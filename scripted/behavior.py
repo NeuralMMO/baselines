@@ -2,6 +2,7 @@ from pdb import set_trace as T
 import numpy as np
 
 import nmmo
+from nmmo import scripting
 from nmmo.systems.ai import move, attack, utils
 
 def update(entity):
@@ -22,7 +23,7 @@ def update(entity):
       entity.water = None
       
 def pathfind(config, ob, actions, rr, cc):
-   actions[action.Move]   = {action.Direction: move.pathfind(config, ob, actions, rr, cc)}
+   actions[nmmo.action.Move]   = {nmmo.action.Direction: move.pathfind(config, ob, actions, rr, cc)}
 
 def explore(config, ob, actions, spawnR, spawnC):
    vision = config.NSTIM
@@ -31,8 +32,8 @@ def explore(config, ob, actions, spawnR, spawnC):
    Tile   = nmmo.Serialized.Tile
 
    agent  = ob.agent
-   r      = utils.Observation.attribute(agent, Entity.R)
-   c      = utils.Observation.attribute(agent, Entity.C)
+   r      = scripting.Observation.attribute(agent, Entity.R)
+   c      = scripting.Observation.attribute(agent, Entity.C)
 
    centR, centC   = sz//2, sz//2
 
@@ -70,7 +71,7 @@ def attack(realm, actions, entity):
    if distance > entity.skills.style.attackRange(realm.config):
       return
 
-   actions[action.Attack] = {nmmo.action.Style: entity.skills.style,
+   actions[nmmo.action.Attack] = {nmmo.action.Style: entity.skills.style,
          nmmo.action.Target: entity.target}
 
 def forageDP(realm, actions, entity):

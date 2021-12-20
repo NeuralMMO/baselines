@@ -3,6 +3,7 @@ from pdb import set_trace as T
 from scripted import behavior, move, attack, utils
 
 import nmmo
+from nmmo import scripting
 from nmmo.lib import colors
 
 class Scripted(nmmo.Agent):
@@ -117,11 +118,11 @@ class Scripted(nmmo.Agent):
         '''Process observations and return actions
 
         Args:
-           obs: An observation object from the environment. Unpack with io.Observation
+           obs: An observation object from the environment. Unpack with scripting.Observation
         '''
         self.actions = {}
 
-        self.ob = io.Observation(self.config, obs)
+        self.ob = scripting.Observation(self.config, obs)
         agent   = self.ob.agent
 
         self.food   = scripting.Observation.attribute(agent, nmmo.Serialized.Entity.Food)

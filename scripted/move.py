@@ -174,7 +174,7 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
       goal = backtrace[goal]
 
    direction = towards(goal)
-   actions[action.Move] = {action.Direction: direction}
+   actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def aStar(config, ob, actions, rr, cc, cutoff=100):
    Entity = nmmo.Serialized.Entity
@@ -216,7 +216,7 @@ def aStar(config, ob, actions, rr, cc, cutoff=100):
 
          tile     = ob.tile(*nxt)
          matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
-         occupied = nmmo.scripting.Observation.attribute(tile, tile.nents)
+         occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
 
          #if not vacant(tile):
          #   continue

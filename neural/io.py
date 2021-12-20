@@ -53,6 +53,10 @@ class Input(nn.Module):
       self.tileWeight = torch.Tensor([1.0, 0.0, 0.02, 0.02])
       self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.00, 0.02, 0.02, 0.1, 0.01, 0.1, 0.1, 0.1, 0.3])
 
+      if torch.cuda.is_available():
+          self.tileWeight = self.tileWeight.cuda()
+          self.entWeight  = self.entWeight.cuda()
+
    def forward(self, inp):
       '''Produces tensor representations from an IO object
 
