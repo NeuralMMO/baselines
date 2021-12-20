@@ -2,12 +2,11 @@ from pdb import set_trace as T
 import numpy as np
 import random as rand
 
-from neural_mmo.lib import material
-from neural_mmo.io.stimulus.static import Stimulus
-from neural_mmo.io.action import static as Action
 from queue import PriorityQueue, Queue
 
-from neural_mmo.infra import scripting as io
+import nmmo
+from nmmo.lib import material
+
 from scripted import utils
 
 def adjacentPos(pos):
@@ -22,40 +21,40 @@ def inSight(dr, dc, vision):
           dc <= vision)
 
 def vacant(tile):
-   Tile     = Stimulus.Tile
-   occupied = io.Observation.attribute(tile, Tile.NEnts)
-   matl     = io.Observation.attribute(tile, Tile.Index)
+   Tile     = nmmo.Serialized.Tile
+   occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
+   matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
 
    return matl in material.Habitable and not occupied
 
 def random(config, ob, actions):
-   direction = rand.choice(Action.Direction.edges)
-   actions[Action.Move] = {Action.Direction: direction}
+   direction                 = rand.choice(nmmo.action.Direction.edges)
+   actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def towards(direction):
    if direction == (-1, 0):
-      return Action.North
+      return nmmo.action.North
    elif direction == (1, 0):
-      return Action.South
+      return nmmo.action.South
    elif direction == (0, -1):
-      return Action.West
+      return nmmo.action.West
    elif direction == (0, 1):
-      return Action.East
+      return nmmo.action.East
    else:
-      return rand.choice(Action.Direction.edges)
+      return rand.choice(nmmo.action.Direction.edges)
 
 def pathfind(config, ob, actions, rr, cc):
    direction = aStar(config, ob, actions, rr, cc)
    direction = towards(direction)
-   actions[Action.Move] = {Action.Direction: direction}
+   actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def meander(config, ob, actions):
    agent  = ob.agent
-   Entity = Stimulus.Entity
-   Tile   = Stimulus.Tile
+   Entity = nmmo.Serialized.Entity
+   Tile   = nmmo.Serialized.Tile
 
-   r = io.Observation.attribute(agent, Entity.R)
-   c = io.Observation.attribute(agent, Entity.C)
+   r = nmmo.scripting.Observation.attribute(agent, Entity.R)
+   c = nmmo.scripting.Observation.attribute(agent, Entity.C)
 
    cands = []
    if vacant(ob.tile(-1, 0)):
@@ -71,17 +70,17 @@ def meander(config, ob, actions):
 
    direction = rand.choices(cands)[0]
    direction = towards(direction)
-   actions[Action.Move] = {Action.Direction: direction}
+   actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def explore(config, ob, actions, spawnR, spawnC):
    vision = config.NSTIM
    sz     = config.TERRAIN_SIZE
-   Entity = Stimulus.Entity
-   Tile   = Stimulus.Tile
+   Entity = nmmo.Serialized.Entity
+   Tile   = nmmo.Serialized.Tile
 
    agent  = ob.agent
-   r      = io.Observation.attribute(agent, Entity.R)
-   c      = io.Observation.attribute(agent, Entity.C)
+   r      = nmmo.scripting.Observation.attribute(agent, Entity.R)
+   c      = nmmo.scripting.Observation.attribute(agent, Entity.C)
 
    centR, centC = sz//2, sz//2
    vR, vC = centR-spawnR, centC-spawnC
@@ -92,13 +91,13 @@ def explore(config, ob, actions, spawnR, spawnC):
    pathfind(config, ob, actions, rr, cc)
 
 def evade(config, ob, actions, attacker):
-   Entity = Stimulus.Entity
+   Entity = nmmo.Serialized.Entity
 
-   sr     = io.Observation.attribute(ob.agent, Entity.R)
-   sc     = io.Observation.attribute(ob.agent, Entity.C)
+   sr     = nmmo.scripting.Observation.attribute(ob.agent, Entity.R)
+   sc     = nmmo.scripting.Observation.attribute(ob.agent, Entity.C)
 
-   gr     = io.Observation.attribute(attacker, Entity.R)
-   gc     = io.Observation.attribute(attacker, Entity.C)
+   gr     = nmmo.scripting.Observation.attribute(attacker, Entity.R)
+   gc     = nmmo.scripting.Observation.attribute(attacker, Entity.C)
 
    rr, cc = (2*sr - gr, 2*sc - gc)
 
@@ -106,12 +105,12 @@ def evade(config, ob, actions, attacker):
 
 def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
    vision = config.NSTIM
-   Entity = Stimulus.Entity
-   Tile   = Stimulus.Tile
+   Entity = nmmo.Serialized.Entity
+   Tile   = nmmo.Serialized.Tile
 
    agent  = ob.agent
-   food   = io.Observation.attribute(agent, Entity.Food)
-   water  = io.Observation.attribute(agent, Entity.Water)
+   food   = nmmo.scripting.Observation.attribute(agent, Entity.Food)
+   water  = nmmo.scripting.Observation.attribute(agent, Entity.Water)
 
    best      = -1000 
    start     = (0, 0)
@@ -137,8 +136,8 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
             continue
 
          tile     = ob.tile(*nxt)
-         matl     = io.Observation.attribute(tile, Tile.Index)
-         occupied = io.Observation.attribute(tile, Tile.NEnts)
+         matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
+         occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
 
          if not vacant(tile):
             continue
@@ -154,7 +153,7 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
                continue
 
             tile = ob.tile(*pos)
-            matl = io.Observation.attribute(tile, Tile.Index)
+            matl = nmmo.scripting.Observation.attribute(tile, Tile.Index)
  
             if matl == material.Water.index:
                water = min(water+water_max//2, water_max)
@@ -175,11 +174,11 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
       goal = backtrace[goal]
 
    direction = towards(goal)
-   actions[Action.Move] = {Action.Direction: direction}
+   actions[action.Move] = {action.Direction: direction}
 
 def aStar(config, ob, actions, rr, cc, cutoff=100):
-   Entity = Stimulus.Entity
-   Tile   = Stimulus.Tile
+   Entity = nmmo.Serialized.Entity
+   Tile   = nmmo.Serialized.Tile
    vision = config.NSTIM
 
    start = (0, 0)
@@ -216,8 +215,8 @@ def aStar(config, ob, actions, rr, cc, cutoff=100):
             continue
 
          tile     = ob.tile(*nxt)
-         matl     = io.Observation.attribute(tile, Tile.Index)
-         occupied = io.Observation.attribute(tile, Tile.NEnts)
+         matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
+         occupied = nmmo.scripting.Observation.attribute(tile, tile.nents)
 
          #if not vacant(tile):
          #   continue

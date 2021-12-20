@@ -1,11 +1,12 @@
 from pdb import set_trace as T
 
-from neural_mmo import core
-from neural_mmo.core import config
-from scripted import baselines
-from neural_mmo.infra.agent import Agent
-from neural_mmo.systems import achievement
+import nmmo
+from nmmo import core
+from nmmo.core import config
+from nmmo.systems import achievement
+
 import rllib_wrapper
+from scripted import baselines
 
 #Default achievements -- or write your own
 DEFAULT_ACHIEVEMENTS = [achievement.PlayerKills, achievement.Equipment, achievement.Exploration, achievement.Foraging]
@@ -36,8 +37,8 @@ class RLlibConfig(config.Achievement):
    RESTORE_CHECKPOINT     = 1000
 
    #Policy specification
-   AGENTS      = [Agent]
-   EVAL_AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, Agent]
+   AGENTS      = [nmmo.Agent]
+   EVAL_AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
    EVALUATE    = False #Reserved param
 
    #Hardware and debug
@@ -69,37 +70,29 @@ class RLlibConfig(config.Achievement):
    ACHIEVEMENT_SCALE       = 1.0/15.0
    REWARD_ACHIEVEMENT      = True
 
-
-class LargeMaps(RLlibConfig, core.Config):
-   '''Large scale Neural MMO training setting
-
-   Features up to 1000 concurrent agents and 1000 concurrent NPCs,
-   1km x 1km maps, and 5/10k timestep train/eval horizons
-
-   This is the default setting as of v1.5 and allows for large
-   scale multiagent research even on relatively modest hardware'''
-
-   #Memory/Batch Scale
-   NUM_WORKERS             = 14
-   TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
-   ROLLOUT_FRAGMENT_LENGTH = 32
-   SGD_MINIBATCH_SIZE      = 128
-
-   #Horizon
-   TRAIN_HORIZON           = 8192
-   EVALUATION_HORIZON      = 8192
-
-
-class SmallMaps(RLlibConfig, config.SmallMaps):
+class Small(RLlibConfig, config.Small):
    '''Small scale Neural MMO training setting
 
-   Features up to 128 concurrent agents and 32 concurrent NPCs,
-   60x60 maps (excluding the border), and 1000 timestep train/eval horizons.
+   Features up to 64 concurrent agents and 32 concurrent NPCs,
+   64 x 64 maps (excluding the border), and 128 timestep horizons'''
    
-   This setting is modeled off of v1.1-v1.4 It is appropriate as a quick train
-   task for new ideas, a transfer target for agents trained on large maps,
-   or as a primary research target for PCG methods.'''
+   #Memory/Batch Scale
+   NUM_WORKERS             = 4
+   TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
+   ROLLOUT_FRAGMENT_LENGTH = 128
+   SGD_MINIBATCH_SIZE      = 128
+ 
+   #Horizon
+   TRAIN_HORIZON           = 128
+   EVALUATION_HORIZON      = 128
 
+
+class Medium(RLlibConfig, config.Medium):
+   '''Medium scale Neural MMO training setting
+
+   Features up to 256 concurrent agents and 128 concurrent NPCs,
+   128 x 128 maps (excluding the border), and 1024 timestep horizons'''
+ 
    #Memory/Batch Scale
    NUM_WORKERS             = 1 #Baseline uses 28 cores
    TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
@@ -111,11 +104,30 @@ class SmallMaps(RLlibConfig, config.SmallMaps):
    EVALUATION_HORIZON      = 1024
 
 
-class Debug(SmallMaps, config.AllGameSystems):
+class Large(RLlibConfig, config.Large):
+   '''Large scale Neural MMO training setting
+
+   Features up to 2048 concurrent agents and 1024 concurrent NPCs,
+   1024 x 1024 maps (excluding the border), and 8192 timestep horizons'''
+ 
+   #Memory/Batch Scale
+   NUM_WORKERS             = 14
+   TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
+   ROLLOUT_FRAGMENT_LENGTH = 32
+   SGD_MINIBATCH_SIZE      = 128
+
+   #Horizon
+   TRAIN_HORIZON           = 8192
+   EVALUATION_HORIZON      = 8192
+
+
+
+class Debug(Small, config.AllGameSystems):
    '''Debug Neural MMO training setting
 
    A version of the SmallMap setting with greatly reduced batch parameters.
    Only intended as a tool for identifying bugs in the model or environment'''
+
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    LOAD                    = False
@@ -132,7 +144,7 @@ class Debug(SmallMaps, config.AllGameSystems):
 
 
 ### AICrowd competition settings
-class CompetitionRound1(SmallMaps, config.AllGameSystems):
+class CompetitionRound1(Medium, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
@@ -142,7 +154,7 @@ class CompetitionRound1(SmallMaps, config.AllGameSystems):
    NENT                    = 128
    NPOP                    = 1
 
-class CompetitionRound2(SmallMaps, config.AllGameSystems):
+class CompetitionRound2(Medium, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
@@ -154,14 +166,14 @@ class CompetitionRound2(SmallMaps, config.AllGameSystems):
       return 8 * len(self.AGENTS)
 
    NPOP                    = 16
-   AGENTS                  = NPOP*[Agent]
-   EVAL_AGENTS             = 8*[baselines.Meander, baselines.Forage, baselines.Combat, Agent]
+   AGENTS                  = NPOP*[nmmo.Agent]
+   EVAL_AGENTS             = 8*[baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
 
    AGENT_LOADER            = config.TeamLoader
    COOPERATIVE             = True
    TEAM_SPIRIT             = 1.0
 
-class CompetitionRound3(LargeMaps, config.AllGameSystems):
+class CompetitionRound3(Large, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
@@ -176,13 +188,14 @@ class CompetitionRound3(LargeMaps, config.AllGameSystems):
 
 
 ### NeurIPS Experiments
-class SmallMultimodalSkills(SmallMaps, config.AllGameSystems):
+class SmallMultimodalSkills(Medium, config.AllGameSystems):
+   '''Small name on medium maps legacy from NeurIPS experiments'''
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
-class LargeMultimodalSkills(LargeMaps, config.AllGameSystems):
+class LargeMultimodalSkills(Large, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
-class DomainRandomization(SmallMaps, config.AllGameSystems):
+class DomainRandomization(Medium, config.AllGameSystems):
    ACHIEVEMENTS            = [achievement.Lifetime]
 class DomainRandomization16384(DomainRandomization):
    TERRAIN_TRAIN_MAPS=16384
@@ -193,7 +206,7 @@ class DomainRandomization32(DomainRandomization):
 class DomainRandomization1(DomainRandomization):
    TERRAIN_TRAIN_MAPS=1
 
-class MagnifyExploration(SmallMaps, config.Resource, config.Progression):
+class MagnifyExploration(Medium, config.Resource, config.Progression):
    ACHIEVEMENTS            = [achievement.Lifetime]
 class Population4(MagnifyExploration):
    NENT  = 4

@@ -1,9 +1,8 @@
 from pdb import set_trace as T
 import numpy as np
 
-from neural_mmo.systems.ai import move, attack, utils
-from neural_mmo.io.stimulus.static import Stimulus
-from neural_mmo.io.action import static as Action
+import nmmo
+from nmmo.systems.ai import move, attack, utils
 
 def update(entity):
    '''Update validity of tracked entities'''
@@ -23,13 +22,13 @@ def update(entity):
       entity.water = None
       
 def pathfind(config, ob, actions, rr, cc):
-   actions[Action.Move]   = {Action.Direction: move.pathfind(config, ob, actions, rr, cc)}
+   actions[action.Move]   = {action.Direction: move.pathfind(config, ob, actions, rr, cc)}
 
 def explore(config, ob, actions, spawnR, spawnC):
    vision = config.NSTIM
    sz     = config.TERRAIN_SIZE
-   Entity = Stimulus.Entity
-   Tile   = Stimulus.Tile
+   Entity = nmmo.Serialized.Entity
+   Tile   = nmmo.Serialized.Tile
 
    agent  = ob.agent
    r      = utils.Observation.attribute(agent, Entity.R)
@@ -46,10 +45,10 @@ def explore(config, ob, actions, spawnR, spawnC):
    pathfind(config, ob, actions, rr, cc)
 
 def meander(realm, actions, entity):
-   actions[Action.Move] = {Action.Direction: move.habitable(realm.map.tiles, entity)}
+   actions[nmmo.action.Move] = {nmmo.action.Direction: move.habitable(realm.map.tiles, entity)}
 
 def evade(realm, actions, entity):
-   actions[Action.Move] = {Action.Direction: move.antipathfind(realm.map.tiles, entity, entity.attacker)}
+   actions[nmmo.action.Move] = {nmmo.action.Direction: move.antipathfind(realm.map.tiles, entity, entity.attacker)}
 
 def hunt(realm, actions, entity):
    #Move args
@@ -62,7 +61,7 @@ def hunt(realm, actions, entity):
       direction = move.pathfind(realm.map.tiles, entity, entity.target)
 
    if direction is not None:
-      actions[Action.Move] = {Action.Direction: direction}
+      actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
    attack(realm, actions, entity)
 
@@ -71,14 +70,14 @@ def attack(realm, actions, entity):
    if distance > entity.skills.style.attackRange(realm.config):
       return
 
-   actions[Action.Attack] = {Action.Style: entity.skills.style,
-         Action.Target: entity.target}
+   actions[action.Attack] = {nmmo.action.Style: entity.skills.style,
+         nmmo.action.Target: entity.target}
 
 def forageDP(realm, actions, entity):
-   direction            = utils.forageDP(realm.map.tiles, entity)
-   actions[Action.Move] = {Action.Direction: move.towards(direction)}
+   direction                 = utils.forageDP(realm.map.tiles, entity)
+   actions[nmmo.action.Move] = {nmmo.action.Direction: move.towards(direction)}
 
 #def forageDijkstra(realm, actions, entity):
 def forageDijkstra(config, ob, actions, food_max, water_max):
-   direction                   = utils.forageDijkstra(config, ob, food_max, water_max)
-   actions[Action.Move] = {Action.Direction: move.towards(direction)}
+   direction                 = utils.forageDijkstra(config, ob, food_max, water_max)
+   actions[nmmo.action.Move] = {nmmo.action.Direction: move.towards(direction)}

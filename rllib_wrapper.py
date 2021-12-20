@@ -17,21 +17,13 @@ from ray import rllib
 import ray.rllib.agents.ppo.ppo as ppo
 import ray.rllib.agents.ppo.appo as appo
 import ray.rllib.agents.impala.impala as impala
+
 from ray.rllib.agents.callbacks import DefaultCallbacks
-from ray.tune.integration.wandb import WandbLoggerCallback
-from ray.rllib.utils.spaces.flexdict import FlexDict
 from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 
-from neural_mmo.io.action.static import Action, Fixed
-from neural_mmo.io.stimulus.static import Stimulus
-from neural_mmo.lib import overlay
-from neural_mmo.systems import ai
+import nmmo
 
 from neural.policy import Recurrent
-
-from neural_mmo.infra import Env
-from neural_mmo.infra.dataframe import DataType
-from neural_mmo.infra.overlay import Overlay, OverlayRegistry
 
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
@@ -67,7 +59,7 @@ class RLlibPolicy(RecurrentNetwork, nn.Module):
       return self.model.attn
 
 
-class RLlibEnv(Env, rllib.MultiAgentEnv):
+class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
    '''Wrapper class for using Neural MMO with RLlib'''
    def __init__(self, config):
       self.config = config['config']
@@ -105,9 +97,8 @@ class RLlibEnv(Env, rllib.MultiAgentEnv):
       alpha  = config.TEAM_SPIRIT
       return alpha*team + (1.0-alpha)*individual
 
-   def step(self, decisions, preprocess=None, omitDead=False):
-      preprocess = {entID for entID in decisions}
-      obs, rewards, dones, infos = super().step(decisions, preprocess, omitDead)
+   def step(self, decisions):
+      obs, rewards, dones, infos = super().step(decisions)
 
       config = self.config
       dones['__all__'] = False
@@ -126,7 +117,7 @@ class RLlibEnv(Env, rllib.MultiAgentEnv):
 
       return obs, rewards, dones, infos
 
-class RLlibOverlayRegistry(OverlayRegistry):
+class RLlibOverlayRegistry(nmmo.OverlayRegistry):
    '''Host class for RLlib Map overlays'''
    def __init__(self, realm):
       super().__init__(realm.config, realm)
@@ -136,7 +127,7 @@ class RLlibOverlayRegistry(OverlayRegistry):
       self.overlays['tileValues']   = TileValues
       self.overlays['entityValues'] = EntityValues
 
-class RLlibOverlay(Overlay):
+class RLlibOverlay(nmmo.Overlay):
    '''RLlib Map overlay wrapper'''
    def __init__(self, config, realm, trainer, model):
       super().__init__(config, realm)
@@ -170,7 +161,7 @@ class Attention(RLlibOverlay):
                continue
             data[r, c] = np.mean(attentions[tile])
 
-      colorized = overlay.twoTone(data)
+      colorized = nmmo.overlay.twoTone(data)
       self.realm.register(colorized)
 
 class Values(RLlibOverlay):
@@ -186,7 +177,7 @@ class Values(RLlibOverlay):
          self.values[r, c] = float(self.model.value_function()[idx])
 
    def register(self, obs):
-      colorized = overlay.twoTone(self.values[:, :])
+      colorized = nmmo.overlay.twoTone(self.values[:, :])
       self.realm.register(colorized)
 
 def zeroOb(ob, key):
@@ -220,7 +211,7 @@ class GlobalValues(RLlibOverlay):
             batch = {}
 
       print('Value map computed')
-      self.colorized = overlay.twoTone(values)
+      self.colorized = nmmo.overlay.twoTone(values)
 
    def register(self, obs):
       print('Computing Global Values. This requires one NN pass per tile')

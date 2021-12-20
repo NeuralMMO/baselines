@@ -1,13 +1,12 @@
 from pdb import set_trace as T
 import numpy as np
 
+from collections import defaultdict
+
 import torch
 from torch import nn
 
-from collections import defaultdict
-
-from neural_mmo.io import node, stimulus
-from neural_mmo.io.action import static
+import nmmo
 
 from neural import subnets
 
@@ -41,7 +40,7 @@ class Input(nn.Module):
       self.embeddings = nn.ModuleDict()
       self.attributes = nn.ModuleDict()
 
-      for _, entity in stimulus.Static:
+      for _, entity in nmmo.Serialized:
          continuous = len([e for e in entity if e[1].CONTINUOUS])
          discrete   = len([e for e in entity if e[1].DISCRETE])
          self.attributes[entity.__name__] = nn.Linear(
@@ -95,7 +94,7 @@ class Output(nn.Module):
       self.h = config.HIDDEN
 
       self.net = DiscreteAction(self.config, self.h, self.h)
-      self.arg = nn.Embedding(static.Action.n, self.h)
+      self.arg = nn.Embedding(nmmo.Action.n, self.h)
 
    def names(self, nameMap, args):
       '''Lookup argument indices from name mapping'''
@@ -109,10 +108,10 @@ class Output(nn.Module):
          lookup : A fixed size representation of each entity
       ''' 
       rets = defaultdict(dict)
-      for atn in static.Action.edges:
+      for atn in nmmo.Action.edges:
          for arg in atn.edges:
             lens  = None
-            if arg.argType == static.Fixed:
+            if arg.argType == nmmo.action.Fixed:
                batch = obs.shape[0]
                idxs  = [e.idx for e in arg.edges]
                cands = self.arg.weight[idxs]

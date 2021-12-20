@@ -5,8 +5,6 @@ import torch
 from torch import nn
 from torch.nn.utils import rnn
 
-from neural_mmo.io.stimulus.static import Stimulus
-
 from neural import io, subnets
 
 class Base(nn.Module):

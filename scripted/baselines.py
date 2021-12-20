@@ -2,18 +2,15 @@ from pdb import set_trace as T
 
 from scripted import behavior, move, attack, utils
 
-from neural_mmo.infra.agent import Agent
-from neural_mmo.infra import scripting as io
-from neural_mmo.io.stimulus.static import Stimulus
-from neural_mmo.io.action import static as Action
-from neural_mmo.lib import enums
+import nmmo
+from nmmo.lib import colors
 
-class Scripted(Agent):
+class Scripted(nmmo.Agent):
     '''Template class for scripted models.
 
     You may either subclass directly or mirror the __call__ function'''
     scripted = True
-    color    = enums.Neon.SKY
+    color    = colors.Neon.SKY
     def __init__(self, config, idx):
         '''
         Args:
@@ -64,19 +61,19 @@ class Scripted(Agent):
           return
 
        if self.targetDist <= self.config.COMBAT_MELEE_REACH:
-          self.style = Action.Melee
+          self.style = nmmo.action.Melee
        elif self.targetDist <= self.config.COMBAT_RANGE_REACH:
-          self.style = Action.Range
+          self.style = nmmo.action.Range
        else:
-          self.style = Action.Mage
+          self.style = nmmo.action.Mage
 
     def target_weak(self):
         '''Target the nearest agent if it is weak'''
         if self.closest is None:
             return False
 
-        selfLevel = io.Observation.attribute(self.ob.agent, Stimulus.Entity.Level)
-        targLevel = io.Observation.attribute(self.closest, Stimulus.Entity.Level)
+        selfLevel = scripting.Observation.attribute(self.ob.agent, nmmo.Serialized.Entity.Level)
+        targLevel = scripting.Observation.attribute(self.closest, nmmo.Serialized.Entity.Level)
         
         if targLevel <= selfLevel <= 5 or selfLevel >= targLevel + 3:
            self.target     = self.closest
@@ -90,11 +87,11 @@ class Scripted(Agent):
 
         self.closestID = None
         if self.closest is not None:
-           self.closestID = io.Observation.attribute(self.closest, Stimulus.Entity.ID)
+           self.closestID = scripting.Observation.attribute(self.closest, nmmo.Serialized.Entity.ID)
 
         self.attackerID = None
         if self.attacker is not None:
-           self.attackerID = io.Observation.attribute(self.attacker, Stimulus.Entity.ID)
+           self.attackerID = scripting.Observation.attribute(self.attacker, nmmo.Serialized.Entity.ID)
 
         self.style      = None
         self.target     = None
@@ -127,8 +124,8 @@ class Scripted(Agent):
         self.ob = io.Observation(self.config, obs)
         agent   = self.ob.agent
 
-        self.food   = io.Observation.attribute(agent, Stimulus.Entity.Food)
-        self.water  = io.Observation.attribute(agent, Stimulus.Entity.Water)
+        self.food   = scripting.Observation.attribute(agent, nmmo.Serialized.Entity.Food)
+        self.water  = scripting.Observation.attribute(agent, nmmo.Serialized.Entity.Water)
 
         if self.food > self.food_max:
            self.food_max = self.food
@@ -136,9 +133,9 @@ class Scripted(Agent):
            self.water_max = self.water
 
         if self.spawnR is None:
-            self.spawnR = io.Observation.attribute(agent, Stimulus.Entity.R)
+            self.spawnR = scripting.Observation.attribute(agent, nmmo.Serialized.Entity.R)
         if self.spawnC is None:
-            self.spawnC = io.Observation.attribute(agent, Stimulus.Entity.C)
+            self.spawnC = scripting.Observation.attribute(agent, nmmo.Serialized.Entity.C)
 
 class Random(Scripted):
     name = 'Random_'
@@ -189,7 +186,7 @@ class CombatNoExplore(Scripted):
 
         self.adaptive_control_and_targeting(explore=False)
 
-        self.style = Action.Range
+        self.style = nmmo.action.Range
         self.attack()
 
         return self.actions
@@ -202,7 +199,7 @@ class Combat(Scripted):
 
         self.adaptive_control_and_targeting()
 
-        self.style = Action.Range
+        self.style = nmmo.action.Range
         self.attack()
 
         return self.actions

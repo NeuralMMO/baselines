@@ -1,6 +1,7 @@
 from pdb import set_trace as T
 
-from neural_mmo.io.stimulus.static import Stimulus
+import nmmo
+from nmmo.lib import material
 
 def l1(start, goal):
    sr, sc = start
@@ -32,9 +33,9 @@ def inSight(dr, dc, vision):
           dc <= vision)
 
 def vacant(tile):
-   Tile     = Stimulus.Tile
-   occupied = Observation.attribute(tile, Tile.NEnts)
-   matl     = Observation.attribute(tile, Tile.Index)
+   Tile     = nmmo.Serialized.Tile
+   occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
+   matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
 
    lava    = material.Lava.index
    water   = material.Water.index

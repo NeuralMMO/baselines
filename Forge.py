@@ -18,22 +18,18 @@ import ray
 from ray import rllib, tune
 from ray.tune import CLIReporter
 from ray.tune.integration.wandb import WandbLoggerCallback
-import rllib_wrapper as wrapper
+from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
+
+import nmmo
 
 import config as base_config
+import rllib_wrapper as wrapper
 
-import neural_mmo
-from neural_mmo.core import terrain
-from neural_mmo.infra.env import Env
-
-from neural_mmo.io.action.static import Action
-
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 
 class ConsoleLog(CLIReporter):
    def report(self, trials, done, *sys_info):
       os.system('cls' if os.name == 'nt' else 'clear') 
-      print(neural_mmo.motd)
+      print(nmmo.motd + '\n')
       super().report(trials, done, *sys_info)
 
 
@@ -56,7 +52,7 @@ def run_tune_experiment(config):
          agentID % config.NPOLICIES)
 
    policies = {}
-   env = Env(config)
+   env = nmmo.Env(config)
    for i in range(config.NPOLICIES):
       params = {
             "agent_id": i,
@@ -191,11 +187,6 @@ class Anvil():
       self.config.RENDER                  = True
       self.config.NUM_WORKERS             = 1
       self.evaluate(**kwargs)
-
-   def generate(self, **kwargs):
-      '''Generate game maps for the current --config setting'''
-      from neural_mmo.forge.blade.core import terrain
-      terrain.MapGenerator(self.config).generate()
 
 if __name__ == '__main__':
    def Display(lines, out):
