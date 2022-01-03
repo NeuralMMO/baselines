@@ -33,12 +33,19 @@ class ConsoleLog(CLIReporter):
       super().report(trials, done, *sys_info)
 
 
-def run_tune_experiment(config):
+def run_tune_experiment(config, trainer_wrapper):
    '''Ray[RLlib, Tune] integration for Neural MMO
 
    Setup custom environment, observations/actions, policies,
    and parallel training/evaluation'''
 
+   #Round and round the num_threads flags go
+   #Which are needed nobody knows!
+   torch.set_num_threads(1)
+   os.environ['MKL_NUM_THREADS']     = '1'
+   os.environ['OMP_NUM_THREADS']     = '1'
+   os.environ['NUMEXPR_NUM_THREADS'] = '1'
+ 
    ray.init(local_mode=config.LOCAL_MODE)
 
    #Register custom env and policies
@@ -66,15 +73,16 @@ def run_tune_experiment(config):
    eval_config.EVALUATE = True
    eval_config.AGENTS   = eval_config.EVAL_AGENTS
 
+   trainer_cls, extra_config = trainer_wrapper(config)
+
    #Create rllib config
-   rllib_config={
+   rllib_config = {
       'num_workers': config.NUM_WORKERS,
       'num_gpus_per_worker': config.NUM_GPUS_PER_WORKER,
       'num_gpus': config.NUM_GPUS,
       'num_envs_per_worker': 1,
       'train_batch_size': config.TRAIN_BATCH_SIZE,
       'rollout_fragment_length': config.ROLLOUT_FRAGMENT_LENGTH,
-      'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
       'num_sgd_iter': config.NUM_SGD_ITER,
       'framework': 'torch',
       'horizon': np.inf,
@@ -106,10 +114,13 @@ def run_tune_experiment(config):
       'evaluation_num_workers': config.EVALUATION_NUM_WORKERS,
       'evaluation_parallel_to_training': config.EVALUATION_PARALLEL,
    }
+
+   #Alg-specific params
+   rllib_config = {**rllib_config, **extra_config}
  
    restore     = None
    config_name = config.__class__.__name__
-   algorithm   = wrapper.RLlibTrainer.name()
+   algorithm   = trainer_cls.name()
    if config.RESTORE:
       if config.RESTORE_ID:
          config_name = '{}_{}'.format(config_name, config.RESTORE_ID)
@@ -117,9 +128,9 @@ def run_tune_experiment(config):
       restore   = '{0}/{1}/{2}/checkpoint_{3:06d}/checkpoint-{3}'.format(
             config.EXPERIMENT_DIR, algorithm, config_name, config.RESTORE_CHECKPOINT)
 
-   tune.run(wrapper.RLlibTrainer,
+   tune.run(trainer_cls,
       config    = rllib_config,
-      name      = wrapper.RLlibTrainer.name(),
+      name      = trainer_cls.name(),
       verbose   = config.LOG_LEVEL,
       stop      = {'training_iteration': config.TRAINING_ITERATIONS},
       restore   = restore,
@@ -162,16 +173,11 @@ class Anvil():
       config.override(**kwargs)
       self.config = config
 
-      #Round and round the num_threads flags go
-      #Which are needed nobody knows!
-      torch.set_num_threads(1)
-      os.environ['MKL_NUM_THREADS']     = '1'
-      os.environ['OMP_NUM_THREADS']     = '1'
-      os.environ['NUMEXPR_NUM_THREADS'] = '1'
- 
+      self.trainer_wrapper = wrapper.Impala
+
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''
-      run_tune_experiment(self.config)
+      run_tune_experiment(self.config, self.trainer_wrapper)
 
    def evaluate(self, **kwargs):
       '''Evaluate a model against EVAL_AGENTS models'''
@@ -180,7 +186,7 @@ class Anvil():
       self.config.EVALUATION_NUM_WORKERS  = self.config.NUM_WORKERS
       self.config.EVALUATION_NUM_EPISODES = self.config.NUM_WORKERS
 
-      run_tune_experiment(self.config)
+      run_tune_experiment(self.config, self.trainer_wrapper)
 
    def render(self, **kwargs):
       '''Start a WebSocket server that autoconnects to the 3D Unity client'''

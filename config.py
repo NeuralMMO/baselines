@@ -94,7 +94,7 @@ class Medium(RLlibConfig, config.Medium):
    128 x 128 maps (excluding the border), and 1024 timestep horizons'''
  
    #Memory/Batch Scale
-   NUM_WORKERS             = 1 #Baseline uses 28 cores
+   NUM_WORKERS             = 4
    TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
    ROLLOUT_FRAGMENT_LENGTH = 256
    SGD_MINIBATCH_SIZE      = 128
@@ -111,7 +111,7 @@ class Large(RLlibConfig, config.Large):
    1024 x 1024 maps (excluding the border), and 8192 timestep horizons'''
  
    #Memory/Batch Scale
-   NUM_WORKERS             = 14
+   NUM_WORKERS             = 2
    TRAIN_BATCH_SIZE        = 64 * 256 * NUM_WORKERS
    ROLLOUT_FRAGMENT_LENGTH = 32
    SGD_MINIBATCH_SIZE      = 128
@@ -130,9 +130,10 @@ class Debug(Small, config.AllGameSystems):
 
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
-   LOAD                    = False
-   LOCAL_MODE              = True
+   RESTORE                 = False
    NUM_WORKERS             = 1
+
+   TRAINING_ITERATIONS     = 2
 
    SGD_MINIBATCH_SIZE      = 100
    TRAIN_BATCH_SIZE        = 400
@@ -188,11 +189,13 @@ class CompetitionRound3(Large, config.AllGameSystems):
 
 
 ### NeurIPS Experiments
-class SmallMultimodalSkills(Medium, config.AllGameSystems):
-   '''Small name on medium maps legacy from NeurIPS experiments'''
+class SmallAllSystems(Small, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
-class LargeMultimodalSkills(Large, config.AllGameSystems):
+class MediumAllSystems(Medium, config.AllGameSystems):
+   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
+
+class LargeAllSystems(Large, config.AllGameSystems):
    ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
 class DomainRandomization(Medium, config.AllGameSystems):

@@ -13,11 +13,6 @@ from torch import nn
 from torch.nn.utils import rnn
 
 from ray import rllib
-
-import ray.rllib.agents.ppo.ppo as ppo
-import ray.rllib.agents.ppo.appo as appo
-import ray.rllib.agents.impala.impala as impala
-
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 
@@ -232,7 +227,7 @@ class EntityValues(GlobalValues):
       super().init(zeroKey)
 
 
-class RLlibTrainer(ppo.PPOTrainer):
+class Trainer:
    def __init__(self, config, env=None, logger_creator=None):
       super().__init__(config, env, logger_creator)
       self.env_config = config['env_config']['config']
@@ -296,6 +291,18 @@ class RLlibTrainer(ppo.PPOTrainer):
      
       return stat_dict
 
+def PPO(config):
+   class PPO(Trainer, rllib.agents.ppo.ppo.PPOTrainer): pass
+   extra_config = {'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE}
+   return PPO, extra_config
+
+def APPO(config):
+   class APPO(Trainer, rllib.agents.ppo.appo.APPOTrainer): pass
+   return APPO, {}
+
+def Impala(config):
+   class Impala(Trainer, rllib.agents.impala.impala.ImpalaTrainer): pass
+   return Impala, {}
 
 ###############################################################################
 ### Logging
