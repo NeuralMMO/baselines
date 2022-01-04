@@ -1,9 +1,8 @@
 from pdb import set_trace as T
 
 import nmmo
-from nmmo import core
+from nmmo import core, achievement
 from nmmo.core import config
-from nmmo.systems import achievement
 
 import rllib_wrapper
 from scripted import baselines
