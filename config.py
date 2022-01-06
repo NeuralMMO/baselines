@@ -16,7 +16,7 @@ class RLlibConfig:
    Extends core Config, which contains environment, evaluation,
    and non-RLlib-specific learning parameters
 
-   IMPORTANT: Configure NUM_GPUS and NUM_WORKERS for your hardware
+   Configure NUM_GPUS and NUM_WORKERS for your hardware
    Note that EVALUATION_NUM_WORKERS cores are reserved for evaluation
    and one additional core is reserved for the driver process.
    Therefore set NUM_WORKERS <= cores - EVALUATION_NUM_WORKERS - 1

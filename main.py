@@ -149,13 +149,13 @@ def run_tune_experiment(config, trainer_wrapper):
       )
 
 
-class Anvil():
+class CLI():
    '''Neural MMO CLI powered by Google Fire
 
    Main file for the RLlib demo included with Neural MMO.
 
    Usage:
-      python Forge.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
+      python main.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
 
    The User API documents core env flags. Additional config options specific
    to this demo are available in projekt/config.py. 
@@ -206,4 +206,4 @@ if __name__ == '__main__':
 
    from fire import core
    core.Display = Display
-   Fire(Anvil)
+   Fire(CLI)
