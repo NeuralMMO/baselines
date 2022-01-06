@@ -60,6 +60,13 @@ class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
       self.config = config['config']
       super().__init__(self.config)
 
+   def render(self):
+      #Patch for RLlib dupe rendering bug
+      if not self.config.RENDER:
+         return
+
+      super().render()
+
    def step(self, decisions):
       obs, rewards, dones, infos = super().step(decisions)
       config = self.config

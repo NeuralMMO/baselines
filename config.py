@@ -10,7 +10,7 @@ import tasks
 
 from scripted import baselines
 
-class RLlibConfig(config.Achievement):
+class RLlibConfig:
    '''Base config for RLlib Models
 
    Extends core Config, which contains environment, evaluation,
