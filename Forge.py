@@ -173,7 +173,12 @@ class Anvil():
       config.override(**kwargs)
       self.config = config
 
-      self.trainer_wrapper = wrapper.Impala
+      self.trainer_wrapper = wrapper.PPO
+
+   def generate(self, **kwargs):
+      '''Manually generates maps using the current --config setting'''
+      from nmmo.core import terrain
+      terrain.MapGenerator(self.config).generate_all_maps()
 
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''

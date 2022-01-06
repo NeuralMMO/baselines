@@ -1,14 +1,19 @@
 from pdb import set_trace as T
 
-import nmmo
+import os
 
-from nmmo import config, achievement
+import nmmo
+from nmmo import config
+
+import tasks
+
 from scripted import baselines
 
 def test_scripted():
-    conf              = config.Small()
-    conf.ACHIEVEMENTS = [achievement.PlayerKills, achievement.Equipment, achievement.Exploration, achievement.Foraging]
-    conf.AGENTS       = [baselines.Meander, baselines.Forage, baselines.Combat]
+    conf           = config.Small()
+    conf.TASKS     = [tasks.All]
+    conf.AGENTS    = [baselines.Meander, baselines.Forage, baselines.Combat]
+    conf.PATH_MAPS = os.path.join(conf.PATH_MAPS, 'evaluation')
 
     env = nmmo.Env(conf)
     env.reset()

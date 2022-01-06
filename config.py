@@ -1,14 +1,14 @@
 from pdb import set_trace as T
 
+import os
+
 import nmmo
-from nmmo import core, achievement
 from nmmo.core import config
 
 import rllib_wrapper
-from scripted import baselines
+import tasks
 
-#Default achievements -- or write your own
-DEFAULT_ACHIEVEMENTS = [achievement.PlayerKills, achievement.Equipment, achievement.Exploration, achievement.Foraging]
+from scripted import baselines
 
 class RLlibConfig(config.Achievement):
    '''Base config for RLlib Models
@@ -22,23 +22,41 @@ class RLlibConfig(config.Achievement):
    Therefore set NUM_WORKERS <= cores - EVALUATION_NUM_WORKERS - 1
    '''
 
+   #Run in train/evaluation mode
+   EVALUATE     = False
+   N_TRAIN_MAPS = 256
+
    @property
    def MODEL(self):
       return self.__class__.__name__
 
+   @property
+   def PATH_MAPS(self):
+      maps = super().PATH_MAPS
+      if self.EVALUATE:
+          self.TERRAIN_FLIP_SEED = True
+          return os.path.join(maps, 'evaluation')
+      return os.path.join(maps, 'training')
+
+   @property
+   def NMAPS(self):
+      if not self.EVALUATE:
+          return self.N_TRAIN_MAPS
+      return super().NMAPS
+
    #Checkpointing. Resume will load the latest trial, e.g. to continue training
    #Restore (overrides resume) will force load a specific checkpoint (e.g. for rendering)
-   EXPERIMENT_DIR         = 'experiments'
-   RESUME                 = False
+   EXPERIMENT_DIR          = 'experiments'
+   RESUME                  = False
 
-   RESTORE                = True
-   RESTORE_ID             = 'Baseline' #Experiment name suffix
-   RESTORE_CHECKPOINT     = 1000
+   RESTORE                 = True
+   RESTORE_ID              = 'Baseline' #Experiment name suffix
+   RESTORE_CHECKPOINT      = 1000
 
    #Policy specification
-   AGENTS      = [nmmo.Agent]
-   EVAL_AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
-   EVALUATE    = False #Reserved param
+   EVAL_AGENTS             = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
+   AGENTS                  = [nmmo.Agent]
+   TASKS                   = []
 
    #Hardware and debug
    NUM_GPUS_PER_WORKER     = 0
@@ -65,15 +83,15 @@ class RLlibConfig(config.Achievement):
    EMBED                   = 64
 
    #Reward
+   COOPERATIVE             = False
    TEAM_SPIRIT             = 0.0
-   ACHIEVEMENT_SCALE       = 1.0/15.0
-   REWARD_ACHIEVEMENT      = True
 
 class Small(RLlibConfig, config.Small):
    '''Small scale Neural MMO training setting
 
    Features up to 64 concurrent agents and 32 concurrent NPCs,
    64 x 64 maps (excluding the border), and 128 timestep horizons'''
+   
    
    #Memory/Batch Scale
    NUM_WORKERS             = 4
@@ -127,7 +145,7 @@ class Debug(Small, config.AllGameSystems):
    A version of the SmallMap setting with greatly reduced batch parameters.
    Only intended as a tool for identifying bugs in the model or environment'''
 
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
+   TASKS                   = tasks.All
 
    RESTORE                 = False
    NUM_WORKERS             = 1
@@ -145,17 +163,16 @@ class Debug(Small, config.AllGameSystems):
 
 ### AICrowd competition settings
 class CompetitionRound1(Medium, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
    def SPAWN(self):
       return self.SPAWN_CONCURRENT
 
+   TASKS                   = tasks.All
    NENT                    = 128
    NPOP                    = 1
 
 class CompetitionRound2(Medium, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
    def SPAWN(self):
@@ -166,15 +183,15 @@ class CompetitionRound2(Medium, config.AllGameSystems):
       return 8 * len(self.AGENTS)
 
    NPOP                    = 16
-   AGENTS                  = NPOP*[nmmo.Agent]
    EVAL_AGENTS             = 8*[baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
+   AGENTS                  = NPOP*[nmmo.Agent]
+   TASKS                   = tasks.All
 
    AGENT_LOADER            = config.TeamLoader
    COOPERATIVE             = True
    TEAM_SPIRIT             = 1.0
 
 class CompetitionRound3(Large, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
 
    @property
    def SPAWN(self):
@@ -185,40 +202,38 @@ class CompetitionRound3(Large, config.AllGameSystems):
    COOPERATIVE             = True
    TEAM_SPIRIT             = 1.0
    AGENT_LOADER            = config.TeamLoader
+   TASKS                   = tasks.All
 
 
 ### NeurIPS Experiments
 class SmallAllSystems(Small, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
+   TASKS                   = tasks.All
 
 class MediumAllSystems(Medium, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
+   TASKS                   = tasks.All
 
 class LargeAllSystems(Large, config.AllGameSystems):
-   ACHIEVEMENTS            = DEFAULT_ACHIEVEMENTS
+   TASKS                   = tasks.All
 
-class DomainRandomization(Medium, config.AllGameSystems):
-   ACHIEVEMENTS            = [achievement.Lifetime]
+class DomainRandomization(Medium, config.AllGameSystems): pass
 class DomainRandomization16384(DomainRandomization):
-   TERRAIN_TRAIN_MAPS=16384
+   N_TRAIN_MAPS            = 16384
 class DomainRandomization256(DomainRandomization):
-   TERRAIN_TRAIN_MAPS=256
+   N_TRAIN_MAPS            = 256
 class DomainRandomization32(DomainRandomization):
-   TERRAIN_TRAIN_MAPS=32
+   N_TRAIN_MAPS            = 32
 class DomainRandomization1(DomainRandomization):
-   TERRAIN_TRAIN_MAPS=1
+   N_TRAIN_MAPS            = 1
 
-class MagnifyExploration(Medium, config.Resource, config.Progression):
-   ACHIEVEMENTS            = [achievement.Lifetime]
+class MagnifyExploration(Medium, config.Resource, config.Progression): pass
 class Population4(MagnifyExploration):
-   NENT  = 4
+   NENT                    = 4
 class Population32(MagnifyExploration):
-   NENT  = 32
+   NENT                    = 32
 class Population256(MagnifyExploration):
-   NENT  = 256
+   NENT                    = 256
 
 class TeamBased(MagnifyExploration, config.Combat):
-   ACHIEVEMENTS            = [achievement.Lifetime]
    NENT                    = 128
    NPOP                    = 32
    COOPERATIVE             = True
