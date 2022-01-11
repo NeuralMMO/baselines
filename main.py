@@ -9,6 +9,7 @@ from pdb import set_trace as T
 
 from fire import Fire
 from copy import deepcopy
+from operator import attrgetter
 import os
 
 import numpy as np
@@ -169,7 +170,7 @@ class CLI():
 
       assert 'config' in kwargs, 'Specify a config class'
       config = kwargs.pop('config')
-      config = getattr(base_config, config)()
+      config = attrgetter(config)(base_config)()
       config.override(**kwargs)
 
       if 'scale' in kwargs:
@@ -177,10 +178,10 @@ class CLI():
           config = getattr(scale, config_scale)()
           config.override(config_scale)
 
-      assert hasattr(config, NUM_GPUS), 'Missing NUM_GPUS (did you specify a scale?)'
-      assert hasattr(config, NUM_WORKERS), 'Missing NUM_WORKERS (did you specify a scale?)'
-      assert hasattr(config, EVALUATION_NUM_WORKERS), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
-      assert hasattr(config, EVALUATION_NUM_EPISODES), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
+      assert hasattr(config, 'NUM_GPUS'), 'Missing NUM_GPUS (did you specify a scale?)'
+      assert hasattr(config, 'NUM_WORKERS'), 'Missing NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_WORKERS'), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
 
       self.config = config
       self.trainer_wrapper = wrapper.PPO

@@ -3,7 +3,6 @@ class Baseline:
 
    Requires a 32 core 1 GPU machine
    '''
-
    NUM_GPUS                = 1
    NUM_WORKERS             = 28
    EVALUATION_NUM_WORKERS  = 3
