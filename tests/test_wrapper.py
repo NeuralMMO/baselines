@@ -4,7 +4,7 @@ import rllib_wrapper
 import config
 
 def test_env():
-    conf = {'config': config.SmallAllSystems()}
+    conf = {'config': config.baselines.Medium()}
     env = rllib_wrapper.RLlibEnv(conf)
     env.reset()
 

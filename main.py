@@ -1,10 +1,10 @@
-'''Main file for the neural-mmo/projekt demo
+'''Main file for NMMO baselines
 
-/projeckt contains all necessary RLlib wrappers to train and
+rllib_wrapper.py contains all necessary RLlib wrappers to train and
 evaluate capable policies on Neural MMO as well as rendering,
 logging, and visualization tools.
 
-Associated docs and tutorials are hosted on jsuarez5341.github.io.'''
+Associated docs and tutorials are hosted on neuralmmo.github.io.'''
 from pdb import set_trace as T
 
 from fire import Fire
@@ -18,12 +18,12 @@ import ray
 from ray import rllib, tune
 from ray.tune import CLIReporter
 from ray.tune.integration.wandb import WandbLoggerCallback
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 
 import nmmo
 
-import config as base_config
 import rllib_wrapper as wrapper
+import config as base_config
+from config import scale
 
 
 class ConsoleLog(CLIReporter):
@@ -167,12 +167,22 @@ class CLI():
       if 'help' in kwargs:
          return 
 
-      assert 'config' in kwargs, 'Specify a config'
+      assert 'config' in kwargs, 'Specify a config class'
       config = kwargs.pop('config')
       config = getattr(base_config, config)()
       config.override(**kwargs)
-      self.config = config
 
+      if 'scale' in kwargs:
+          config_scale = kwargs.pop('scale')
+          config = getattr(scale, config_scale)()
+          config.override(config_scale)
+
+      assert hasattr(config, NUM_GPUS), 'Missing NUM_GPUS (did you specify a scale?)'
+      assert hasattr(config, NUM_WORKERS), 'Missing NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, EVALUATION_NUM_WORKERS), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, EVALUATION_NUM_EPISODES), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
+
+      self.config = config
       self.trainer_wrapper = wrapper.PPO
 
    def generate(self, **kwargs):

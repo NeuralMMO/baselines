@@ -265,8 +265,9 @@ class Trainer:
              ranks[agent] = stat
 
       #Getting a type(int) exception?
-      #Achievement system is off
+      #Either install error or (old) achievement system is off?
       ranks = list(ranks.values())
+      assert type(ranks[0]) != int, 'Incorrect RLlib install. See required baseline setup on the install docs'
       nEnvs = len(ranks[0])
       
       #Once RLlib adds better custom metric support,
