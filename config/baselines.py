@@ -8,6 +8,8 @@ import tasks
 
 class Medium(scale.Baseline, bases.Medium, nmmo.config.AllGameSystems):
     '''Config for NMMO default environment with concurrent spawns'''
+    TASKS                   = tasks.All
+
     @property
     def SPAWN(self):
         return self.SPAWN_CONCURRENT

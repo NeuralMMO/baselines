@@ -42,7 +42,7 @@ class RLlib:
       return super().NMAPS
 
    @property
-   def TRAIN_BATCH_SIZE():
+   def TRAIN_BATCH_SIZE(self):
       return 64 * 256 * self.NUM_WORKERS
 
    #Checkpointing. Resume will load the latest trial, e.g. to continue training
