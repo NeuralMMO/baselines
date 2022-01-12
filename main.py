@@ -1,14 +1,15 @@
-'''Main file for the neural-mmo/projekt demo
+'''Main file for NMMO baselines
 
-/projeckt contains all necessary RLlib wrappers to train and
+rllib_wrapper.py contains all necessary RLlib wrappers to train and
 evaluate capable policies on Neural MMO as well as rendering,
 logging, and visualization tools.
 
-Associated docs and tutorials are hosted on jsuarez5341.github.io.'''
+Associated docs and tutorials are hosted on neuralmmo.github.io.'''
 from pdb import set_trace as T
 
 from fire import Fire
 from copy import deepcopy
+from operator import attrgetter
 import os
 
 import numpy as np
@@ -18,12 +19,12 @@ import ray
 from ray import rllib, tune
 from ray.tune import CLIReporter
 from ray.tune.integration.wandb import WandbLoggerCallback
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 
 import nmmo
 
-import config as base_config
 import rllib_wrapper as wrapper
+import config as base_config
+from config import scale
 
 
 class ConsoleLog(CLIReporter):
@@ -149,13 +150,13 @@ def run_tune_experiment(config, trainer_wrapper):
       )
 
 
-class Anvil():
+class CLI():
    '''Neural MMO CLI powered by Google Fire
 
    Main file for the RLlib demo included with Neural MMO.
 
    Usage:
-      python Forge.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
+      python main.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
 
    The User API documents core env flags. Additional config options specific
    to this demo are available in projekt/config.py. 
@@ -167,13 +168,28 @@ class Anvil():
       if 'help' in kwargs:
          return 
 
-      assert 'config' in kwargs, 'Specify a config'
+      assert 'config' in kwargs, 'Specify a config class'
       config = kwargs.pop('config')
-      config = getattr(base_config, config)()
+      config = attrgetter(config)(base_config)()
       config.override(**kwargs)
-      self.config = config
 
-      self.trainer_wrapper = wrapper.Impala
+      if 'scale' in kwargs:
+          config_scale = kwargs.pop('scale')
+          config = getattr(scale, config_scale)()
+          config.override(config_scale)
+
+      assert hasattr(config, 'NUM_GPUS'), 'Missing NUM_GPUS (did you specify a scale?)'
+      assert hasattr(config, 'NUM_WORKERS'), 'Missing NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_WORKERS'), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
+
+      self.config = config
+      self.trainer_wrapper = wrapper.PPO
+
+   def generate(self, **kwargs):
+      '''Manually generates maps using the current --config setting'''
+      from nmmo.core import terrain
+      terrain.MapGenerator(self.config).generate_all_maps()
 
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''
@@ -201,4 +217,4 @@ if __name__ == '__main__':
 
    from fire import core
    core.Display = Display
-   Fire(Anvil)
+   Fire(CLI)

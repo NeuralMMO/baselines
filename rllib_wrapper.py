@@ -60,42 +60,34 @@ class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
       self.config = config['config']
       super().__init__(self.config)
 
-   def reward(self, ent):
-      config      = self.config
+   def render(self):
+      #Patch for RLlib dupe rendering bug
+      if not self.config.RENDER:
+         return
 
-      ACHIEVEMENT = config.REWARD_ACHIEVEMENT
-      SCALE       = config.ACHIEVEMENT_SCALE
-      COOPERATIVE = config.COOPERATIVE
-
-      individual  = 0 if ent.entID in self.realm.players else -1
-      team        = 0
-
-      if ACHIEVEMENT:
-         individual += SCALE*ent.achievements.update(self.realm, ent, dry=True)
-      if COOPERATIVE:
-         nDead = len([p for p in self.dead.values() if p.population == ent.pop])
-         team  = -nDead / config.TEAM_SIZE
-      if COOPERATIVE and ACHIEVEMENT:
-         pre, post = [], []
-         for p in self.realm.players.corporeal.values():
-            if p.population == ent.pop:
-               pre.append(p.achievements.score(aggregate=False))
-               post.append(p.achievements.update(
-                     self.realm, ent, aggregate=False, dry=True))
-        
-         pre   = np.array(pre).max(0)
-         post  = np.array(post).max(0)
-         team += SCALE*(post - pre).sum()
-
-      ent.achievements.update(self.realm, ent)
-
-      alpha  = config.TEAM_SPIRIT
-      return alpha*team + (1.0-alpha)*individual
+      super().render()
 
    def step(self, decisions):
       obs, rewards, dones, infos = super().step(decisions)
-
       config = self.config
+      ts = config.TEAM_SPIRIT
+      
+      if config.COOPERATIVE:
+          #Union of task rewards across population
+          team_rewards = defaultdict(lambda: defaultdict(int))
+          populations = {}
+          for entID, info in infos.items():
+              pop = info.pop('population')
+              populations[entID] = pop
+              team = team_rewards[pop]
+              for task, reward in info.items():
+                  team[task] = max(team[task], reward)
+
+          #Team spirit interpolated between agent and team summed task rewards
+          for entID, reward in rewards.items():
+              pop = populations[entID]
+              rewards[entID] = ts*sum(team_rewards[pop].values()) + (1-ts)*reward
+
       dones['__all__'] = False
       test = config.EVALUATE or config.RENDER
       
@@ -273,8 +265,9 @@ class Trainer:
              ranks[agent] = stat
 
       #Getting a type(int) exception?
-      #Achievement system is off
+      #Either install error or (old) achievement system is off?
       ranks = list(ranks.values())
+      assert type(ranks[0]) != int, 'Incorrect RLlib install. See required baseline setup on the install docs'
       nEnvs = len(ranks[0])
       
       #Once RLlib adds better custom metric support,
@@ -322,7 +315,7 @@ class RLlibLogCallbacks(DefaultCallbacks):
 
       stats      = logs['Stats']
       policy_ids = stats['PolicyID']
-      scores     = stats['Achievement']
+      scores     = stats['Achievement_Reward']
 
       invMap = {agent.policyID: agent for agent in env.config.AGENTS}
 
