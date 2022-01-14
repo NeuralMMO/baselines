@@ -304,20 +304,26 @@ class RLlibLogCallbacks(DefaultCallbacks):
       assert len(base_env.envs) == 1, 'One env per worker'
       env    = base_env.envs[0]
 
+      invMap = {agent.policyID: agent for agent in env.config.AGENTS}
+
+      stats      = logs['Stats']
+      policy_ids = stats['PolicyID']
+ 
       logs = env.terminal()
       for key, vals in logs['Stats'].items():
-         episode.custom_metrics[key] = np.mean(vals)
+         policy_stat = defaultdict(list)
+         for policy, v in zip(policy_ids, vals):
+             policy_stat(policy).append(v)
+         for policy, vals in policy_stat.items():
+             episode.custom_metrics[key] = np.mean(vals)
 
       if not env.config.EVALUATE:
          return 
 
       agents = defaultdict(list)
 
-      stats      = logs['Stats']
-      policy_ids = stats['PolicyID']
-      scores     = stats['Achievement_Reward']
+      scores     = stats['Task_Reward']
 
-      invMap = {agent.policyID: agent for agent in env.config.AGENTS}
 
       for policyID, score in zip(policy_ids, scores):
          policy = invMap[policyID]

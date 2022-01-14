@@ -1,3 +1,12 @@
+#* Put render command first
+#* Fix default config load
+#* Make wandb optional
+#* Make maps gen per directory
+#* Example pregen maps
+#* Wandb check per-pop stats
+#Make a /demos folder with a bunch of tutorials
+#Small map one agent train laptop
+
 '''Main file for NMMO baselines
 
 rllib_wrapper.py contains all necessary RLlib wrappers to train and
@@ -129,6 +138,16 @@ def run_tune_experiment(config, trainer_wrapper):
       restore   = '{0}/{1}/{2}/checkpoint_{3:06d}/checkpoint-{3}'.format(
             config.EXPERIMENT_DIR, algorithm, config_name, config.RESTORE_CHECKPOINT)
 
+   callbacks = []
+   wandb_api_key = 'wandb_api_key'
+   if os.path.exists(wandb_api_key):
+       callbacks=[WandbLoggerCallback(
+               project = 'NeuralMMO',
+               api_key_file = 'wandb_api_key',
+               log_config = False)]
+   else:
+       print('Running without WanDB. Create a file baselines/wandb_api_key and paste your API key to enable')
+
    tune.run(trainer_cls,
       config    = rllib_config,
       name      = trainer_cls.name(),
@@ -143,10 +162,7 @@ def run_tune_experiment(config, trainer_wrapper):
       trial_dirname_creator = lambda _: config_name,
       progress_reporter = ConsoleLog(),
       reuse_actors = True,
-      callbacks=[WandbLoggerCallback(
-          project = 'NeuralMMO',
-          api_key_file = 'wandb_api_key',
-          log_config = False)],
+      callbacks=callbacks,
       )
 
 
@@ -168,8 +184,10 @@ class CLI():
       if 'help' in kwargs:
          return 
 
-      assert 'config' in kwargs, 'Specify a config class'
-      config = kwargs.pop('config')
+      config = 'baselines.Medium'
+      if 'config' in kwargs:
+          config = kwargs.pop('config')
+
       config = attrgetter(config)(base_config)()
       config.override(**kwargs)
 
@@ -188,8 +206,7 @@ class CLI():
 
    def generate(self, **kwargs):
       '''Manually generates maps using the current --config setting'''
-      from nmmo.core import terrain
-      terrain.MapGenerator(self.config).generate_all_maps()
+      nmmo.MapGenerator(self.config).generate_all_maps()
 
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''
@@ -209,6 +226,7 @@ class CLI():
       self.config.RENDER                  = True
       self.config.NUM_WORKERS             = 1
       self.evaluate(**kwargs)
+
 
 if __name__ == '__main__':
    def Display(lines, out):
