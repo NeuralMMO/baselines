@@ -5,12 +5,12 @@ import ray
 import config
 import rllib_wrapper
 
-from Forge import run_tune_experiment
+from main import run_tune_experiment
 
 def setup():
    ray.shutdown()
 
-   conf = config.Debug()
+   conf = config.baselines.Debug()
    conf.TRAINING_ITERATIONS = 1
    conf.RESTORE             = False
 

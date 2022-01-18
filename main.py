@@ -1,14 +1,24 @@
-'''Main file for the neural-mmo/projekt demo
+#* Put render command first
+#* Fix default config load
+#* Make wandb optional
+#* Make maps gen per directory
+#* Example pregen maps
+#* Wandb check per-pop stats
+#Make a /demos folder with a bunch of tutorials
+#Small map one agent train laptop
 
-/projeckt contains all necessary RLlib wrappers to train and
+'''Main file for NMMO baselines
+
+rllib_wrapper.py contains all necessary RLlib wrappers to train and
 evaluate capable policies on Neural MMO as well as rendering,
 logging, and visualization tools.
 
-Associated docs and tutorials are hosted on jsuarez5341.github.io.'''
+Associated docs and tutorials are hosted on neuralmmo.github.io.'''
 from pdb import set_trace as T
 
 from fire import Fire
 from copy import deepcopy
+from operator import attrgetter
 import os
 
 import numpy as np
@@ -18,12 +28,12 @@ import ray
 from ray import rllib, tune
 from ray.tune import CLIReporter
 from ray.tune.integration.wandb import WandbLoggerCallback
-from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 
 import nmmo
 
-import config as base_config
 import rllib_wrapper as wrapper
+import config as base_config
+from config import scale
 
 
 class ConsoleLog(CLIReporter):
@@ -128,6 +138,16 @@ def run_tune_experiment(config, trainer_wrapper):
       restore   = '{0}/{1}/{2}/checkpoint_{3:06d}/checkpoint-{3}'.format(
             config.EXPERIMENT_DIR, algorithm, config_name, config.RESTORE_CHECKPOINT)
 
+   callbacks = []
+   wandb_api_key = 'wandb_api_key'
+   if os.path.exists(wandb_api_key):
+       callbacks=[WandbLoggerCallback(
+               project = 'NeuralMMO',
+               api_key_file = 'wandb_api_key',
+               log_config = False)]
+   else:
+       print('Running without WanDB. Create a file baselines/wandb_api_key and paste your API key to enable')
+
    tune.run(trainer_cls,
       config    = rllib_config,
       name      = trainer_cls.name(),
@@ -142,20 +162,17 @@ def run_tune_experiment(config, trainer_wrapper):
       trial_dirname_creator = lambda _: config_name,
       progress_reporter = ConsoleLog(),
       reuse_actors = True,
-      callbacks=[WandbLoggerCallback(
-          project = 'NeuralMMO',
-          api_key_file = 'wandb_api_key',
-          log_config = False)],
+      callbacks=callbacks,
       )
 
 
-class Anvil():
+class CLI():
    '''Neural MMO CLI powered by Google Fire
 
    Main file for the RLlib demo included with Neural MMO.
 
    Usage:
-      python Forge.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
+      python main.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
 
    The User API documents core env flags. Additional config options specific
    to this demo are available in projekt/config.py. 
@@ -167,13 +184,29 @@ class Anvil():
       if 'help' in kwargs:
          return 
 
-      assert 'config' in kwargs, 'Specify a config'
-      config = kwargs.pop('config')
-      config = getattr(base_config, config)()
-      config.override(**kwargs)
-      self.config = config
+      config = 'baselines.Medium'
+      if 'config' in kwargs:
+          config = kwargs.pop('config')
 
-      self.trainer_wrapper = wrapper.Impala
+      config = attrgetter(config)(base_config)()
+      config.override(**kwargs)
+
+      if 'scale' in kwargs:
+          config_scale = kwargs.pop('scale')
+          config = getattr(scale, config_scale)()
+          config.override(config_scale)
+
+      assert hasattr(config, 'NUM_GPUS'), 'Missing NUM_GPUS (did you specify a scale?)'
+      assert hasattr(config, 'NUM_WORKERS'), 'Missing NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_WORKERS'), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
+
+      self.config = config
+      self.trainer_wrapper = wrapper.PPO
+
+   def generate(self, **kwargs):
+      '''Manually generates maps using the current --config setting'''
+      nmmo.MapGenerator(self.config).generate_all_maps()
 
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''
@@ -194,6 +227,7 @@ class Anvil():
       self.config.NUM_WORKERS             = 1
       self.evaluate(**kwargs)
 
+
 if __name__ == '__main__':
    def Display(lines, out):
         text = "\n".join(lines) + "\n"
@@ -201,4 +235,4 @@ if __name__ == '__main__':
 
    from fire import core
    core.Display = Display
-   Fire(Anvil)
+   Fire(CLI)
