@@ -12,14 +12,20 @@ from demos import minimal
 
 
 class PlayerKillRewardEnv(nmmo.Env):
-    '''Assigns a reward of 0.1 per player defeated and the default -1 reward for dying'''
+    '''Reward 0.1 per player defeated, -1 for death'''
     def reward(self, player):
+        # Default -1 reward for death
+        # Infos returns per-task rewards
         reward, info = super().reward(player)
 
+        # Inject new attribute
         if not hasattr(player, 'kills'):
             player.kills = 0
 
+        # Historical kills already in player state
         kills = player.history.playerKills
+
+        # Only reward for new kills
         if kills > player.kills:
             reward += 0.1 * (kills - player.kills)
 
@@ -33,12 +39,19 @@ def player_kills(realm, player):
 
 class PlayerKillTaskConfig(minimal.Config):
     '''Assign reward 1 for the first and third kills'''
-    TASKS  = [Task(player_kills, target=1, reward=2), Task(player_kills, target=3, reward=2)]
     AGENTS = [baselines.Combat]
+
+    # Task params: reward fn, score to complete, completion reward
+    TASKS  = [Task(player_kills, target=1, reward=2),
+              Task(player_kills, target=3, reward=2)]
 
 
 if __name__ == '__main__':
-    stats    = minimal.simulate(PlayerKillRewardEnv, PlayerKillTaskConfig, horizon=128)['Stats']
+    stats = minimal.simulate(
+            PlayerKillRewardEnv,
+            PlayerKillTaskConfig,
+            horizon=128)['Stats']
+
     reward   = np.mean(stats['Task_Reward'])
     complete = np.mean(stats['Task_Completed'])
 

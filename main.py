@@ -6,6 +6,11 @@
 #* Wandb check per-pop stats
 #Make a /demos folder with a bunch of tutorials
 #Small map one agent train laptop
+#Terrain demo
+#Different populations doing different tasks
+# Per population config?
+#Tiled map editor -- do later
+# Simplify evaluate SR -- api for Open Skill?
 
 '''Main file for NMMO baselines
 

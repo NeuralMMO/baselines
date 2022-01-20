@@ -17,50 +17,11 @@ import tasks
 from demos import minimal
 
 
-def rank(policy_ids, scores):
-    '''Compute policy rankings from per-agent scores'''
-    agents = defaultdict(list)
-    for policy_id, score in zip(policy_ids, scores):
-        agents[policy_id].append(score + 1e-8*np.random.normal())
-
-    # Double argsort returns ranks
-    return np.argsort(
-            np.argsort(
-                    [-np.mean(vals) for policy, vals in 
-                    sorted(agents.items())])).tolist()
-
-
-class OpenSkillRating:
-    '''Rating wrapper'''
-    def __init__(self, mu=1e-9, sigma=100/3):
-        # 95% win chance against 2*sigma lower SR
-        self.ratings = {agent.__name__: openskill.Rating(mu=mu, sigma=sigma)
-                for agent in Config.AGENTS}
-
-        self.mu    = mu
-        self.sigma = sigma
-
-        self.anchor()
-
-    def update(self, ranks):
-        teams = [[e] for e in list(self.ratings.values())]
-        ratings = openskill.rate(teams, rank=ranks)
-        ratings = [openskill.create_rating(team[0]) for team in ratings]
-        for agent_name, rating in zip(self.ratings, ratings):
-            self.ratings[agent_name] = rating
-
-        self.anchor()
-
-    def anchor(self, anchor='Meander'):
-        for agent_name, rating in self.ratings.items():
-            rating.sigma = self.sigma
-            if agent_name == anchor:
-                rating.mu = self.mu
-                rating.sigma = self.sigma
-
-
 def parallel_simulations(cores, horizon):
-    '''Simulate environments in parallel and compute skill ratings'''
+    '''Simulate environments in parallel and compute skill ratings
+
+    Runs one environment per core for horizon steps, then uses
+    the nmmo.OpenSkillRating wrapper to estimate per-policy skill'''
     nmmo.MapGenerator(Config()).generate_all_maps()
 
     # Parallel sim using base ray
@@ -69,22 +30,35 @@ def parallel_simulations(cores, horizon):
                     nmmo.Env, Config, horizon=horizon)
             for worker in range(cores)])
 
+    # NMMO OpenSkill wrapper for computing SR
+    sr = nmmo.OpenSkillRating(Config.AGENTS)
     for stats in all_stats:
-        stats      = stats['Stats']
-        ranks      = rank(stats['PolicyID'], stats['Task_Reward'])
-        sr.update(ranks)
+        stats = stats['Stats']
 
-        print(sr.ratings)
+        # SR updates take a list of policy IDs and scores for all agents
+        ratings = sr.update(
+                policy_ids=stats['PolicyID'],
+                scores=stats['Task_Reward'])
+
+        # Prettify results
+        results = []
+        for agent, rating in ratings.items():
+            results.append(f'{agent}: {str(rating.mu)[:6]:.6s}')
+        print('   '.join(results))
 
 
 class Config(nmmo.config.Default):
+    '''Default baseline config with only scripted agents'''
     AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat]
     TASKS  = tasks.All
 
+    # Share maps with baseline evaluations
+    PATH_MAPS = 'maps/medium/evaluation/'
+
 
 if __name__ == '__main__':
-    CORES   = 10
-    HORIZON = 32
+    CORES   = 20
+    HORIZON = 128
 
     ray.init()
     parallel_simulations(CORES, HORIZON)
