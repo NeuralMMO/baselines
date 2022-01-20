@@ -55,4 +55,4 @@ if __name__ == '__main__':
     #lifetime = minimal.simulate(SmallExploreEnv, MeanderBaseline, horizon=128)['Stats']['Lifetime']
     #print(f'Average Scripted Meander Lifetime: {np.mean(lifetime)}')
 
-    run_tune_experiment(SmallExploreConfig, rllib_wrapper.PPO)
+    run_tune_experiment(SmallExploreConfig(), rllib_wrapper.PPO)
