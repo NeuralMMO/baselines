@@ -35,3 +35,4 @@ class Debug(scale.Debug, bases.Small, nmmo.config.AllGameSystems):
 
    HIDDEN                  = 2
    EMBED                   = 2
+

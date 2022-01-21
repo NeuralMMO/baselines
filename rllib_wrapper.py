@@ -19,6 +19,7 @@ from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 import nmmo
 
 from neural.policy import Recurrent
+from scripted import baselines
 
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
@@ -224,23 +225,15 @@ class Trainer:
       super().__init__(config, env, logger_creator)
       self.env_config = config['env_config']['config']
 
-      #1/sqrt(2)=76% win chance within beta, 95% win chance vs 3*beta=100 SR
-      trueskill.setup(mu=1000, sigma=2*100/3, beta=100/3, tau=2/3, draw_probability=0)
+      agents = self.env_config.EVAL_AGENTS
 
-      self.ratings = [{agent.__name__: trueskill.Rating(mu=1000, sigma=2*100/3)}
-            for agent in set(self.env_config.EVAL_AGENTS)]
-
-      self.reset_scripted()
+      err = 'Meander not in EVAL_AGENTS. Specify another agent to anchor to SR=0'
+      assert baselines.Meander in agents, err
+      self.sr = nmmo.OpenSkillRating(agents, baselines.Meander)
 
    @classmethod
    def name(cls):
       return cls.__bases__[0].__name__
-
-   def reset_scripted(self):
-      for rating_dict in self.ratings:
-         for agent, rating in rating_dict.items():
-            if agent == 'Combat':
-               rating_dict[agent] = trueskill.Rating(mu=1500, sigma=1)
 
    def post_mean(self, stats):
       for key, vals in stats.items():
@@ -255,34 +248,23 @@ class Trainer:
    def evaluate(self):
       stat_dict = super().evaluate()
       stats = stat_dict['evaluation']['custom_metrics']
- 
-      ranks = {agent.__name__: -1 for agent in set(self.env_config.EVAL_AGENTS)}
-      for key in list(stats.keys()):
-         if key.startswith('Rank_'):
-             stat = stats[key]
-             del stats[key]
-             agent = key[5:]
-             ranks[agent] = stat
 
-      #Getting a type(int) exception?
-      #Either install error or (old) achievement system is off?
-      ranks = list(ranks.values())
-      assert type(ranks[0]) != int, 'Incorrect RLlib install. See required baseline setup on the install docs'
-      nEnvs = len(ranks[0])
-      
-      #Once RLlib adds better custom metric support,
-      #there should be a cleaner way to divide episodes into blocks
-      for i in range(nEnvs): 
-         env_ranks = [e[i] for e in ranks]
-         self.ratings = trueskill.rate(self.ratings, env_ranks)
-         self.reset_scripted()
-
-      for rating in self.ratings:
-         key  = 'SR_{}'.format(list(rating.keys())[0])
-         val  = list(rating.values())[0]
-         stats[key] = val.mu
+      policy_ids   = stats.pop('Raw_Policy_IDs')
+      task_rewards = stats.pop('Raw_Task_Rewards')
      
+      for ids, scores in zip(policy_ids, task_rewards):
+          ratings = self.sr.update(policy_ids=ids, scores=scores)
+
+          for pop, (agent, rating) in enumerate(ratings.items()):
+              key = f'SR_{agent.__name__}_{pop}'
+
+              if key not in stats:
+                  stats[key] = []
+ 
+              stats[key] = rating.mu
+        
       return stat_dict
+
 
 def PPO(config):
    class PPO(Trainer, rllib.agents.ppo.ppo.PPOTrainer): pass
@@ -304,40 +286,27 @@ class RLlibLogCallbacks(DefaultCallbacks):
       assert len(base_env.envs) == 1, 'One env per worker'
       env    = base_env.envs[0]
 
-      invMap = {agent.policyID: agent for agent in env.config.AGENTS}
+      inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
 
-      stats      = logs['Stats']
-      policy_ids = stats['PolicyID']
+      stats      = env.terminal()['Stats']
+      policy_ids = stats.pop('PolicyID')
  
-      logs = env.terminal()
-      for key, vals in logs['Stats'].items():
+      for key, vals in stats.items():
          policy_stat = defaultdict(list)
-         for policy, v in zip(policy_ids, vals):
-             policy_stat(policy).append(v)
-         for policy, vals in policy_stat.items():
+
+         # Per-population metrics
+         for policy_id, v in zip(policy_ids, vals):
+             policy_stat[policy_id].append(v)
+
+         for policy_id, vals in policy_stat.items():
+             policy = inv_map[policy_id].__name__
+
+             key = f'{policy}_{policy_id}_{key}'
              episode.custom_metrics[key] = np.mean(vals)
 
       if not env.config.EVALUATE:
          return 
 
-      agents = defaultdict(list)
-
-      scores     = stats['Task_Reward']
-
-
-      for policyID, score in zip(policy_ids, scores):
-         policy = invMap[policyID]
-         agents[policy].append(score)
-
-      for agent in agents:
-         agents[agent] = np.mean(agents[agent])
-
-      policies = list(agents.keys())
-      scores   = list(agents.values())
-
-      idxs     = np.argsort(-np.array(scores))
-
-      for rank, idx in enumerate(idxs):
-          key = 'Rank_{}'.format(policies[idx].__name__)
-          episode.custom_metrics[key] = rank
+      episode.custom_metrics['Raw_Policy_IDs']   = policy_ids
+      episode.custom_metrics['Raw_Task_Rewards'] = stats['Task_Reward']
 

@@ -4,11 +4,14 @@ from pdb import set_trace as T
 
 import nmmo
 
+# Scripted models included with the baselines repository
 from scripted import baselines
 
 
 def simulate(env, config, render=False, horizon=float('inf')):
     '''Simulate an environment for a fixed horizon'''
+
+    # Environment accepts a config object
     env = env(config())
     env.reset()
 
@@ -30,7 +33,14 @@ def simulate(env, config, render=False, horizon=float('inf')):
 
 
 class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
-    # Agents will be instantiated using these templates
+    '''Config objects subclass a nmmo.config.{Small, Medium, Large} template
+
+    Can also specify config game systems to enable various features'''
+
+    # Agents will be instantiated using templates included with the baselines
+    # Meander: randomly wanders around
+    # Forage: explicitly searches for food and water
+    # Combat: forages and actively fights other agents
     AGENTS    = [baselines.Meander, baselines.Forage, baselines.Combat]
 
     #Set a unique path for demo maps
