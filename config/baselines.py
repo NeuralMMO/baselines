@@ -10,6 +10,10 @@ class Medium(scale.Baseline, bases.Medium, nmmo.config.AllGameSystems):
     '''Config for NMMO default environment with concurrent spawns'''
     TASKS                   = tasks.All
 
+    # Load 1000 epoch pretrained model
+    RESTORE                 = True
+    RESTORE_ID              = '870d'
+
     @property
     def SPAWN(self):
         return self.SPAWN_CONCURRENT

@@ -31,7 +31,7 @@ def parallel_simulations(cores, horizon):
             for worker in range(cores)])
 
     # NMMO OpenSkill wrapper for computing SR
-    sr = nmmo.OpenSkillRating(Config.AGENTS)
+    sr = nmmo.OpenSkillRating(Config.AGENTS, anchor=baselines.Meander)
     for stats in all_stats:
         stats = stats['Stats']
 
@@ -43,7 +43,7 @@ def parallel_simulations(cores, horizon):
         # Prettify results
         results = []
         for agent, rating in ratings.items():
-            results.append(f'{agent}: {str(rating.mu)[:6]:.6s}')
+            results.append(f'{agent.__name__}: {str(rating.mu)[:6]:.6s}')
         print('   '.join(results))
 
 
