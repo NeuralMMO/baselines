@@ -229,7 +229,7 @@ class Trainer:
 
       err = 'Meander not in EVAL_AGENTS. Specify another agent to anchor to SR=0'
       assert baselines.Meander in agents, err
-      self.sr = nmmo.OpenSkillRating(agents, baselines.Meander)
+      self.sr = nmmo.OpenSkillRating(agents, baselines.Combat)
 
    @classmethod
    def name(cls):
@@ -251,7 +251,7 @@ class Trainer:
 
       policy_ids   = stats.pop('Raw_Policy_IDs')
       task_rewards = stats.pop('Raw_Task_Rewards')
-     
+
       for ids, scores in zip(policy_ids, task_rewards):
           ratings = self.sr.update(policy_ids=ids, scores=scores)
 
@@ -301,8 +301,8 @@ class RLlibLogCallbacks(DefaultCallbacks):
          for policy_id, vals in policy_stat.items():
              policy = inv_map[policy_id].__name__
 
-             key = f'{policy}_{policy_id}_{key}'
-             episode.custom_metrics[key] = np.mean(vals)
+             k = f'{policy}_{policy_id}_{key}'
+             episode.custom_metrics[k] = np.mean(vals)
 
       if not env.config.EVALUATE:
          return 

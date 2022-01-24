@@ -46,6 +46,10 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
 
+    #Force terrain generation -- avoids unexpected behavior from caching
+    FORCE_MAP_GENERATION = True
+
+
 
 if __name__ == '__main__':
     simulate(nmmo.Env, Config, render=True)

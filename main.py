@@ -1,22 +1,10 @@
-#* Put render command first
-#* Fix default config load
-#* Make wandb optional
-#* Make maps gen per directory
-#* Example pregen maps
-#* Wandb check per-pop stats
-#Make a /demos folder with a bunch of tutorials
-#Small map one agent train laptop
-#Terrain demo
-#Different populations doing different tasks
-# Per population config?
-#Tiled map editor -- do later
-# Simplify evaluate SR -- api for Open Skill?
-
 '''Main file for NMMO baselines
 
 rllib_wrapper.py contains all necessary RLlib wrappers to train and
 evaluate capable policies on Neural MMO as well as rendering,
 logging, and visualization tools.
+
+TODO: Still need to add per pop / diff task demo and Tiled support
 
 Associated docs and tutorials are hosted on neuralmmo.github.io.'''
 from pdb import set_trace as T

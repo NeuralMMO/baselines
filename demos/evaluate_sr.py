@@ -31,7 +31,7 @@ def parallel_simulations(cores, horizon):
             for worker in range(cores)])
 
     # NMMO OpenSkill wrapper for computing SR
-    sr = nmmo.OpenSkillRating(Config.AGENTS, anchor=baselines.Meander)
+    sr = nmmo.OpenSkillRating(Config.AGENTS, anchor=baselines.Combat)
     for stats in all_stats:
         stats = stats['Stats']
 
@@ -57,7 +57,7 @@ class Config(nmmo.config.Default):
 
 
 if __name__ == '__main__':
-    CORES   = 20
+    CORES   = 100
     HORIZON = 128
 
     ray.init()
