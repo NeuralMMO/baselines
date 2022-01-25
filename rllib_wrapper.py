@@ -6,7 +6,6 @@ from collections import defaultdict
 from tqdm import tqdm
 import gym
 import wandb
-import trueskill
 
 import torch
 from torch import nn
