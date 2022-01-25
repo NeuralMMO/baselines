@@ -248,6 +248,10 @@ class Trainer:
       stat_dict = super().evaluate()
       stats = stat_dict['evaluation']['custom_metrics']
 
+      if __debug__:
+         err = 'Missing evaluation key. Patch RLlib as per the installation guide'
+         assert 'Raw_Policy_IDs' in stats, err
+
       policy_ids   = stats.pop('Raw_Policy_IDs')
       task_rewards = stats.pop('Raw_Task_Rewards')
 
