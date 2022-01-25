@@ -36,7 +36,7 @@ class ConsoleLog(CLIReporter):
       super().report(trials, done, *sys_info)
 
 
-def run_tune_experiment(config, trainer_wrapper):
+def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
    '''Ray[RLlib, Tune] integration for Neural MMO
 
    Setup custom environment, observations/actions, policies,
@@ -53,7 +53,7 @@ def run_tune_experiment(config, trainer_wrapper):
 
    #Register custom env and policies
    ray.tune.registry.register_env("Neural_MMO",
-         lambda config: wrapper.RLlibEnv(config))
+         lambda config: rllib_env(config))
 
    rllib.models.ModelCatalog.register_custom_model(
          'godsword', wrapper.RLlibPolicy)

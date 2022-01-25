@@ -14,7 +14,7 @@ from config import bases, scale
 from main import run_tune_experiment
 
 
-class SmallExploreEnv(nmmo.Env):
+class SmallExploreEnv(rllib_wrapper.RLlibEnv):
     '''Simple environment with task exploration'''
     def reward(self, player):
         # Default survival reward
@@ -39,7 +39,7 @@ class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Resource):
     '''Config for NMMO default environment with concurrent spawns'''
 
     # Always trains from scratch, enable 1 GPU
-    RESTORE  = None
+    RESTORE  = False
     NUM_GPUS = 1
 
     # Render maps during generation for user to preview
@@ -61,17 +61,22 @@ class CLI:
     '''Google Fire CLI for this simple training demo. Commands: baselines, neural'''
     def baselines(self):
         '''Scripted baselines for demo'''
-        lifetime = minimal.simulate(SmallExploreEnv, ForageBaseline, horizon=128)['Stats']['Lifetime']
+        lifetime = minimal.simulate(SmallExploreEnv, ForageBaseline,
+                horizon=128)['Stats']['Lifetime']
         print(f'Average Scripted Forage Lifetime: {np.mean(lifetime)}')
 
-        lifetime = minimal.simulate(SmallExploreEnv, MeanderBaseline, horizon=128)['Stats']['Lifetime']
+        lifetime = minimal.simulate(SmallExploreEnv, MeanderBaseline,
+                horizon=128)['Stats']['Lifetime']
         print(f'Average Scripted Meander Lifetime: {np.mean(lifetime)}')
 
         print('Note that these are noisy estimates on one env')
 
     def neural(self):
         '''Train neural model from scratch'''
-        run_tune_experiment(SmallExploreConfig(), rllib_wrapper.PPO)
+        run_tune_experiment(
+                SmallExploreConfig(),
+                rllib_wrapper.PPO,
+                rllib_env=SmallExploreEnv)
 
 if __name__ == '__main__':
     Fire(CLI)
