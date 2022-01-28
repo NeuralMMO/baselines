@@ -13,13 +13,13 @@ def player_kills(realm, player):
     return player.history.playerKills
 
 def equipment(realm, player):
-    return player.loadout.defense
+    return player.equipment.total(lambda e: e.level)
 
 def exploration(realm, player):
     return player.history.exploration
 
 def foraging(realm, player):
-    return (player.skills.fishing.level + player.skills.hunting.level) / 2.0
+    return (player.skills.food.level.val + player.skills.water.level.val) / 2.0
 
 PlayerKills = [
         Task(player_kills, 1, Tier.EASY),
