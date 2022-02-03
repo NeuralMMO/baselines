@@ -135,7 +135,7 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
    wandb_api_key = 'wandb_api_key'
    if os.path.exists(wandb_api_key):
        callbacks=[WandbLoggerCallback(
-               project = 'NeuralMMO',
+               project = 'NeuralMMO-v1.6',
                api_key_file = 'wandb_api_key',
                log_config = False)]
    else:

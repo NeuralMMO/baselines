@@ -30,7 +30,7 @@ class Debug(scale.Debug, bases.Small, nmmo.config.AllGameSystems):
 
    RESTORE                 = False
 
-   TRAINING_ITERATIONS     = 2
+   TRAINING_ITERATIONS     = 10
 
    SGD_MINIBATCH_SIZE      = 100
    TRAIN_BATCH_SIZE        = 400

@@ -51,7 +51,8 @@ class Input(nn.Module):
       
       #TODO: implement obs scaling in a less hackey place
       self.tileWeight = torch.Tensor([1.0, 0.0, 0.02, 0.02])
-      self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.00, 0.02, 0.02, 0.1, 0.01, 0.1, 0.1, 0.1, 0.3])
+      self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+      self.itemWeight = torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0])
 
       if torch.cuda.is_available():
           self.tileWeight = self.tileWeight.cuda()
