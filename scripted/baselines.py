@@ -35,8 +35,9 @@ class Scripted(nmmo.Agent):
            config : A forge.blade.core.Config object or subclass object
         ''' 
         super().__init__(config, idx)
-        self.food_max  = config.RESOURCE_BASE
-        self.water_max = config.RESOURCE_BASE
+        self.food_max   = config.RESOURCE_BASE
+        self.water_max  = config.RESOURCE_BASE
+        self.health_max = config.BASE_HEALTH
 
         self.spawnR    = None
         self.spawnC    = None
@@ -235,13 +236,22 @@ class Scripted(nmmo.Agent):
             if itm.equipped:
                continue
 
-            self.actions[Action.Inventory] = {
-               Action.InventoryAction: Action.Use,
+            self.actions[Action.Use] = {
                Action.Item: itm.instance}
            
             return True
  
+    def consume(self):
+        if self.health <= self.health_max // 2 and item.Poultice in self.best_items:
+            itm = self.best_items[item.Poultice]
+        elif (self.food == 0 or self.water == 0) and item.Ration in self.best_items:
+            itm = self.best_items[item.Ration]
+        else:
+            return
 
+        self.actions[Action.Use] = {
+           Action.Item: itm.instance}
+ 
     def sell(self, keep_k: dict, keep_best: set):
         for itm in self.inventory:
             cls = itm.cls
@@ -262,11 +272,10 @@ class Scripted(nmmo.Agent):
             if itm.quantity == 0:
                 continue
 
-            self.actions[Action.Exchange] = {
-               Action.ExchangeAction: Action.Sell,
+            self.actions[Action.Sell] = {
                Action.Item: itm.instance,
-               Action.Quantity: itm.quantity,
-               Action.Price: itm.level}
+               Action.Quantity: Action.Quantity.edges[int(itm.quantity)],
+               Action.Price: Action.Price.edges[int(itm.level)]}
 
             return itm
 
@@ -294,10 +303,9 @@ class Scripted(nmmo.Agent):
         if purchase is None:
             return
  
-        self.actions[Action.Exchange] = {
-           Action.ExchangeAction: Action.Buy,
+        self.actions[Action.Buy] = {
            Action.Item: purchase.instance,
-           Action.Quantity: 1}
+           Action.Quantity: Action.Quantity.edges[0]}
 
         return purchase
  
@@ -400,6 +408,7 @@ class Combat(Scripted):
     def __call__(self, obs):
         super().__call__(obs)
 
+        self.style = Action.Range
         self.adaptive_control_and_targeting()
         self.attack()
 
@@ -426,7 +435,8 @@ class Gather(Scripted):
         self.process_inventory()
         self.process_market()
 
-        self.equip(items={item.Hat, item.Top, item.Bottom, self.tool})
+        if not self.consume():
+            self.equip(items={item.Hat, item.Top, item.Bottom, self.tool})
 
         if self.forage_criterion:
            self.forage()
@@ -485,7 +495,8 @@ class CombatExchange(Combat):
         self.process_inventory()
         self.process_market()
 
-        self.equip(items={item.Hat, item.Top, item.Bottom, self.weapon, self.ammo})
+        if not self.consume():
+           self.equip(items={item.Hat, item.Top, item.Bottom, self.weapon, self.ammo})
 
         item_sold = self.sell(
                 keep_k={item.Ration: 2, item.Poultice: 2, self.ammo: 10},

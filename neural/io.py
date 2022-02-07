@@ -121,8 +121,14 @@ class Output(nn.Module):
                idxs  = [e.idx for e in arg.edges]
                cands = self.arg.weight[idxs]
                cands = cands.repeat(batch, 1, 1)
-            else:
+            elif atn == nmmo.action.Attack:
                cands = lookup['Entity']
+               lens  = lookup['N']
+            elif atn in (nmmo.action.Sell, nmmo.action.Use):
+               cands = lookup['Item']
+               lens  = lookup['N']
+            elif atn == nmmo.action.Buy:
+               cands = lookup['Market']
                lens  = lookup['N']
 
             logits         = self.net(obs, cands, lens)
