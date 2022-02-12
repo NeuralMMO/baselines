@@ -31,7 +31,7 @@ def parallel_simulations(cores, horizon):
             for worker in range(cores)])
 
     # NMMO OpenSkill wrapper for computing SR
-    sr = nmmo.OpenSkillRating(Config.AGENTS, anchor=baselines.Combat)
+    sr = nmmo.OpenSkillRating(Config.PLAYERS, anchor=baselines.Range)
     for stats in all_stats:
         stats = stats['Stats']
 
@@ -49,8 +49,8 @@ def parallel_simulations(cores, horizon):
 
 class Config(nmmo.config.Default):
     '''Default baseline config with only scripted agents'''
-    AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat]
-    TASKS  = tasks.All
+    PLAYERS = [baselines.Meander, baselines.Forage, baselines.Range]
+    TASKS   = tasks.All
 
     # Share maps with baseline evaluations
     PATH_MAPS = 'maps/medium/evaluation/'

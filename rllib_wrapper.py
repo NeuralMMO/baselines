@@ -224,10 +224,9 @@ class Trainer:
       super().__init__(config, env, logger_creator)
       self.env_config = config['env_config']['config']
 
-      agents = self.env_config.EVAL_AGENTS
+      agents = self.env_config.EVAL_PLAYERS
 
-      err = 'Meander not in EVAL_AGENTS. Specify another agent to anchor to SR=0'
-      assert baselines.Meander in agents, err
+      assert baselines.Meander in agents, 'Meander not in EVAL_PLAYERS. Specify another agent to anchor to SR=0'
       self.sr = nmmo.OpenSkillRating(agents, baselines.Combat)
 
    @classmethod
@@ -249,8 +248,7 @@ class Trainer:
       stats = stat_dict['evaluation']['custom_metrics']
 
       if __debug__:
-         err = 'Missing evaluation key. Patch RLlib as per the installation guide'
-         assert 'Raw_Policy_IDs' in stats, err
+         assert 'Raw_Policy_IDs' in stats, 'Missing evaluation key. Patch RLlib as per the installation guide'
 
       policy_ids   = stats.pop('Raw_Policy_IDs')
       task_rewards = stats.pop('Raw_Task_Rewards')
@@ -289,7 +287,7 @@ class RLlibLogCallbacks(DefaultCallbacks):
       assert len(base_env.envs) == 1, 'One env per worker'
       env    = base_env.envs[0]
 
-      inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
+      inv_map = {agent.policyID: agent for agent in env.config.PLAYERS}
 
       stats      = env.terminal()['Stats']
       policy_ids = stats.pop('PolicyID')

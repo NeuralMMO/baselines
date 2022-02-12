@@ -73,7 +73,7 @@ class Simple(Base):
       tiles     = obs['Tile']
       self.attn = torch.norm(tiles, p=2, dim=-1)
 
-      w      = self.config.WINDOW
+      w      = self.config.PLAYER_VISION_DIAMETER
       batch  = tiles.size(0)
       hidden = tiles.size(2)
       #Dims correct?

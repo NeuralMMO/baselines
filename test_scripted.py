@@ -11,12 +11,12 @@ import tasks
 
 from scripted import baselines
 
-class MediumAllSystems(config.Medium, config.AllGameSystems):
-    PATH_MAPS = os.path.join(config.Medium.PATH_MAPS, 'evaluation')
-    FORCE_MAP_GENERATION = True
+class MediumAllSystems(config.Small, config.AllGameSystems):
+    PATH_MAPS = os.path.join(config.Small.PATH_MAPS, 'evaluation')
+    MAP_FORCE_GENERATION = True
 
     TASKS     = tasks.All
-    AGENTS    = [
+    PLAYERS   = [
             baselines.Fisher, baselines.Herbalist,
             baselines.Prospector, baselines.Carver, baselines.Alchemist,
             baselines.Melee, baselines.Range, baselines.Mage]

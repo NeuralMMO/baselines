@@ -10,7 +10,7 @@ from main import run_tune_experiment
 from config import baselines
 
 
-def PopulationTaskEnv(rllib_wrapper.RLlibEnv):
+class PopulationTaskEnv(rllib_wrapper.RLlibEnv):
     def reward(self, player):
         reward, info = super().reward(player)
 
@@ -34,8 +34,8 @@ def PopulationTaskEnv(rllib_wrapper.RLlibEnv):
 
 
 class PopulationTaskConfig(baselines.Medium):
-    RESTORE   = False
-    NPOLICIES = 4
+    RESTORE = False
+    PLAYERS = 4 * [nmmo.Agent]
 
 
 if __name__ == '__main__':

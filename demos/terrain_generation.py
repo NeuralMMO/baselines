@@ -13,7 +13,7 @@ class CustomMapGenerator(nmmo.MapGenerator):
     def generate_map(self, idx):
         '''Override the default per-map generation method'''
         config  = self.config
-        size    = config.TERRAIN_SIZE
+        size    = config.MAP_SIZE
 
         # Create fractal and material placeholders
         fractal = np.zeros((size, size)) #Unused in demo
@@ -30,7 +30,7 @@ class CustomMapGenerator(nmmo.MapGenerator):
                     matl[r, c] = nmmo.Terrain.WATER
                 elif linf < 12:
                     matl[r, c] = nmmo.Terrain.FOREST
-                elif linf <= size//2 - config.TERRAIN_BORDER:
+                elif linf <= size//2 - config.MAP_BORDER:
                     matl[r, c] = nmmo.Terrain.GRASS
                 else:
                     matl[r, c] = nmmo.Terrain.LAVA

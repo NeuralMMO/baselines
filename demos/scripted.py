@@ -9,6 +9,7 @@ from scripted import baselines
 
 from demos import minimal
 
+
 #Subclass nmmo.Agent
 class LavaAgent(nmmo.Agent):
     '''Likes to jump in lava'''
@@ -56,7 +57,7 @@ class LavaAgent(nmmo.Agent):
         return {nmmo.action.Move: {nmmo.action.Direction: direction}}
 
 class LavaAgentConfig(minimal.Config):
-    AGENTS    = [LavaAgent]
+    PLAYERS   = [LavaAgent]
 
 if __name__ == '__main__':
     minimal.simulate(nmmo.Env, LavaAgentConfig, render=True)

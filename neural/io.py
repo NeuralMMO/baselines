@@ -40,6 +40,9 @@ class Input(nn.Module):
       self.embeddings = nn.ModuleDict()
       self.attributes = nn.ModuleDict()
 
+      # TODO: Remove setup hack
+      nmmo.Action.edges(config)
+
       for _, entity in nmmo.Serialized:
          continuous = len([e for e in entity if e[1].CONTINUOUS])
          discrete   = len([e for e in entity if e[1].DISCRETE])
@@ -113,7 +116,7 @@ class Output(nn.Module):
          lookup : A fixed size representation of each entity
       ''' 
       rets = defaultdict(dict)
-      for atn in nmmo.Action.edges:
+      for atn in nmmo.Action.edges(self.config):
          for arg in atn.edges:
             lens  = None
             if arg.argType == nmmo.action.Fixed:

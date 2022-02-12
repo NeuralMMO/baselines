@@ -21,7 +21,9 @@ class RLlib:
 
    #Run in train/evaluation mode
    EVALUATE     = False
-   N_TRAIN_MAPS = 256
+
+   MAP_N_TRAIN  = 256
+   MAP_N_EVAL   = 32
 
    @property
    def MODEL(self):
@@ -36,10 +38,10 @@ class RLlib:
       return os.path.join(maps, 'training')
 
    @property
-   def NMAPS(self):
-      if not self.EVALUATE:
-          return self.N_TRAIN_MAPS
-      return super().NMAPS
+   def MAP_N(self):
+      if self.EVALUATE:
+         return self.MAP_N_EVAL
+      return self.MAP_N_TRAIN
 
    @property
    def TRAIN_BATCH_SIZE(self):
@@ -55,11 +57,11 @@ class RLlib:
    RESTORE_CHECKPOINT      = 1000
 
    #Policy specification
-   EVAL_AGENTS             = [
+   EVAL_PLAYERS            = [
            baselines.Meander, 
            baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver, baselines.Alchemist,
            baselines.Melee, baselines.Range, baselines.Mage] + [nmmo.Agent] * 7
-   AGENTS                  = [nmmo.Agent]
+   PLAYERS                 = [nmmo.Agent]
    TASKS                   = []
 
    #Hardware and debug
@@ -78,7 +80,7 @@ class RLlib:
 
    #Model
    SCRIPTED                = None
-   N_AGENT_OBS             = 100
+   PLAYER_N_OBS            = 100
    NPOLICIES               = 1
    HIDDEN                  = 64
    EMBED                   = 64
@@ -93,7 +95,6 @@ class Small(RLlib, nmmo.config.Small):
 
    Features up to 64 concurrent agents and 32 concurrent NPCs,
    64 x 64 maps (excluding the border), and 128 timestep horizons'''
-   
    
    #Memory/Batch Scale
    ROLLOUT_FRAGMENT_LENGTH = 128

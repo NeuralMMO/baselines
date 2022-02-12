@@ -35,9 +35,11 @@ class Scripted(nmmo.Agent):
            config : A forge.blade.core.Config object or subclass object
         ''' 
         super().__init__(config, idx)
-        self.food_max   = config.RESOURCE_BASE
-        self.water_max  = config.RESOURCE_BASE
-        self.health_max = config.BASE_HEALTH
+        self.health_max = config.PLAYER_BASE_HEALTH
+
+        if config.RESOURCE_SYSTEM_ENABLED:
+            self.food_max   = config.RESOURCE_BASE
+            self.water_max  = config.RESOURCE_BASE
 
         self.spawnR    = None
         self.spawnC    = None
@@ -141,6 +143,9 @@ class Scripted(nmmo.Agent):
         self.target_weak()
 
     def process_inventory(self):
+        if not self.config.ITEM_SYSTEM_ENABLED:
+            return
+
         self.inventory   = set()
         self.best_items  = {}
         self.item_counts = defaultdict(int)
@@ -195,6 +200,9 @@ class Scripted(nmmo.Agent):
         return (upgrade_level - current_level) / price
 
     def process_market(self):
+        if not self.config.EXCHANGE_SYSTEM_ENABLED:
+            return
+
         self.market         = set()
         self.best_heuristic = {}
 
@@ -308,7 +316,20 @@ class Scripted(nmmo.Agent):
            Action.Quantity: Action.Quantity.edges[0]}
 
         return purchase
- 
+
+    def exchange(self):
+        if not self.config.EXCHANGE_SYSTEM_ENABLED:
+            return
+
+        self.process_market()
+        if not self.sell(keep_k=self.supplies, keep_best=self.wishlist):
+            self.buy(buy_k=self.supplies, buy_upgrade=self.wishlist)
+
+    def use(self):
+        self.process_inventory()
+        if self.config.EQUIPMENT_SYSTEM_ENABLED and not self.consume():
+            self.equip(items=self.wishlist)
+
     def __call__(self, obs):
         '''Process observations and return actions
 
@@ -370,12 +391,12 @@ class Meander(Scripted):
         move.meander(self.config, self.ob, self.actions)
         return self.actions
 
-class ForageNoExplore(Scripted):
-    '''Forages using Dijkstra's algorithm'''
+class Explore(Scripted):
+    '''Actively explores towards the center'''
     def __call__(self, obs):
         super().__call__(obs)
 
-        self.forage()
+        self.explore()
 
         return self.actions
 
@@ -391,71 +412,45 @@ class Forage(Scripted):
 
         return self.actions
 
-class CombatNoExplore(Scripted):
-    '''Forages using Dijkstra's algorithm and fights nearby agents'''
-    def __call__(self, obs):
-        super().__call__(obs)
-
-        self.adaptive_control_and_targeting(explore=False)
-
-        self.style = Action.Range
-        self.attack()
-
-        return self.actions
- 
 class Combat(Scripted):
     '''Forages, fights, and explores'''
+    @property
+    def supplies(self):
+        return {item.Ration: 2, item.Poultice: 2, self.ammo: 10}
+
+    @property
+    def wishlist(self):
+        return {item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
+
     def __call__(self, obs):
         super().__call__(obs)
-
-        self.style = Action.Range
-        self.adaptive_control_and_targeting()
-        self.attack()
-
-        return self.actions
-
-class CombatTribrid(Scripted):
-    '''Forages, fights, and explores.
-
-    Uses a slightly more sophisticated attack routine'''
-    def __call__(self, obs):
-        super().__call__(obs)
+        self.use()
+        self.exchange()
 
         self.adaptive_control_and_targeting()
-
-        self.select_combat_style()
         self.attack()
 
         return self.actions
 
 class Gather(Scripted):
     '''Forages, fights, and explores'''
+    @property
+    def supplies(self):
+        return {item.Ration: 2, item.Poultice: 2}
+
+    @property
+    def wishlist(self):
+        return {item.Hat, item.Top, item.Bottom, self.tool}
+
     def __call__(self, obs):
         super().__call__(obs)
-        self.process_inventory()
-        self.process_market()
-
-        if not self.consume():
-            self.equip(items={item.Hat, item.Top, item.Bottom, self.tool})
+        self.use()
+        self.exchange()
 
         if self.forage_criterion:
            self.forage()
-        elif self.gather(self.resource):
-            pass #Successful pathing
-        else:
+        elif not self.gather(self.resource):
            self.explore()
-
-
-        item_sold = self.sell(
-                keep_k={item.Ration: 2, item.Poultice: 2},
-                keep_best={self.tool, item.Hat, item.Top, item.Bottom})
-
-        if item_sold:
-           return self.actions
-
-        item_bought = self.buy(
-                buy_k={item.Ration: 2, item.Poultice: 2},
-                buy_upgrade={self.tool, item.Hat, item.Top, item.Bottom})
 
         return self.actions
 
@@ -489,43 +484,21 @@ class Alchemist(Gather):
         self.resource = material.Crystal
         self.tool     = item.Arcane
 
-class CombatExchange(Combat):
-    def __call__(self, obs):
-        super().__call__(obs)
-        self.process_inventory()
-        self.process_market()
-
-        if not self.consume():
-           self.equip(items={item.Hat, item.Top, item.Bottom, self.weapon, self.ammo})
-
-        item_sold = self.sell(
-                keep_k={item.Ration: 2, item.Poultice: 2, self.ammo: 10},
-                keep_best={self.weapon, item.Hat, item.Top, item.Bottom})
-
-        if item_sold:
-           return self.actions
-
-        item_bought = self.buy(
-                buy_k={item.Ration: 2, item.Poultice: 2, self.ammo: 10},
-                buy_upgrade={self.weapon, item.Hat, item.Top, item.Bottom})
-
-        return self.actions
-
-class Melee(CombatExchange):
+class Melee(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
         self.weapon = item.Sword
         self.style  = Action.Melee
         self.ammo   = item.Scrap
 
-class Range(CombatExchange):
+class Range(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
         self.weapon = item.Bow
         self.style  = Action.Range
         self.ammo   = item.Shaving
 
-class Mage(CombatExchange):
+class Mage(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
         self.weapon = item.Wand

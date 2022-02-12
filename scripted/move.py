@@ -73,8 +73,8 @@ def meander(config, ob, actions):
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def explore(config, ob, actions, spawnR, spawnC):
-   vision = config.NSTIM
-   sz     = config.TERRAIN_SIZE
+   vision = config.PLAYER_VISION_RADIUS
+   sz     = config.MAP_SIZE
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
@@ -104,7 +104,7 @@ def evade(config, ob, actions, attacker):
    pathfind(config, ob, actions, rr, cc)
 
 def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
-   vision = config.NSTIM
+   vision = config.PLAYER_VISION_RADIUS
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
@@ -177,7 +177,7 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def findResource(config, ob, resource):
-    vision = config.NSTIM
+    vision = config.PLAYER_VISION_RADIUS
     Tile   = Stimulus.Tile
              
     resource_index = resource.index
@@ -207,7 +207,7 @@ def gatherAStar(config, ob, actions, resource, cutoff=100):
     return True
 
 def gatherBFS(config, ob, actions, resource, cutoff=100):
-    vision = config.NSTIM
+    vision = config.PLAYER_VISION_RADIUS
     Entity = nmmo.Serialized.Entity
     Tile   = nmmo.Serialized.Tile
 
@@ -277,13 +277,14 @@ def gatherBFS(config, ob, actions, resource, cutoff=100):
 
     direction = towards(found)
     actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
+
     return True
 
 
 def aStar(config, ob, actions, rr, cc, cutoff=100):
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
-   vision = config.NSTIM
+   vision = config.PLAYER_VISION_RADIUS
 
    start = (0, 0)
    goal  = (rr, cc)
@@ -352,6 +353,7 @@ def aStar(config, ob, actions, rr, cc, cutoff=100):
    #if goal not in backtrace:
    #   goal = closestPos
 
+   goal = closestPos
    while goal in backtrace and backtrace[goal] != start:
       goal = backtrace[goal]
 

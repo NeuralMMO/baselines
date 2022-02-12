@@ -74,7 +74,7 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
    #Evaluation config
    eval_config = deepcopy(config)
    eval_config.EVALUATE = True
-   eval_config.AGENTS   = eval_config.EVAL_AGENTS
+   eval_config.PLAYERS  = eval_config.EVAL_PLAYERS
 
    trainer_cls, extra_config = trainer_wrapper(config)
 
@@ -206,7 +206,7 @@ class CLI():
       run_tune_experiment(self.config, self.trainer_wrapper)
 
    def evaluate(self, **kwargs):
-      '''Evaluate a model against EVAL_AGENTS models'''
+      '''Evaluate a model against EVAL_PLAYERS models'''
       self.config.TRAINING_ITERATIONS     = 0
       self.config.EVALUATE                = True
       self.config.EVALUATION_NUM_WORKERS  = self.config.NUM_WORKERS
