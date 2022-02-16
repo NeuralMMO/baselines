@@ -173,8 +173,9 @@ class Scripted(nmmo.Agent):
            itm = Item(item_ary)
            cls = itm.cls
 
-           if itm.quantity == 0:
-              continue
+           assert itm.cls.__name__ == 'Gold' or itm.quantity != 0
+           #if itm.quantity == 0:
+           #   continue
 
            self.item_counts[cls] += itm.quantity
            self.inventory.add(itm)
@@ -262,7 +263,13 @@ class Scripted(nmmo.Agent):
  
     def sell(self, keep_k: dict, keep_best: set):
         for itm in self.inventory:
-            cls = itm.cls
+            price    = itm.level
+            cls      = itm.cls
+
+            if cls == item.Gold:
+                continue
+
+            assert itm.quantity > 0
 
             if cls in keep_k:
                 owned = self.item_counts[cls]
@@ -270,20 +277,13 @@ class Scripted(nmmo.Agent):
                 if owned <= k:
                     continue
  
-            if cls == item.Gold:
-                continue
-
             #Exists an equippable of the current class, best needs to be kept, and this is the best item
             if cls in self.best_items and cls in keep_best and itm.instance == self.best_items[cls].instance:
                 continue
 
-            if itm.quantity == 0:
-                continue
-
             self.actions[Action.Sell] = {
                Action.Item: itm.instance,
-               Action.Quantity: Action.Quantity.edges[int(itm.quantity)],
-               Action.Price: Action.Price.edges[int(itm.level)]}
+               Action.Price: Action.Price.edges[int(price)]}
 
             return itm
 
@@ -312,8 +312,7 @@ class Scripted(nmmo.Agent):
             return
  
         self.actions[Action.Buy] = {
-           Action.Item: purchase.instance,
-           Action.Quantity: Action.Quantity.edges[0]}
+           Action.Item: purchase.instance}
 
         return purchase
 

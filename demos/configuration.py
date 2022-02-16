@@ -29,6 +29,7 @@ class Forage(Base, nmmo.config.Resource, nmmo.config.Terrain):
 class Fight(Forage, nmmo.config.Combat):
     '''Fight for control of resources'''
     PLAYERS = [baselines.Range]
+    PROGRESSION_BASE_XP_SCALE = 1000
 
 class Specialize(Fight, nmmo.config.Progression):
     '''Specialize training to gain an upper hand'''
