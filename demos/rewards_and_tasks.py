@@ -53,7 +53,7 @@ if __name__ == '__main__':
             horizon=128)['Stats']
 
     reward   = np.mean(stats['Task_Reward'])
-    complete = np.mean(stats['Task_Completed'])
+    complete = np.mean(stats['Tasks_Completed'])
 
     print(f'Task Reward: {reward:.3f}, Tasks Complete: {complete:.3f}')
 
