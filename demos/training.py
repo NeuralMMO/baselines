@@ -15,9 +15,6 @@ from main import run_tune_experiment
 
 
 class SmallExploreEnv(nmmo.Env):
-    pass
-
-class SmallExploreRLlibEnv(rllib_wrapper.RLlibEnv):
     '''Simple environment with task exploration'''
     def reward(self, player):
         # Default survival reward
@@ -37,6 +34,8 @@ class SmallExploreRLlibEnv(rllib_wrapper.RLlibEnv):
 
         return reward, info
 
+class SmallExploreRLlibEnv(SmallExploreEnv, rllib_wrapper.RLlibEnv):
+    pass
 
 class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Resource):
     '''Config for NMMO default environment with concurrent spawns'''
