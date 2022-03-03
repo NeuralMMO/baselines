@@ -35,6 +35,27 @@ class ConsoleLog(CLIReporter):
       print(nmmo.motd + '\n')
       super().report(trials, done, *sys_info)
 
+import functools, gym
+class QMixEnv(wrapper.RLlibEnv):
+   def observation_space(self, agent: int):
+      return gym.spaces.Tuple([gym.spaces.Box(low=0, high=1, shape=(1,1), dtype=np.float32)])
+
+   def action_space(self, agent):
+      return gym.spaces.Tuple([gym.spaces.Discrete(2)])
+
+   def step(self, actions):
+      actions = {}
+
+      obs, rewards, dones, infos = super().step(actions)
+
+      for key in list(obs.keys()):
+         obs[key] = tuple(np.array([[0.5]], dtype=np.float32),)
+
+      if len(obs) != 1:
+         T()
+
+      return obs, rewards, dones, infos
+
 
 def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
    '''Ray[RLlib, Tune] integration for Neural MMO
@@ -52,17 +73,21 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
    ray.init(local_mode=config.LOCAL_MODE)
 
    #Register custom env and policies
+   grouping = lambda e: 'group1'
+   #{'group1': [i for i in range(1, config.NENT+1)]}
    ray.tune.registry.register_env("Neural_MMO",
-         lambda config: rllib_env(config))
+         lambda config: rllib_env(config).with_agent_groups(grouping))
 
    rllib.models.ModelCatalog.register_custom_model(
          'godsword', wrapper.RLlibPolicy)
 
-   mapPolicy = lambda agentID : 'policy_{}'.format(
-         agentID % config.NPOLICIES)
+   mapPolicy = lambda agentID : 'policy_{0}'
+
+   #mapPolicy = lambda agentID : 'policy_{}'.format(
+   #      agentID % config.NPOLICIES)
 
    policies = {}
-   env = nmmo.Env(config)
+   env = rllib_env({'config': config})
    for i in range(config.NPOLICIES):
       params = {
             "agent_id": i,
@@ -87,7 +112,8 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
       'simple_optimizer': True,
       'train_batch_size': config.TRAIN_BATCH_SIZE,
       'rollout_fragment_length': config.ROLLOUT_FRAGMENT_LENGTH,
-      'num_sgd_iter': config.NUM_SGD_ITER,
+      #'num_sgd_iter': config.NUM_SGD_ITER,
+      'timesteps_per_iteration': 10,
       'framework': 'torch',
       'horizon': np.inf,
       'soft_horizon': False, 
@@ -196,7 +222,7 @@ class CLI():
       assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
 
       self.config = config
-      self.trainer_wrapper = wrapper.PPO
+      self.trainer_wrapper = wrapper.QMix
 
    def generate(self, **kwargs):
       '''Manually generates maps using the current --config setting'''
@@ -204,7 +230,7 @@ class CLI():
 
    def train(self, **kwargs):
       '''Train a model using the current --config setting'''
-      run_tune_experiment(self.config, self.trainer_wrapper)
+      run_tune_experiment(self.config, self.trainer_wrapper, QMixEnv)
 
    def evaluate(self, **kwargs):
       '''Evaluate a model against EVAL_AGENTS models'''

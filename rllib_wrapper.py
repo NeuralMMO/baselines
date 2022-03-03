@@ -20,11 +20,38 @@ import nmmo
 from neural.policy import Recurrent
 from scripted import baselines
 
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+
+'''
+class RLlibPolicy(TorchModelV2, nn.Module):
+   def __init__(self, obs_space, action_space, num_outputs, model_config, name, config=None):
+      super().__init__(obs_space=obs_space, action_space=action_space,
+            num_outputs=num_outputs, model_config=model_config, name=name)
+      nn.Module.__init__(self)
+      self.config = config
+
+      #self.space  = actionSpace(self.config).spaces
+      self.model      = nn.Linear(1, 2)
+      self.value_net  = nn.Linear(1, 1)
+
+   def forward(self, input_dict, state, seq_lens):
+      logits = self.model(input_dict['obs'])
+      self.value = self.value_net(input_dict['obs'])
+
+      return logits, state
+
+   def value_function(self):
+      return self.value
+'''
+
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
+   #def __init__(self, observation_space, action_space, config):
    def __init__(self, *args, **kwargs):
+      #self.config = config
       self.config = kwargs.pop('config')
       super().__init__(*args, **kwargs)
+      #super().__init__(observation_space, action_space, config)
       nn.Module.__init__(self)
 
       #self.space  = actionSpace(self.config).spaces
@@ -245,6 +272,7 @@ class Trainer:
       return stats
 
    def evaluate(self):
+      return {}
       stat_dict = super().evaluate()
       stats = stat_dict['evaluation']['custom_metrics']
 
@@ -282,12 +310,17 @@ def Impala(config):
    class Impala(Trainer, rllib.agents.impala.impala.ImpalaTrainer): pass
    return Impala, {}
 
+def QMix(config):
+   class QMix(Trainer, rllib.agents.qmix.qmix.QMixTrainer): pass
+   return QMix, {}
+
+
 ###############################################################################
 ### Logging
 class RLlibLogCallbacks(DefaultCallbacks):
    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
       assert len(base_env.envs) == 1, 'One env per worker'
-      env    = base_env.envs[0]
+      env    = base_env.envs[0].env
 
       inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
 
