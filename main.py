@@ -84,7 +84,7 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
       'num_gpus_per_worker': config.NUM_GPUS_PER_WORKER,
       'num_gpus': config.NUM_GPUS,
       'num_envs_per_worker': 1,
-      'simple_optimizer': True,
+      'simple_optimizer': False, #True broken in ray < 1.10, False broken in ray > 1.92
       'train_batch_size': config.TRAIN_BATCH_SIZE,
       'rollout_fragment_length': config.ROLLOUT_FRAGMENT_LENGTH,
       'num_sgd_iter': config.NUM_SGD_ITER,
