@@ -428,15 +428,8 @@ class Attentional(Base):
       hidden = self.proj(hidden)
       return hidden, state
 
-class SimpleAtns(Simple):
-   def __init__(self, config):
-      super().__init__(config)
-      self.proj_out = nn.Linear(config.HIDDEN, 4)
-
-   def output(self, hidden, entityLookup):
-      return self.proj_out(hidden)
-
-class RLlibPolicy(TorchModelV2, nn.Module):
+#class RLlibPolicy(TorchModelV2, nn.Module):
+class RLlibPolicy(RecurrentNetwork, nn.Module):
    def __init__(self, *args, **kwargs):
       self.config = kwargs.pop('config')
       config = self.config
@@ -444,27 +437,58 @@ class RLlibPolicy(TorchModelV2, nn.Module):
       super().__init__(*args, **kwargs)
       nn.Module.__init__(self)
 
-      self.model = SimpleAtns(self.config)
+      self.lstm = BatchFirstLSTM(
+            input_size=config.HIDDEN,
+            hidden_size=config.HIDDEN)
 
-   def forward(self, input_dict, state, seq_lens):
-      obs = nmmo.unpack(self.config, input_dict['obs'])
 
-      #logitDict, state = self.model(obs, state, seq_lens) 
-      actions, state = self.model(obs, state, seq_lens) 
+      self.proj_in  = nn.Linear(3276, config.HIDDEN)
+      self.proj_out = nn.Linear(config.HIDDEN, 4)
+      self.val = nn.Linear(config.HIDDEN, 1)
 
-      return actions, state
+   #Initial hidden state for RLlib Trainer
+   def get_initial_state(self):
+      return [self.val.weight.new(1, self.config.HIDDEN).zero_(),
+      self.val.weight.new(1, self.config.HIDDEN).zero_()]
 
-      logits = []
-      for atnKey, atn in sorted(logitDict.items()):
-         for argKey, arg in sorted(atn.items()):
-            logits.append(arg)
-            return torch.cat(logits, dim=1), state  
+   def forward(self, input_dict, state, lens):
+      obs = input_dict['obs']
+      hidden = self.proj_in(obs)
+      
+      #Attentional input preprocessor and batching
+      lens = lens.cpu() if type(lens) == torch.Tensor else lens
+      #hidden, _ = super().hidden(obs)
+      config    = self.config
+      h, c      = state
+
+      TB  = hidden.size(0) #Padded batch of size (seq x batch)
+      B   = len(lens)      #Sequence fragment time length
+      TT  = TB // B        #Trajectory batch size
+      H   = config.HIDDEN  #Hidden state size
+
+      #Pack (batch x seq, hidden) -> (batch, seq, hidden)
+      hidden        = rnn.pack_padded_sequence(
+                         input=hidden.view(B, TT, H),
+                         lengths=lens,
+                         enforce_sorted=False,
+                         batch_first=True)
+
+      #Main recurrent network
+      hidden, state = self.lstm(hidden, state)
+
+      #Unpack (batch, seq, hidden) -> (batch x seq, hidden)
+      hidden, _     = rnn.pad_packed_sequence(
+                         sequence=hidden,
+                         batch_first=True,
+                         total_length=TT)
+
+      out = self.proj_out(hidden)
+      self.value = self.val(hidden)
+ 
+      return hidden.reshape(TB, H), state
 
    def value_function(self):
       return self.model.value
-
-   def attention(self):
-      return self.model.attn
 
 class QMixNMMO(nmmo.Env, MultiAgentEnv):
    def __init__(self, config):
@@ -475,7 +499,7 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
        return Dict(
          {
             #'obs': super().observation_space(agent)
-            'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3277,), dtype=np.float32),
+            'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3276,), dtype=np.float32),
          }
        )
    
@@ -500,9 +524,14 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
       if self.realm.tick >= 32:
          dones['__all__'] = True
 
-      obs = nmmo.pack(obs)
-      for key, val in obs.items():
-         obs[key] = {'obs': val}
+      for key in obs:
+         flat = []
+         for ent_name, ent_attrs in obs[key].items():
+            for attr_name, attr in ent_attrs.items():
+               flat.append(attr.ravel())
+         flat = np.concatenate(flat)
+    
+         obs[key] = {'obs': flat}
 
       for key in ents:
          if key not in obs:
@@ -510,13 +539,14 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
             rewards[key] = 0
             dones[key] = 1
             infos[key] = {} 
+            
 
       return obs, rewards, dones, infos
 
 class Config(nmmo.config.Small):
     NENT = 2
-    EMBED = 10
-    HIDDEN = 10
+    EMBED = 2
+    HIDDEN = 2
 
     @property
     def SPAWN(self):

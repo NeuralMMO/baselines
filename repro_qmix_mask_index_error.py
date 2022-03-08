@@ -428,37 +428,32 @@ class Attentional(Base):
       hidden = self.proj(hidden)
       return hidden, state
 
-class SimpleAtns(Simple):
-   def __init__(self, config):
-      super().__init__(config)
-      self.proj_out = nn.Linear(config.HIDDEN, 4)
-
-   def output(self, hidden, entityLookup):
-      return self.proj_out(hidden)
-
+#class RLlibPolicy(RecurrentNetwork, nn.Module):
 class RLlibPolicy(TorchModelV2, nn.Module):
+   '''Wrapper class for using our baseline models with RLlib'''
    def __init__(self, *args, **kwargs):
       self.config = kwargs.pop('config')
-      config = self.config
-
       super().__init__(*args, **kwargs)
       nn.Module.__init__(self)
 
-      self.model = SimpleAtns(self.config)
+      self.model  = Simple(self.config)
+
+   #Initial hidden state for RLlib Trainer
+   def get_initial_state(self):
+      return [self.model.valueF.weight.new(1, self.config.HIDDEN).zero_(),
+              self.model.valueF.weight.new(1, self.config.HIDDEN).zero_()]
 
    def forward(self, input_dict, state, seq_lens):
-      obs = nmmo.unpack(self.config, input_dict['obs'])
-
-      #logitDict, state = self.model(obs, state, seq_lens) 
-      actions, state = self.model(obs, state, seq_lens) 
-
-      return actions, state
+      logitDict, state = self.model(input_dict['obs'], state, seq_lens)
 
       logits = []
+      #Flatten structured logits for RLlib
+      #TODO: better to use the space directly here in case of missing keys
       for atnKey, atn in sorted(logitDict.items()):
          for argKey, arg in sorted(atn.items()):
             logits.append(arg)
-            return torch.cat(logits, dim=1), state  
+
+      return torch.cat(logits, dim=1), state
 
    def value_function(self):
       return self.model.value
@@ -472,51 +467,34 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
       super().__init__(self.config)
 
    def observation_space(self, agent: int):
-       return Dict(
+      return Dict(
          {
-            #'obs': super().observation_space(agent)
-            'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3277,), dtype=np.float32),
+            'obs': super().observation_space(agent)
+            #'obs': gym.spaces.Box(low=0, high=1, shape=(1,1), dtype=np.float32),
          }
-       )
+      )
    
    def action_space(self, agent):
-      return gym.spaces.Discrete(4)
+      return gym.spaces.Discrete(2)
 
    def step(self, actions):
-      ents = list(actions.keys())
-      for ent in ents:
-         if ent not in self.realm.players:
-            del actions[ent]
-            continue
-
-         val = actions[ent]
-         move = {nmmo.action.Move: {nmmo.action.Direction: val}}
-         actions[ent] = move
+      actions = {}
 
       obs, rewards, dones, infos = super().step(actions)
 
       dones['__all__'] = False
-
       if self.realm.tick >= 32:
          dones['__all__'] = True
 
-      obs = nmmo.pack(obs)
-      for key, val in obs.items():
-         obs[key] = {'obs': val}
-
-      for key in ents:
-         if key not in obs:
-            obs[key] = {'obs': 0 * self.observation_space(key)['obs'].sample()}
-            rewards[key] = 0
-            dones[key] = 1
-            infos[key] = {} 
+      for key in list(obs.keys()):
+         obs[key] = {'obs': self.observation_space(key)['obs'].sample()}
 
       return obs, rewards, dones, infos
 
 class Config(nmmo.config.Small):
     NENT = 2
-    EMBED = 10
-    HIDDEN = 10
+    EMBED = 2
+    HIDDEN = 2
 
     @property
     def SPAWN(self):
@@ -566,7 +544,6 @@ class TestQMix(unittest.TestCase):
             env="Neural_MMO",
             config={
                 'num_envs_per_worker': 1,  # test with vectorization on
-                'num_gpus': 0,
                 'env_config': {
                     'config': config
                 },
