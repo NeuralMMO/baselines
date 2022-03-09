@@ -431,7 +431,7 @@ class Attentional(Base):
 class SimpleAtns(Simple):
    def __init__(self, config):
       super().__init__(config)
-      self.proj_out = nn.Linear(config.HIDDEN, 4)
+      self.proj_out = nn.Linear(config.HIDDEN, 304)
 
    def output(self, hidden, entityLookup):
       return self.proj_out(hidden)
@@ -474,16 +474,17 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
    def observation_space(self, agent: int):
        return Dict(
          {
-            #'obs': super().observation_space(agent)
-            'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3277,), dtype=np.float32),
+            'obs': super().observation_space(agent)
+            #'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3277,), dtype=np.float32),
          }
        )
    
-   def action_space(self, agent):
-      return gym.spaces.Discrete(4)
+   #def action_space(self, agent):
+   #   return gym.spaces.Discrete(4)
 
    def step(self, actions):
       ents = list(actions.keys())
+      '''
       for ent in ents:
          if ent not in self.realm.players:
             del actions[ent]
@@ -492,6 +493,7 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
          val = actions[ent]
          move = {nmmo.action.Move: {nmmo.action.Direction: val}}
          actions[ent] = move
+      '''
 
       obs, rewards, dones, infos = super().step(actions)
 

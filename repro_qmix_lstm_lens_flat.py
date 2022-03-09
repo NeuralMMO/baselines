@@ -442,7 +442,7 @@ class RLlibPolicy(RecurrentNetwork, nn.Module):
             hidden_size=config.HIDDEN)
 
 
-      self.proj_in  = nn.Linear(3276, config.HIDDEN)
+      self.proj_in  = nn.Linear(3277, config.HIDDEN)
       self.proj_out = nn.Linear(config.HIDDEN, 4)
       self.val = nn.Linear(config.HIDDEN, 1)
 
@@ -498,8 +498,8 @@ class QMixNMMO(nmmo.Env, MultiAgentEnv):
    def observation_space(self, agent: int):
        return Dict(
          {
-            #'obs': super().observation_space(agent)
-            'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3276,), dtype=np.float32),
+            'obs': super().observation_space(agent)
+            #'obs': gym.spaces.Box(low=-2**20, high=2**20, shape=(3276,), dtype=np.float32),
          }
        )
    
