@@ -22,28 +22,6 @@ from scripted import baselines
 
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 
-'''
-class RLlibPolicy(TorchModelV2, nn.Module):
-   def __init__(self, obs_space, action_space, num_outputs, model_config, name, config=None):
-      super().__init__(obs_space=obs_space, action_space=action_space,
-            num_outputs=num_outputs, model_config=model_config, name=name)
-      nn.Module.__init__(self)
-      self.config = config
-
-      #self.space  = actionSpace(self.config).spaces
-      self.model      = nn.Linear(1, 2)
-      self.value_net  = nn.Linear(1, 1)
-
-   def forward(self, input_dict, state, seq_lens):
-      logits = self.model(input_dict['obs'])
-      self.value = self.value_net(input_dict['obs'])
-
-      return logits, state
-
-   def value_function(self):
-      return self.value
-'''
-
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
    #def __init__(self, observation_space, action_space, config):
@@ -299,12 +277,23 @@ class Trainer:
 
 def PPO(config):
    class PPO(Trainer, rllib.agents.ppo.ppo.PPOTrainer): pass
-   extra_config = {'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE}
+   extra_config = {
+            'train_batch_size': config.TRAIN_BATCH_SIZE,
+            'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+            'num_sgd_iter': 1}
    return PPO, extra_config
 
 def APPO(config):
    class APPO(Trainer, rllib.agents.ppo.appo.APPOTrainer): pass
    return APPO, {}
+
+def DDPPO(config):
+   class DDPPO(Trainer, rllib.agents.ppo.ddppo.DDPPOTrainer): pass
+   extra_config = {
+           'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+           'num_gpus_per_worker': 0,
+           'num_gpus': 0}
+   return DDPPO, extra_config
 
 def Impala(config):
    class Impala(Trainer, rllib.agents.impala.impala.ImpalaTrainer): pass

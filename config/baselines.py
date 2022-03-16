@@ -19,6 +19,11 @@ class Medium(scale.Baseline, bases.Medium, nmmo.config.AllGameSystems):
         return self.SPAWN_CONCURRENT
     pass
 
+class CompatibleMedium(Medium):
+    EMULATE_FLAT_OBS       = True
+    EMULATE_FLAT_ATN       = True
+    EMULATE_CONST_POP      = True
+    EMULATE_CONST_HORIZON  = True
 
 class Debug(scale.Debug, bases.Small, nmmo.config.AllGameSystems):
    '''Debug Neural MMO training setting
