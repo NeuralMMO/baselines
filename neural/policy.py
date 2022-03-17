@@ -7,49 +7,11 @@ from torch.nn.utils import rnn
 
 from neural import io, subnets
 
-class Base(nn.Module):
-   def __init__(self, config):
-      '''Base class for baseline policies
-
-      Args:
-         config: A Configuration object
-      '''
-      super().__init__()
-      self.embed  = config.EMBED
-      self.config = config
-
-      self.input  = io.Input(config,
-            embeddings=io.MixedEmbedding,
-            attributes=subnets.SelfAttention)
-      self.output = io.Output(config)
-
-      self.valueF = nn.Linear(config.HIDDEN, 1)
-
-   def hidden(self, obs, state=None, lens=None):
-      '''Abstract method for hidden state processing, recurrent or otherwise,
-      applied between the input and output modules
-
-      Args:
-         obs: An observation dictionary, provided by forward()
-         state: The previous hidden state, only provided for recurrent nets
-         lens: Trajectory segment lengths used to unflatten batched obs
-      ''' 
-      raise NotImplementedError('Implement this method in a subclass')
-
-   def forward(self, obs, state=None, lens=None):
-      '''Applies builtin IO and value function with user-defined hidden
-      state subnetwork processing. Arguments are supplied by RLlib
-      ''' 
-      entityLookup  = self.input(obs)
-      hidden, state = self.hidden(entityLookup, state, lens)
-      self.value    = self.valueF(hidden).squeeze(1)
-      actions       = self.output(hidden, entityLookup)
-      return actions, state
-
-class Simple(Base):
+class Simple(nn.Module):
    def __init__(self, config):
       '''Simple baseline model with flat subnetworks'''
-      super().__init__(config)
+      super().__init__()
+      self.config = config
       h = config.HIDDEN
 
       self.ent    = nn.Linear(2*h, h)
@@ -58,9 +20,9 @@ class Simple(Base):
       self.fc     = nn.Linear(h*6*6, h)
 
       self.proj   = nn.Linear(2*h, h)
-      self.attend = subnets.SelfAttention(self.embed, h)
+      self.attend = subnets.SelfAttention(config.EMBED, h)
 
-   def hidden(self, obs, state=None, lens=None):
+   def forward(self, obs, state=None, lens=None):
       #Attentional agent embedding
       agentEmb  = obs['Entity']
       selfEmb   = agentEmb[:, 0:1].expand_as(agentEmb)
@@ -97,10 +59,10 @@ class Recurrent(Simple):
 
    #Note: seemingly redundant transposes are required to convert between 
    #Pytorch (seq_len, batch, hidden) <-> RLlib (batch, seq_len, hidden)
-   def hidden(self, obs, state, lens):
+   def forward(self, obs, state, lens):
       #Attentional input preprocessor and batching
       lens = lens.cpu() if type(lens) == torch.Tensor else lens
-      hidden, _ = super().hidden(obs)
+      hidden, _ = super().forward(obs)
       config    = self.config
       h, c      = state
 
@@ -127,7 +89,7 @@ class Recurrent(Simple):
 
       return hidden.reshape(TB, H), state
 
-class Attentional(Base):
+class Attentional(nn.Module):
    def __init__(self, config):
       '''Transformer-based baseline model'''
       super().__init__(config)
@@ -135,7 +97,7 @@ class Attentional(Base):
       self.tiles  = nn.TransformerEncoderLayer(d_model=config.HIDDEN, nhead=4)
       self.proj   = nn.Linear(2*config.HIDDEN, config.HIDDEN)
 
-   def hidden(self, obs, state=None, lens=None):
+   def forward(self, obs, state=None, lens=None):
       #Attentional agent embedding
       agents    = self.agents(obs[Stimulus.Entity])
       agents, _ = torch.max(agents, dim=-2)

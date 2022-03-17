@@ -31,7 +31,7 @@ from config import scale
 
 class ConsoleLog(CLIReporter):
    def report(self, trials, done, *sys_info):
-      os.system('cls' if os.name == 'nt' else 'clear') 
+      #os.system('cls' if os.name == 'nt' else 'clear') 
       print(nmmo.motd + '\n')
       super().report(trials, done, *sys_info)
 
@@ -106,7 +106,7 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
       'multiagent': {
          'policies': policies,
          'policy_mapping_fn': mapPolicy,
-         'count_steps_by': 'agent_steps'
+         'count_steps_by': 'env_steps'
       },
       'model': {
          'custom_model': 'godsword',
@@ -198,7 +198,7 @@ class CLI():
       assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
 
       self.config = config
-      self.trainer_wrapper = wrapper.DDPPO
+      self.trainer_wrapper = wrapper.PPO
 
    def generate(self, **kwargs):
       '''Manually generates maps using the current --config setting'''

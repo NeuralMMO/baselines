@@ -30,6 +30,10 @@ class Debug(scale.Debug, bases.Small, nmmo.config.AllGameSystems):
 
    A version of the Smallsetting with greatly reduced batch parameters.
    Only intended as a tool for identifying bugs in the model or environment'''
+   EMULATE_FLAT_OBS       = True
+   EMULATE_FLAT_ATN       = True
+   EMULATE_CONST_POP      = True
+   EMULATE_CONST_HORIZON  = True
 
    TASKS                   = tasks.All
 

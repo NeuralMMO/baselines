@@ -11,13 +11,14 @@ import torch
 from torch import nn
 from torch.nn.utils import rnn
 
+import ray
 from ray import rllib
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 
 import nmmo
 
-from neural.policy import Recurrent
+from neural import io, subnets, policy
 from scripted import baselines
 
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
@@ -27,36 +28,57 @@ class RLlibPolicy(RecurrentNetwork, nn.Module):
    #def __init__(self, observation_space, action_space, config):
    def __init__(self, *args, **kwargs):
       #self.config = config
-      self.config = kwargs.pop('config')
+      config = kwargs.pop('config')
+      self.config = config 
       super().__init__(*args, **kwargs)
-      #super().__init__(observation_space, action_space, config)
       nn.Module.__init__(self)
 
-      #self.space  = actionSpace(self.config).spaces
-      self.model  = Recurrent(self.config)
+      self.input  = io.Input(config,
+            embeddings=io.MixedEmbedding,
+            attributes=subnets.SelfAttention)
+
+      if config.EMULATE_FLAT_ATN:
+         self.output = nn.Linear(self.config.HIDDEN, 304)
+      else:
+         self.output = io.Output(config)
+
+      self.model  = policy.Recurrent(self.config)
+      self.valueF = nn.Linear(config.HIDDEN, 1)
+
 
    #Initial hidden state for RLlib Trainer
    def get_initial_state(self):
-      return [self.model.valueF.weight.new(1, self.config.HIDDEN).zero_(),
-              self.model.valueF.weight.new(1, self.config.HIDDEN).zero_()]
+      return [self.valueF.weight.new(1, self.config.HIDDEN).zero_(),
+              self.valueF.weight.new(1, self.config.HIDDEN).zero_()]
 
    def forward(self, input_dict, state, seq_lens):
-      logitDict, state = self.model(input_dict['obs'], state, seq_lens)
+      obs = input_dict['obs']
+      if self.config.EMULATE_FLAT_OBS:
+         obs = nmmo.emulation.unpack_obs(self.config, obs)
 
-      logits = []
+      entityLookup  = self.input(obs)
+      hidden, state = self.model(entityLookup, state, seq_lens)
+      self.value    = self.valueF(hidden).squeeze(1)
+
+      if self.config.EMULATE_FLAT_ATN:
+         output = self.output(hidden)
+         return output, state
+
       #Flatten structured logits for RLlib
       #TODO: better to use the space directly here in case of missing keys
-      for atnKey, atn in sorted(logitDict.items()):
+      logits = []
+      output = self.output(hidden, entityLookup)
+      for atnKey, atn in sorted(output.items()):
          for argKey, arg in sorted(atn.items()):
             logits.append(arg)
 
       return torch.cat(logits, dim=1), state
 
    def value_function(self):
-      return self.model.value
+      return self.value
 
    def attention(self):
-      return self.model.attn
+      return self.attn
 
 
 class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
@@ -64,6 +86,8 @@ class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
    def __init__(self, config):
       self.config = config['config']
       super().__init__(self.config)
+
+      self._agent_ids = [e for e in range(1, self.config.NENT+1)]
 
    def render(self):
       #Patch for RLlib dupe rendering bug
@@ -276,7 +300,8 @@ class Trainer:
 
 
 def PPO(config):
-   class PPO(Trainer, rllib.agents.ppo.ppo.PPOTrainer): pass
+   from ray.rllib.agents.ppo.ppo import PPOTrainer
+   class PPO(Trainer, PPOTrainer): pass
    extra_config = {
             'train_batch_size': config.TRAIN_BATCH_SIZE,
             'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
@@ -284,23 +309,28 @@ def PPO(config):
    return PPO, extra_config
 
 def APPO(config):
-   class APPO(Trainer, rllib.agents.ppo.appo.APPOTrainer): pass
+   from ray.rllib.agents.ppo.appo import APPOTrainer
+   class APPO(Trainer, APPOTrainer): pass
    return APPO, {}
 
 def DDPPO(config):
-   class DDPPO(Trainer, rllib.agents.ppo.ddppo.DDPPOTrainer): pass
+   from ray.rllib.agents.ppo.ddppo import DDPPOTrainer
+   class DDPPO(Trainer, DDPPOTrainer): pass
    extra_config = {
            'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+           'num_sgd_iter': 1,
            'num_gpus_per_worker': 0,
            'num_gpus': 0}
    return DDPPO, extra_config
 
 def Impala(config):
-   class Impala(Trainer, rllib.agents.impala.impala.ImpalaTrainer): pass
+   from ray.rllib.agents.impala.impala import ImpalaTrainer
+   class Impala(Trainer, ImpalaTrainer): pass
    return Impala, {}
 
 def QMix(config):
-   class QMix(Trainer, rllib.agents.qmix.qmix.QMixTrainer): pass
+   from ray.rllib.agents.qmix.qmix import QMixTrainer
+   class QMix(Trainer, QMixTrainer): pass
    return QMix, {}
 
 
@@ -309,7 +339,7 @@ def QMix(config):
 class RLlibLogCallbacks(DefaultCallbacks):
    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
       assert len(base_env.envs) == 1, 'One env per worker'
-      env    = base_env.envs[0].env
+      env    = base_env.envs[0]#.env
 
       inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
 
