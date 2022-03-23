@@ -68,11 +68,11 @@ class Config(nmmo.config.Small):
     EMULATE_FLAT_OBS      = True
     EMULATE_FLAT_ATN      = True
     EMULATE_CONST_POP     = True
-    EMULATE_CONST_HORIZON = 32
 
-    HIDDEN = 10
-    EMBED  = 10
-    NENT   = 2
+    HORIZON = 32
+    HIDDEN  = 10
+    EMBED   = 10
+    NENT    = 2
 
     @property
     def SPAWN(self):
@@ -82,6 +82,11 @@ class Env(nmmo.Env, rllib.MultiAgentEnv):
     def __init__(self, config):
         self.config = config['config']
         super().__init__(self.config)
+
+    def step(self, actions):
+        obs, rewards, dones, infos = super().step(actions)
+        if self.realm.tick >= self.config.HORIZON:
+            dones['__all__'] =  True
 
 def test_rllib_integration():
     config    = Config()
