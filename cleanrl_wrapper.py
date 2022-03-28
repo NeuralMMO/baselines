@@ -25,7 +25,7 @@ from stable_baselines3.common.atari_wrappers import (  # isort:skip
 )
 
 import nmmo
-from neural import policy
+from neural import policy, io, subnets
 import tasks
 
 def parse_args():
@@ -90,7 +90,7 @@ def parse_args():
     return args
 
 
-class Config(nmmo.config.Medium):
+class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     #NENT               = 128
     #HORIZON            = 256
     #HIDDEN              = 32
@@ -123,13 +123,30 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class Agent(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.policy = policy.Baseline(config)
+        self.config = config
+        self.input  = io.Input(config,
+                embeddings=io.MixedEmbedding,
+                attributes=subnets.SelfAttention)
+
+        self.policy = policy.Simple(config)
+        self.output = nn.Linear(config.HIDDEN, 304)
+        self.value  = nn.Linear(config.HIDDEN, 1)
+
+    def _compute_hidden(self, x):
+        x    = nmmo.emulation.unpack_obs(self.config, obs)
+        x    = self.input(x)
+        x, _ = self.policy(x)
+        return x
 
     def get_value(self, x):
-        return self.policy.compute_value(x)
+        x = self._compute_hidden(x)
+        return self.value(x)
 
     def get_action_and_value(self, x, action=None):
-        logits, value = self.policy.compute_logits_and_value(x)
+        x      = self._compute_hidden(x)
+        logits = self.output(x)
+        value  = self.value(x)
+
         probs = Categorical(logits=logits)
 
         if action is None:
@@ -140,6 +157,10 @@ class Agent(nn.Module):
 if __name__ == "__main__":
     args = parse_args()
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+
+    # WanDB integration                                                       
+    with open('wandb_api_key') as key:                                        
+        os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
     wandb.init(
         project=args.wandb_project_name,
@@ -164,6 +185,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+    # NMMO Integration
     config = Config()
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, 0)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
