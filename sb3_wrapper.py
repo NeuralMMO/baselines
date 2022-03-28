@@ -1,33 +1,28 @@
 '''Documented at neuralmmo.github.io'''
 
 from pdb import set_trace as T
-
-import nmmo
-
-from neural import io, subnets, policy
-
-import gym
+import numpy as np
 import os
+
 import supersuit as ss
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+import gym
 
 import torch as th 
 from torch import nn
-
 import wandb
-from wandb.integration.sb3 import WandbCallback
-
-from pettingzoo.utils.env import ParallelEnv
-from supersuit.vector import MarkovVectorEnv
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
+import nmmo
 
-##################################################
-# Wrapping the NMMO baseline archietecture for SB3
+import tasks
+from neural import io, subnets, policy
+
+#################################################
+# Wrapping the NMMO baseline architecture for SB3
 class CustomFeatureExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Box):
         super().__init__(observation_space, Config.HIDDEN)
@@ -52,7 +47,7 @@ class CustomNetwork(nn.Module):
         # Policy network
         self.policy_net = policy.Simple(config)
         
-    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
+    def forward(self, features):
         hidden, _ = self.policy_net(features)
         return hidden, hidden
 
@@ -71,43 +66,52 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = CustomNetwork()
 
-################################################
-# Configure environment with compatibility mixin
-class Config(nmmo.config.CompatibilityMixin, nmmo.config.Small):
-    NENT               = 4
-    HORIZON            = 32
+##################################################
+# Integrate logging with WanDB through tensorboard
+class TensorboardToWandbCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+    
+    def _on_step(self) -> bool:
+        infos = self.locals['infos']
+        for info in infos:
+            if 'logs' not in info:
+                continue
+            
+            for k, v in info['logs'].items():
+                self.logger.record(k, np.mean(v).item())
+
+        return True
+
+#######################
+# Configure environment
+class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
+    #NENT               = 4
+    #HORIZON            = 128
     HIDDEN             = 32
     EMBED              = 32
 
-    #Set a unique path for demo maps
+    # Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
 
-    #Force terrain generation -- avoids unexpected behavior from caching
+    # Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = True
 
-
-class TensorboardCallback(BaseCallback):
-    def __init__(self, verbose=0):
-        super(TensorboardCallback, self).__init__(verbose)
-    
-    def _on_rollout_end(self) -> bool:
-        logs = self.training_env.terminal()
-        for k, v in logs['Stats'].items():
-            self.logger.record(k, np.mean(v).item())
-        return True
+    # Enable tasks
+    TASKS = tasks.All
 
 
 if __name__ == '__main__':
+    num_epochs = 10
     num_cpu  = 4
-    num_envs = 1
+    num_envs = 4
 
     config = Config()
 
     # Wrap environments for SB3
     env = nmmo.integrations.sb3_vec_envs(Config, num_envs, num_cpu)
 
-    #check_env(env)
-
+    # WanDB integration
     with open('wandb_api_key') as key:
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
@@ -115,21 +119,26 @@ if __name__ == '__main__':
         project='nmmo-sb3',
         sync_tensorboard=True)
 
-    policy_kwargs = {'features_extractor_class': CustomFeatureExtractor}
+    # Learn with SB3
+    model = PPO(
+        CustomActorCriticPolicy,
+        env,
+        n_steps=Config.HORIZON,
+        batch_size=64,
+        n_epochs=1,
+        tensorboard_log=f'runs/{run.id}',
+        policy_kwargs={
+            'features_extractor_class': CustomFeatureExtractor})
 
-    model = PPO(CustomActorCriticPolicy, env, tensorboard_log=f'runs/{run.id}', policy_kwargs=policy_kwargs)
     model.learn(
-        total_timesteps=81,
-        callback=WandbCallback(
-            model_save_path=f'models/{run.id}',
-            verbose=2
-        ),
-    )
+        total_timesteps=num_epochs * num_envs * Config.NENT * Config.HORIZON,
+        callback=TensorboardToWandbCallback())
 
+    # End WanDB logging
     run.finish()
 
-    obs = env.reset()
-    for i in range(1000):
-        action, _state = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
-        #env.render()
+    # TODO: Evaluate and render properly
+    #obs = env.reset()
+    #for i in range(1000):
+    #    action, _state = model.predict(obs, deterministic=True)
+    #    obs, reward, done, info = env.step(action)
