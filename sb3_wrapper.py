@@ -85,11 +85,10 @@ class TensorboardToWandbCallback(BaseCallback):
 
 #######################
 # Configure environment
-class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
-    #NENT               = 4
-    #HORIZON            = 128
-    HIDDEN             = 32
-    EMBED              = 32
+class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
+    # Cheat network params into env config
+    HIDDEN = 64
+    EMBED  = 64
 
     # Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
@@ -102,9 +101,10 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
 
 
 if __name__ == '__main__':
-    num_epochs = 10
-    num_cpu  = 4
-    num_envs = 4
+    num_epochs = 1000 # Number of updates of size num_envs * num_steps * NENT
+    num_cpu    = 32   # Number of CPU cores to use
+    num_envs   = 32   # Number of environments to simulate in parallel
+    n_steps    = 64   # Steps to simulate each environment per batch
 
     config = Config()
 
@@ -123,15 +123,15 @@ if __name__ == '__main__':
     model = PPO(
         CustomActorCriticPolicy,
         env,
-        n_steps=Config.HORIZON,
-        batch_size=64,
+        n_steps=n_steps,
+        batch_size=256,
         n_epochs=1,
         tensorboard_log=f'runs/{run.id}',
         policy_kwargs={
             'features_extractor_class': CustomFeatureExtractor})
 
     model.learn(
-        total_timesteps=num_epochs * num_envs * Config.NENT * Config.HORIZON,
+        total_timesteps=num_epochs * num_envs * n_steps * Config.NENT,
         callback=TensorboardToWandbCallback())
 
     # End WanDB logging
