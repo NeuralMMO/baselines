@@ -4,50 +4,80 @@ from pdb import set_trace as T
 
 import nmmo
 
+from neural import io, subnets, policy
+
 import gym
 import os
+import supersuit as ss
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+
+import torch as th 
+from torch import nn
 
 import wandb
 from wandb.integration.sb3 import WandbCallback
 
-from stable_baselines3 import A2C
+from pettingzoo.utils.env import ParallelEnv
+from supersuit.vector import MarkovVectorEnv
+
+from stable_baselines3 import PPO
+from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.env_checker import check_env
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-'''
-from gym.envs.registration import register
-# Example for the CartPole environment
-register(
-    # unique identifier for the env `name-version`
-    id="CartPole-v1",
-    # path to the class for creating the env
-    # Note: entry_point also accept a class as input (and not only a string)
-    entry_point="gym.envs.classic_control:CartPoleEnv",
-    # Max number of steps per episode, using a `TimeLimitWrapper`
-    max_episode_steps=500,
-)
-'''
 
-class Env(nmmo.Env, gym.Env):
-    def __init__(self, config):
-        super().__init__(config)
-        self.observation_space = self.observation_space(1)
-        self.action_space = self.action_space(1)
+##################################################
+# Wrapping the NMMO baseline archietecture for SB3
+class CustomFeatureExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Box):
+        super().__init__(observation_space, Config.HIDDEN)
 
-    def step(self, actions):
-        if type(actions) != dict:
-            actions = {1: actions}
+        self.extractor = io.Input(Config,
+                embeddings=io.MixedEmbedding,
+                attributes=subnets.SelfAttention)
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        observations = nmmo.emulation.unpack_obs(config, observations)
+        return self.extractor(observations)
+
+class CustomNetwork(nn.Module):
+    def __init__(self):
+        super().__init__()
+        hidden = Config.HIDDEN
+
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = hidden
+        self.latent_dim_vf = hidden
+
+        # Policy network
+        self.policy_net = policy.Simple(config)
         
-        obs, rewards, dones, infos = super().step(actions)
-        return obs[1], rewards[1], dones[1], infos[1]
+    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
+        hidden, _ = self.policy_net(features)
+        return hidden, hidden
 
-class Config(nmmo.config.Small):
-    EMULATE_FLAT_OBS   = True
-    EMULATE_FLAT_ATN   = True
-    EMUALTE_CONST_NENT = True
+    def forward_actor(self, features: th.Tensor) -> th.Tensor:
+        return self.policy_net(features)[0]
 
-    NENT               = 1
+    def forward_critic(self, features: th.Tensor) -> th.Tensor:
+        return self.forward(features)[1]
+
+class CustomActorCriticPolicy(ActorCriticPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Disable orthogonal initialization
+        self.ortho_init = False
+
+    def _build_mlp_extractor(self) -> None:
+        self.mlp_extractor = CustomNetwork()
+
+################################################
+# Configure environment with compatibility mixin
+class Config(nmmo.config.CompatibilityMixin, nmmo.config.Small):
+    NENT               = 4
+    HORIZON            = 32
+    HIDDEN             = 32
+    EMBED              = 32
 
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
@@ -55,16 +85,28 @@ class Config(nmmo.config.Small):
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = True
 
-if __name__ == '__main__':
-    num_cpu = 4
 
+class TensorboardCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super(TensorboardCallback, self).__init__(verbose)
     
-    #make_vec_env(env_id, n_envs=num_cpu, seed=0, vec_env_cls=SubprocVecEnv
-    make_env = lambda: Env(Config())
+    def _on_rollout_end(self) -> bool:
+        logs = self.training_env.terminal()
+        for k, v in logs['Stats'].items():
+            self.logger.record(k, np.mean(v).item())
+        return True
 
-    #env = SubprocVecEnv([make_env for _ in range(num_cpu)])
-    env = make_env()
-    check_env(make_env())
+
+if __name__ == '__main__':
+    num_cpu  = 4
+    num_envs = 1
+
+    config = Config()
+
+    # Wrap environments for SB3
+    env = nmmo.integrations.sb3_vec_envs(Config, num_envs, num_cpu)
+
+    #check_env(env)
 
     with open('wandb_api_key') as key:
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
@@ -72,10 +114,12 @@ if __name__ == '__main__':
     run = wandb.init(
         project='nmmo-sb3',
         sync_tensorboard=True)
- 
-    model = A2C('MlpPolicy', env)
+
+    policy_kwargs = {'features_extractor_class': CustomFeatureExtractor}
+
+    model = PPO(CustomActorCriticPolicy, env, tensorboard_log=f'runs/{run.id}', policy_kwargs=policy_kwargs)
     model.learn(
-        total_timesteps=1000,
+        total_timesteps=81,
         callback=WandbCallback(
             model_save_path=f'models/{run.id}',
             verbose=2
@@ -89,5 +133,3 @@ if __name__ == '__main__':
         action, _state = model.predict(obs, deterministic=True)
         obs, reward, done, info = env.step(action)
         #env.render()
-        if done:
-          obs = env.reset()

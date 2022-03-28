@@ -7,6 +7,59 @@ from torch.nn.utils import rnn
 
 from neural import io, subnets
 
+class Baseline(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        hidden      = config.HIDDEN
+
+        self.input = io.Input(config,
+                embeddings=io.MixedEmbedding,
+                attributes=subnets.SelfAttention)
+
+        if config.EMULATE_FLAT_ATN:
+            self.output = nn.Linear(hidden, 304)
+        else:
+            self.output = io.Output(config)
+
+        self.model  = Simple(config)
+        self.valueF = nn.Linear(hidden, 1)
+
+    def compute_network(self, obs):
+        config = self.config
+
+        if self.config.EMULATE_FLAT_OBS:
+            import nmmo
+            obs = nmmo.emulation.unpack_obs(self.config, obs)
+
+        entityLookup  = self.input(obs)
+        hidden, state = self.model(entityLookup, None, None)
+
+        if self.config.EMULATE_FLAT_ATN:
+            return self.output(hidden), hidden
+
+        output = self.output(hidden, entityLookup)
+        for atnKey, atn in sorted(output.items()):
+            for argKey, arg in sorted(atn.items()):
+                logits.append(arg)
+
+        return torch.cat(logits, dim=1), hidden
+
+    def compute_value(self, obs):
+        logits, hidden = self.compute_network(obs)
+        value          = self.valueF(hidden).squeeze(1)
+        return value
+
+    def compute_logits(self, obs):
+        logits, hidden = self.compute_network(obs)
+        return logits
+
+    def compute_logits_and_value(self, obs):
+        logits, hidden = self.compute_network(obs)
+        value          = self.valueF(hidden).squeeze(1)
+        return logits, value
+        
+
 class Simple(nn.Module):
    def __init__(self, config):
       '''Simple baseline model with flat subnetworks'''
