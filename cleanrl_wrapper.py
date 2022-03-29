@@ -96,8 +96,8 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     #HIDDEN              = 32
     #EMBED               = 32
 
-    NENT               = 4
-    HORIZON            = 32
+    #NENT               = 4
+    #HORIZON            = 32
     HIDDEN             = 32
     EMBED              = 32
 
@@ -133,7 +133,7 @@ class Agent(nn.Module):
         self.value  = nn.Linear(config.HIDDEN, 1)
 
     def _compute_hidden(self, x):
-        x    = nmmo.emulation.unpack_obs(self.config, obs)
+        x    = nmmo.emulation.unpack_obs(self.config, x)
         x    = self.input(x)
         x, _ = self.policy(x)
         return x
@@ -232,11 +232,14 @@ if __name__ == "__main__":
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
             for e in info:
-                if 'logs' in e:
-                    stats = e['logs']['Stats']
-                    for k, v in stats.items():
-                        stats[k] = np.mean(v).item()
-                    wandb.log(stats)
+                if 'logs' not in e:
+                    continue
+
+                stats = {}
+                for k, v in e['logs'].items():
+                    stats[k] = np.mean(v).item()
+
+                wandb.log(stats)
 
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
