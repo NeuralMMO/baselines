@@ -55,6 +55,8 @@ def parse_args():
         help="the learning rate of the optimizer")
     parser.add_argument("--num-envs", type=int, default=Config.NENT,
         help="the number of parallel game environments")
+    parser.add_argument("--num-cpus", type=int, default=32,
+        help="the number of parallel CPU cores")
     parser.add_argument("--num-steps", type=int, default=Config.HORIZON,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
@@ -88,31 +90,6 @@ def parse_args():
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     # fmt: on
     return args
-
-
-class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
-    #NENT               = 128
-    #HORIZON            = 256
-    #HIDDEN              = 32
-    #EMBED               = 32
-
-    #NENT               = 4
-    #HORIZON            = 32
-    HIDDEN             = 32
-    EMBED              = 32
-
-    #Enable task-based
-    TASKS              = tasks.All
-
-    @property
-    def SPAWN(self):
-        return self.SPAWN_CONCURRENT
-
-    #Set a unique path for demo maps
-    PATH_MAPS = 'maps/demos'
-
-    #Force terrain generation -- avoids unexpected behavior from caching
-    FORCE_MAP_GENERATION = True
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -154,14 +131,39 @@ class Agent(nn.Module):
 
         return action, probs.log_prob(action), probs.entropy(), value
 
+class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
+    #NENT               = 128
+    #HORIZON            = 256
+    #HIDDEN              = 32
+    #EMBED               = 32
+
+    NENT               = 4
+    HORIZON            = 32
+    HIDDEN             = 32
+    EMBED              = 32
+
+    #Enable task-based
+    TASKS              = tasks.All
+
+    @property
+    def SPAWN(self):
+        return self.SPAWN_CONCURRENT
+
+    #Set a unique path for demo maps
+    PATH_MAPS = 'maps/demos'
+
+    #Force terrain generation -- avoids unexpected behavior from caching
+    FORCE_MAP_GENERATION = True
+
+
 if __name__ == "__main__":
     args = parse_args()
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-
+    
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
+    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     wandb.init(
         project=args.wandb_project_name,
         entity=args.wandb_entity,
@@ -187,7 +189,7 @@ if __name__ == "__main__":
 
     # NMMO Integration
     config = Config()
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, 0)
+    envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
