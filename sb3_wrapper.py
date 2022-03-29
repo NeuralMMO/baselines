@@ -87,14 +87,19 @@ class TensorboardToWandbCallback(BaseCallback):
 # Configure environment
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     # Cheat network params into env config
-    HIDDEN = 64
-    EMBED  = 64
+    HIDDEN = 32
+    EMBED  = 32
 
     # Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
 
+    @property
+    def SPAWN(self):
+        return self.SPAWN_CONCURRENT
+
     # Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = True
+    NMAPS = 256
 
     # Enable tasks
     TASKS = tasks.All
@@ -102,9 +107,9 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
 if __name__ == '__main__':
     num_epochs = 1000 # Number of updates of size num_envs * num_steps * NENT
-    num_cpu    = 32   # Number of CPU cores to use
-    num_envs   = 32   # Number of environments to simulate in parallel
-    n_steps    = 64   # Steps to simulate each environment per batch
+    num_cpu    = 16   # Number of CPU cores to use
+    num_envs   = 16   # Number of environments to simulate in parallel
+    n_steps    = 32   # Steps to simulate each environment per batch
 
     config = Config()
 
@@ -124,7 +129,7 @@ if __name__ == '__main__':
         CustomActorCriticPolicy,
         env,
         n_steps=n_steps,
-        batch_size=256,
+        batch_size=128,
         n_epochs=1,
         tensorboard_log=f'runs/{run.id}',
         policy_kwargs={
