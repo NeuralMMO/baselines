@@ -21,7 +21,7 @@ def simulate(env, config, render=False, horizon=float('inf')):
             env.render()
 
         # Scripted API computes actions
-        obs, rewards, dones, infos = env.step(actions={})
+        obs, rewards, dones, infos = env.step({})
 
         # Later examples will use a fixed horizon
         t += 1

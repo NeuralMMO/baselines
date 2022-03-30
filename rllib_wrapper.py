@@ -1,15 +1,11 @@
 from pdb import set_trace as T
+from collections import defaultdict
 import numpy as np
 
-from collections import defaultdict
-
 from tqdm import tqdm
-import gym
-import wandb
 
 import torch
 from torch import nn
-from torch.nn.utils import rnn
 
 import ray
 from ray import rllib
@@ -21,8 +17,42 @@ import nmmo
 from neural import io, subnets, policy
 from scripted import baselines
 
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+def PPO(config):
+   from ray.rllib.agents.ppo.ppo import PPOTrainer
+   class PPO(Trainer, PPOTrainer): pass
+   extra_config = {
+            'train_batch_size': config.TRAIN_BATCH_SIZE,
+            'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+            'num_sgd_iter': 1}
+   return PPO, extra_config
 
+def APPO(config):
+   from ray.rllib.agents.ppo.appo import APPOTrainer
+   class APPO(Trainer, APPOTrainer): pass
+   return APPO, {}
+
+def DDPPO(config):
+   from ray.rllib.agents.ppo.ddppo import DDPPOTrainer
+   class DDPPO(Trainer, DDPPOTrainer): pass
+   extra_config = {
+           'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+           'num_sgd_iter': 1,
+           'num_gpus_per_worker': 0,
+           'num_gpus': 0}
+   return DDPPO, extra_config
+
+def Impala(config):
+   from ray.rllib.agents.impala.impala import ImpalaTrainer
+   class Impala(Trainer, ImpalaTrainer): pass
+   return Impala, {}
+
+def QMix(config):
+   from ray.rllib.agents.qmix.qmix import QMixTrainer
+   class QMix(Trainer, QMixTrainer): pass
+   return QMix, {}
+
+###############################################################################
+### Policy integration
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
    #def __init__(self, observation_space, action_space, config):
@@ -44,7 +74,6 @@ class RLlibPolicy(RecurrentNetwork, nn.Module):
 
       self.model  = policy.Recurrent(self.config)
       self.valueF = nn.Linear(config.HIDDEN, 1)
-
 
    #Initial hidden state for RLlib Trainer
    def get_initial_state(self):
@@ -81,58 +110,92 @@ class RLlibPolicy(RecurrentNetwork, nn.Module):
       return self.attn
 
 
-class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
-   '''Wrapper class for using Neural MMO with RLlib'''
-   def __init__(self, config):
-      self.config = config['config']
-      super().__init__(self.config)
+###############################################################################
+### Logging integration
+class RLlibLogCallbacks(DefaultCallbacks):
+   def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
+      assert len(base_env.envs) == 1, 'One env per worker'
+      env    = base_env.envs[0]#.env
 
-      self._agent_ids = [e for e in range(1, self.config.NENT+1)]
+      inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
 
-   def render(self):
-      #Patch for RLlib dupe rendering bug
-      if not self.config.RENDER:
-         return
+      stats      = env.terminal()['Stats']
+      policy_ids = stats.pop('PolicyID')
+ 
+      for key, vals in stats.items():
+         policy_stat = defaultdict(list)
 
-      super().render()
+         # Per-population metrics
+         for policy_id, v in zip(policy_ids, vals):
+             policy_stat[policy_id].append(v)
 
-   def step(self, decisions):
-      obs, rewards, dones, infos = super().step(decisions)
-      config = self.config
-      ts = config.TEAM_SPIRIT
-      
-      if config.COOPERATIVE:
-          #Union of task rewards across population
-          team_rewards = defaultdict(lambda: defaultdict(int))
-          populations = {}
-          for entID, info in infos.items():
-              pop = info.pop('population')
-              populations[entID] = pop
-              team = team_rewards[pop]
-              for task, reward in info.items():
-                  team[task] = max(team[task], reward)
+         for policy_id, vals in policy_stat.items():
+             policy = inv_map[policy_id].__name__
 
-          #Team spirit interpolated between agent and team summed task rewards
-          for entID, reward in rewards.items():
-              pop = populations[entID]
-              rewards[entID] = ts*sum(team_rewards[pop].values()) + (1-ts)*reward
+             k = f'{policy}_{policy_id}_{key}'
+             episode.custom_metrics[k] = np.mean(vals)
 
-      dones['__all__'] = False
-      test = config.EVALUATE or config.RENDER
-      
-      if config.EVALUATE:
-         horizon = config.EVALUATION_HORIZON
-      else:
-         horizon = config.TRAIN_HORIZON
+      if not env.config.EVALUATE:
+         return 
 
-      population  = len(self.realm.players) == 0
-      hit_horizon = self.realm.tick >= horizon
-      
-      if not config.RENDER and (hit_horizon or population):
-         dones['__all__'] = True
+      episode.custom_metrics['Raw_Policy_IDs']   = policy_ids
+      episode.custom_metrics['Raw_Task_Rewards'] = stats['Task_Reward']
 
-      return obs, rewards, dones, infos
 
+###############################################################################
+### Custom tournament evaluation computes SR
+class Trainer:
+   def __init__(self, config, env=None, logger_creator=None):
+      super().__init__(config, env, logger_creator)
+      self.env_config = config['env_config']['config']
+
+      agents = self.env_config.EVAL_AGENTS
+
+      err = 'Meander not in EVAL_AGENTS. Specify another agent to anchor to SR=0'
+      assert baselines.Meander in agents, err
+      self.sr = nmmo.OpenSkillRating(agents, baselines.Combat)
+
+   @classmethod
+   def name(cls):
+      return cls.__bases__[0].__name__
+
+   def post_mean(self, stats):
+      for key, vals in stats.items():
+          if type(vals) == list:
+              stats[key] = np.mean(vals)
+
+   def train(self):
+      stats = super().train()
+      self.post_mean(stats['custom_metrics'])
+      return stats
+
+   def evaluate(self):
+      return {}
+      stat_dict = super().evaluate()
+      stats = stat_dict['evaluation']['custom_metrics']
+
+      if __debug__:
+         err = 'Missing evaluation key. Patch RLlib as per the installation guide'
+         assert 'Raw_Policy_IDs' in stats, err
+
+      policy_ids   = stats.pop('Raw_Policy_IDs')
+      task_rewards = stats.pop('Raw_Task_Rewards')
+
+      for ids, scores in zip(policy_ids, task_rewards):
+          ratings = self.sr.update(policy_ids=ids, scores=scores)
+
+          for pop, (agent, rating) in enumerate(ratings.items()):
+              key = f'SR_{agent.__name__}_{pop}'
+
+              if key not in stats:
+                  stats[key] = []
+ 
+              stats[key] = rating.mu
+        
+      return stat_dict
+
+###############################################################################
+### Custom overlays to hook in with the client
 class RLlibOverlayRegistry(nmmo.OverlayRegistry):
    '''Host class for RLlib Map overlays'''
    def __init__(self, realm):
@@ -246,122 +309,4 @@ class EntityValues(GlobalValues):
       '''Compute a global value function map excluding tiles. This
       requires a forward pass for every tile and will be slow on large maps'''
       super().init(zeroKey)
-
-
-class Trainer:
-   def __init__(self, config, env=None, logger_creator=None):
-      super().__init__(config, env, logger_creator)
-      self.env_config = config['env_config']['config']
-
-      agents = self.env_config.EVAL_AGENTS
-
-      err = 'Meander not in EVAL_AGENTS. Specify another agent to anchor to SR=0'
-      assert baselines.Meander in agents, err
-      self.sr = nmmo.OpenSkillRating(agents, baselines.Combat)
-
-   @classmethod
-   def name(cls):
-      return cls.__bases__[0].__name__
-
-   def post_mean(self, stats):
-      for key, vals in stats.items():
-          if type(vals) == list:
-              stats[key] = np.mean(vals)
-
-   def train(self):
-      stats = super().train()
-      self.post_mean(stats['custom_metrics'])
-      return stats
-
-   def evaluate(self):
-      return {}
-      stat_dict = super().evaluate()
-      stats = stat_dict['evaluation']['custom_metrics']
-
-      if __debug__:
-         err = 'Missing evaluation key. Patch RLlib as per the installation guide'
-         assert 'Raw_Policy_IDs' in stats, err
-
-      policy_ids   = stats.pop('Raw_Policy_IDs')
-      task_rewards = stats.pop('Raw_Task_Rewards')
-
-      for ids, scores in zip(policy_ids, task_rewards):
-          ratings = self.sr.update(policy_ids=ids, scores=scores)
-
-          for pop, (agent, rating) in enumerate(ratings.items()):
-              key = f'SR_{agent.__name__}_{pop}'
-
-              if key not in stats:
-                  stats[key] = []
- 
-              stats[key] = rating.mu
-        
-      return stat_dict
-
-
-def PPO(config):
-   from ray.rllib.agents.ppo.ppo import PPOTrainer
-   class PPO(Trainer, PPOTrainer): pass
-   extra_config = {
-            'train_batch_size': config.TRAIN_BATCH_SIZE,
-            'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
-            'num_sgd_iter': 1}
-   return PPO, extra_config
-
-def APPO(config):
-   from ray.rllib.agents.ppo.appo import APPOTrainer
-   class APPO(Trainer, APPOTrainer): pass
-   return APPO, {}
-
-def DDPPO(config):
-   from ray.rllib.agents.ppo.ddppo import DDPPOTrainer
-   class DDPPO(Trainer, DDPPOTrainer): pass
-   extra_config = {
-           'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
-           'num_sgd_iter': 1,
-           'num_gpus_per_worker': 0,
-           'num_gpus': 0}
-   return DDPPO, extra_config
-
-def Impala(config):
-   from ray.rllib.agents.impala.impala import ImpalaTrainer
-   class Impala(Trainer, ImpalaTrainer): pass
-   return Impala, {}
-
-def QMix(config):
-   from ray.rllib.agents.qmix.qmix import QMixTrainer
-   class QMix(Trainer, QMixTrainer): pass
-   return QMix, {}
-
-
-###############################################################################
-### Logging
-class RLlibLogCallbacks(DefaultCallbacks):
-   def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
-      assert len(base_env.envs) == 1, 'One env per worker'
-      env    = base_env.envs[0]#.env
-
-      inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
-
-      stats      = env.terminal()['Stats']
-      policy_ids = stats.pop('PolicyID')
- 
-      for key, vals in stats.items():
-         policy_stat = defaultdict(list)
-
-         # Per-population metrics
-         for policy_id, v in zip(policy_ids, vals):
-             policy_stat[policy_id].append(v)
-
-         for policy_id, vals in policy_stat.items():
-             policy = inv_map[policy_id].__name__
-
-             k = f'{policy}_{policy_id}_{key}'
-             episode.custom_metrics[k] = np.mean(vals)
-
-      if not env.config.EVALUATE:
-         return 
-
-      episode.custom_metrics['Raw_Policy_IDs']   = policy_ids
-      episode.custom_metrics['Raw_Task_Rewards'] = stats['Task_Reward']
 

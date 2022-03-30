@@ -35,7 +35,7 @@ class ConsoleLog(CLIReporter):
       print(nmmo.motd + '\n')
       super().report(trials, done, *sys_info)
 
-def run_tune_experiment(config, trainer_wrapper, rllib_env=wrapper.RLlibEnv):
+def run_tune_experiment(config, trainer_wrapper, rllib_env=nmmo.integrations.rllib_env_cls()):
    '''Ray[RLlib, Tune] integration for Neural MMO
 
    Setup custom environment, observations/actions, policies,
