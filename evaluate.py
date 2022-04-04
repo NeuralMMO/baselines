@@ -1,16 +1,22 @@
 from pdb import set_trace as T
+import numpy as np
+
+from collections import defaultdict
+
+import torch
 from torch.distributions.categorical import Categorical
 
 import nmmo
 
 from scripted import baselines
 
-class Agent:
-    def __init__(self, config, policy, scripted=False, flat_obs=True, flat_atn=True):
-        self.policy   = policy
-        self.config   = config
+class Policy:
+    def __init__(self, config, torch_model,
+            flat_obs=True, flat_atn=True, device='cuda:0'):
+        self.model  = torch_model
+        self.config = config
+        self.device = device
 
-        self.scripted = scripted
         self.flat_obs = flat_obs
         self.flat_atn = flat_atn
 
@@ -18,60 +24,90 @@ class Agent:
         return Categorical(logits=logits).sample()
 
     def policy_logits(self, ob):
-        return self.policy(ob)
+        return self.model(ob)
 
     def policy_value(self, ob):
-        return self.policy.value(ob)
+        return self.model.value(ob)
 
-    def compute_action(self, ob):
-        #if self.policy.scripted or not self.flat_obs:
-        #    ob = ob.reshape(1, -1)
-        #    ob = nmmo.emulation.unpack_obs(self.config, ob) 
+    def compute_action(self, obs):
+        config = self.config
 
-        if self.policy.scripted:
-            return self.policy(ob)
+        obs_keys = obs.keys()
+        obs = np.stack(obs.values())
+        obs = torch.tensor(obs).float()
 
-        logits = self.policy_logits(ob)
+        logits = self.policy_logits(obs)
     
-        if self.flat_atn:
-            return self.sample_logits(logits)
+        #if self.flat_atn:
+        #    return self.sample_logits(logits)
 
         action = {} 
-        for atnKey, atn in sorted(output.items()):                              
+        for atnKey, atn in sorted(logits.items()):                              
             action[atnKey] = {}
             for argKey, arg in sorted(atn.items()):
-                action[atnKey][argKey] = sample(logits)
+                action[atnKey][argKey] = self.sample_logits(arg)
 
-        return action
+        unpack_action = {}
+        for idx, ob_key in enumerate(obs_keys):
+            unpack_action[ob_key] = {}
+            for atnKey, atn in sorted(logits.items()):                              
+               unpack_action[ob_key][atnKey] = {}
+               for argKey, arg in sorted(atn.items()):
+                   unpack_action[ob_key][atnKey][argKey] = action[atnKey][argKey][idx]
 
-def population_fn(idx):
-    return idx // 8
+        return unpack_action
 
 class Evaluator:
-    def __init__(self, config, agents):
+    def __init__(self, config, torch_model=None):
         self.config = config
 
-        self.ratings = nmmo.OpenSkillRating(agents, baselines.Combat)
+        config.EMULATE_FLAT_OBS   = True
 
-    def evaluate(self, agents):
-        config  = self.config
-        config.AGENTS = agents
-        config.HORIZON = 32
+        # Generate maps once at the start
+        if config.FORCE_MAP_GENERATION:
+            nmmo.MapGenerator(self.config).generate_all_maps()
+            config.FORCE_MAP_GENERATION = False
 
-        agents = {i: agent for i, agent in enumerate(agents)}
+        self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
 
-        env     = nmmo.Env(config)
-        obs     = env.reset()
-        actions = {}
+        if torch_model:
+            self.policy  = Policy(config, torch_model)
 
-        for _ in range(config.HORIZON):
-            for k, ob in obs.items():
-                agent_idx  = config.population_mapping_fn(k)
-                agent      = agents[agent_idx]
-                actions[k] = agent(ob)
+    def render(self):
+        self.config.RENDER = True
+        self.rollout()
+
+    def evaluate(self, rollouts=10):
+        for i in range(rollouts):
+            stats = self.rollout()
+
+            ratings = self.ratings.update(
+                    policy_ids=stats['PolicyID'],
+                    scores=stats['Task_Reward']) 
+
+            for policy, rating in ratings.items():
+                print(f'{policy.__name__}: {rating.mu}')
+
+    def rollout(self):
+        config = self.config
+        env    = nmmo.Env(config)
+        obs    = env.reset()
+
+        t = 0
+        while True:
+            if config.RENDER:
+                env.render()
+            elif t == config.HORIZON:
+                break
+
+            t += 1
+
+            # TODO: Should we pad here or not? Makes handling LSTMs easier to pad...
+            actions = {}
+            if obs:
+                actions = self.policy.compute_action(obs)
 
             obs, atns, dones, infos = env.step(actions)
 
-        stats = env.terminal()['Stats']
+        return env.terminal()['Stats']
         
-         
