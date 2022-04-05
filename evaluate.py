@@ -9,25 +9,23 @@ from torch.distributions.categorical import Categorical
 import nmmo
 
 from scripted import baselines
+from neural import overlays
 
 class Policy:
-    def __init__(self, config, torch_model,
-            flat_obs=True, flat_atn=True, device='cuda:0'):
+    def __init__(self, config, torch_model, device='cuda:0'):
         self.model  = torch_model
         self.config = config
         self.device = device
 
-        self.flat_obs = flat_obs
-        self.flat_atn = flat_atn
+        batch = config.NENT
+
+        # Set initial state for recurrent models
+        self.state = None
+        if hasattr(self.model, 'get_initial_state'):
+            self.state = self.model.get_initial_state(batch)
 
     def sample_logits(self, logits):
         return Categorical(logits=logits).sample()
-
-    def policy_logits(self, ob):
-        return self.model(ob)
-
-    def policy_value(self, ob):
-        return self.model.value(ob)
 
     def compute_action(self, obs):
         config = self.config
@@ -35,12 +33,17 @@ class Policy:
         obs_keys = obs.keys()
         obs = np.stack(obs.values())
         obs = torch.tensor(obs).float()
+        obs = nmmo.emulation.unpack_obs(self.config, obs)
 
-        logits = self.policy_logits(obs)
+        if self.state:
+            logits, self.state = self.model(obs, self.state)
+        else:
+            logits = self.model(obs)
     
-        #if self.flat_atn:
-        #    return self.sample_logits(logits)
+        if self.config.EMULATE_FLAT_ATN:
+            return self.sample_logits(logits)
 
+        # Big mess for unpacking observations
         action = {} 
         for atnKey, atn in sorted(logits.items()):                              
             action[atnKey] = {}
@@ -62,6 +65,7 @@ class Evaluator:
         self.config = config
 
         config.EMULATE_FLAT_OBS   = True
+        config.EMULATE_CONST_NENT = True
 
         # Generate maps once at the start
         if config.FORCE_MAP_GENERATION:
@@ -90,24 +94,24 @@ class Evaluator:
 
     def rollout(self):
         config = self.config
-        env    = nmmo.Env(config)
-        obs    = env.reset()
 
-        t = 0
+        # Init env with extra overlays
+        env          = nmmo.Env(config)
+        env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
+
+        t   = 0  
+        obs = env.reset()
         while True:
+            with torch.no_grad():
+                actions = self.policy.compute_action(obs)
+
             if config.RENDER:
                 env.render()
             elif t == config.HORIZON:
                 break
 
+            obs, rewards, dones, infos = env.step(actions)
             t += 1
-
-            # TODO: Should we pad here or not? Makes handling LSTMs easier to pad...
-            actions = {}
-            if obs:
-                actions = self.policy.compute_action(obs)
-
-            obs, atns, dones, infos = env.step(actions)
 
         return env.terminal()['Stats']
         

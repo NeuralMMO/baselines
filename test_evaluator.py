@@ -18,4 +18,5 @@ if __name__ == '__main__':
     policy = policy.Baseline(config)
 
     evaluator = evaluate.Evaluator(config, policy)
-    evaluator.evaluate()
+    evaluator.render()
+    #evaluator.evaluate()

@@ -10,8 +10,8 @@ from neural import io, subnets
 class Baseline(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
         hidden      = config.HIDDEN
+        self.config = config
 
         self.input = io.Input(config,
                 embeddings=io.MixedEmbedding,
@@ -25,38 +25,18 @@ class Baseline(nn.Module):
         self.model  = Simple(config)
         self.valueF = nn.Linear(hidden, 1)
 
-    def _encode(self, obs):
-        config = self.config
-
-        if config.EMULATE_FLAT_OBS:
-            import nmmo
-            obs = nmmo.emulation.unpack_obs(config, obs)
-
+    def forward(self, obs):
         entityLookup  = self.input(obs)
         hidden, state = self.model(entityLookup, None, None)
 
-        return entityLookup, hidden
-
-    def compute_value(self, obs):
-        _, hidden = self._encode(obs)
-        return self.valueF(hidden).squeeze(1)
-
-    def forward(self, obs):
-        config = self.config
-
-        entityLookup, hidden = self._encode(obs)
+        if self.config.RENDER:
+            self.cached_values    = self.valueF(hidden).squeeze(1).cpu().numpy()
+            self.cached_attention = self.model.attn.cpu().numpy()
         
         if self.config.EMULATE_FLAT_ATN:
-            return self.output(hidden), hidden
+            return self.output(hidden)
 
-        logits = []
-        output = self.output(hidden, entityLookup)
-        return output
-        for atnKey, atn in sorted(output.items()):
-            for argKey, arg in sorted(atn.items()):
-                logits.append(arg)
-
-        return torch.cat(logits, dim=1)
+        return self.output(hidden, entityLookup)
 
 class Simple(nn.Module):
    def __init__(self, config):
