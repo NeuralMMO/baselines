@@ -290,7 +290,7 @@ def run_tune_experiment(config, trainer_wrapper, rllib_env=nmmo.integrations.rll
       'multiagent': {
          'policies': policies,
          'policy_mapping_fn': mapPolicy,
-         'count_steps_by': 'env_steps'
+         'count_steps_by': 'agent_steps'
       },
       'model': {
          'custom_model': 'godsword',
