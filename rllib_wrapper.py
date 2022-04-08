@@ -17,7 +17,7 @@ from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 
 import nmmo
 
-from neural.policy import Recurrent
+from neural.policy import Recurrent, ViT
 from scripted import baselines
 
 class RLlibPolicy(RecurrentNetwork, nn.Module):

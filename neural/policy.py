@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn.utils import rnn
 
-from neural import io, subnets
+from neural import io, subnets, vit
 
 class Base(nn.Module):
    def __init__(self, config):
@@ -87,7 +87,38 @@ class Simple(Base):
       hidden = self.proj(hidden)
       return hidden, state
 
-class Recurrent(Simple):
+class ViT(Base):
+   def __init__(self, config):
+      '''Simple baseline model with flat subnetworks'''
+      super().__init__(config)
+      h = config.HIDDEN
+      self.ent = nn.Linear(2*h, h)
+
+      self.vit = vit.ViT(
+              num_entities=config.N_AGENT_OBS + config.WINDOW*config.WINDOW,
+              dim = config.HIDDEN,
+              depth = 1,
+              heads = 8,
+              mlp_dim = config.HIDDEN,
+              dim_head = 8)
+             
+
+   def hidden(self, obs, state=None, lens=None):
+      #Attentional agent embedding
+      agentEmb  = obs['Entity']
+      selfEmb   = agentEmb[:, 0:1].expand_as(agentEmb)
+      agents    = torch.cat((selfEmb, agentEmb), dim=-1)
+      agents    = self.ent(agents)
+
+      tiles     = obs['Tile']
+      self.attn = torch.norm(tiles, p=2, dim=-1)
+       
+      entities  = torch.cat((agents, tiles), dim =1)
+      hidden    = self.vit(entities)
+      return hidden, state
+
+
+class Recurrent(ViT):
    def __init__(self, config):
       '''Recurrent baseline model'''
       super().__init__(config)

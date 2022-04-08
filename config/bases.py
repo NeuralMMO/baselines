@@ -109,7 +109,7 @@ class Medium(RLlib, nmmo.config.Medium):
  
    #Memory/Batch Scale
    ROLLOUT_FRAGMENT_LENGTH = 256
-   SGD_MINIBATCH_SIZE      = 128
+   SGD_MINIBATCH_SIZE      = 32
  
    #Horizon
    TRAIN_HORIZON           = 1024
