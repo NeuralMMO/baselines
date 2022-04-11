@@ -152,6 +152,8 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
     EMBED              = 64
 
+    NENT = 128
+
     #Large map pool
     NMAPS = 256
 
