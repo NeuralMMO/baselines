@@ -50,7 +50,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=2.5e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=8*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
     parser.add_argument("--num-cpus", type=int, default=8,
         help="the number of parallel CPU cores")
@@ -100,7 +100,8 @@ class Agent(nn.Module):
         self.input  = io.Input(config,
                 embeddings=io.MixedEmbedding,
                 attributes=subnets.SelfAttention)
-        self.output = nn.Linear(config.HIDDEN, 304)
+        #self.output = nn.Linear(config.HIDDEN, 4)# 304)
+        self.output = io.Output(config)
         self.value  = nn.Linear(config.HIDDEN, 1)
         self.policy = policy.Simple(config)
 
@@ -113,8 +114,8 @@ class Agent(nn.Module):
 
     def _compute_hidden(self, x, lstm_state, done):
         x         = nmmo.emulation.unpack_obs(self.config, x)
-        x         = self.input(x)
-        hidden, _ = self.policy(x)
+        lookup    = self.input(x)
+        hidden, _ = self.policy(lookup)
 
         batch_size = lstm_state[0].shape[1]
         hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
@@ -130,23 +131,33 @@ class Agent(nn.Module):
             )
             new_hidden += [h]
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
-        return new_hidden, lstm_state
+        return new_hidden, lookup, lstm_state
 
     def get_value(self, x, lstm_state, done):
-        x, _ = self._compute_hidden(x, lstm_state, done)
+        x, _, _ = self._compute_hidden(x, lstm_state, done)
         return self.value(x)
 
     def get_action_and_value(self, x, lstm_state, done, action=None):
-        x, lstm_state = self._compute_hidden(x, lstm_state, done)
-        logits        = self.output(x)
-        value         = self.value(x)
+        x, lookup, lstm_state = self._compute_hidden(x, lstm_state, done)
+        logits                = self.output(x, lookup)
+        value                 = self.value(x)
 
-        probs = Categorical(logits=logits)
+        flat_logits = []
+        for atn in nmmo.Action.edges:
+            for arg in atn.edges:
+                flat_logits.append(logits[atn][arg]) 
+
+        mulit_categorical = [Categorical(logits=l) for l in flat_logits]
 
         if action is None:
-            action = probs.sample()
+            action = torch.stack([c.sample() for c in mulit_categorical])
+        else:
+            action = action.view(-1, action.shape[-1]).T
 
-        return action, probs.log_prob(action), probs.entropy(), value, lstm_state
+        logprob = torch.stack([c.log_prob(a) for c, a in zip(mulit_categorical, action)]).T
+        entropy = torch.stack([c.entropy() for c in mulit_categorical]).T
+
+        return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
@@ -169,6 +180,8 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = False #True
+
+    NUM_ARGUMENTS = 3
 
 if __name__ == "__main__":
     args = parse_args()
@@ -205,14 +218,13 @@ if __name__ == "__main__":
     config = Config()
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     agent = Agent(config).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,)).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -262,7 +274,7 @@ if __name__ == "__main__":
 
                 wandb.log(stats)
 
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            rewards[step] = torch.tensor(reward).view(-1)#.to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
 
             for item in info:
@@ -279,8 +291,9 @@ if __name__ == "__main__":
                 next_lstm_state,
                 next_done,
             ).reshape(1, -1)
+
             if args.gae:
-                advantages = torch.zeros_like(rewards).to(device)
+                advantages = torch.zeros_like(rewards)#.to(device)
                 lastgaelam = 0
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
@@ -293,7 +306,7 @@ if __name__ == "__main__":
                     advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
                 returns = advantages + values
             else:
-                returns = torch.zeros_like(rewards).to(device)
+                returns = torch.zeros_like(rewards)#.to(device)
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
                         nextnonterminal = 1.0 - next_done
@@ -305,9 +318,9 @@ if __name__ == "__main__":
                 advantages = returns - values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
+        b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_actions = actions.reshape((-1,) + (Config.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
@@ -327,10 +340,10 @@ if __name__ == "__main__":
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
 
                 _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
-                    b_obs[mb_inds],
+                    b_obs[mb_inds].to(device),
                     (initial_lstm_state[0][:, mbenvinds], initial_lstm_state[1][:, mbenvinds]),
-                    b_dones[mb_inds],
-                    b_actions.long()[mb_inds],
+                    b_dones[mb_inds].to(device),
+                    b_actions.long()[mb_inds].to(device),
                 )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
