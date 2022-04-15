@@ -52,9 +52,9 @@ def parse_args():
         help="the learning rate of the optimizer")
     parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=16,
+    parser.add_argument("--num-cpus", type=int, default=8,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=32,
+    parser.add_argument("--num-steps", type=int, default=256,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
     actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,)).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -274,7 +274,7 @@ if __name__ == "__main__":
 
                 wandb.log(stats)
 
-            rewards[step] = torch.tensor(reward).view(-1)#.to(device).view(-1)
+            rewards[step] = torch.tensor(reward).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
 
             for item in info:
@@ -293,7 +293,7 @@ if __name__ == "__main__":
             ).reshape(1, -1)
 
             if args.gae:
-                advantages = torch.zeros_like(rewards)#.to(device)
+                advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
@@ -306,7 +306,7 @@ if __name__ == "__main__":
                     advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
                 returns = advantages + values
             else:
-                returns = torch.zeros_like(rewards)#.to(device)
+                returns = torch.zeros_like(rewards)
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
                         nextnonterminal = 1.0 - next_done
@@ -405,6 +405,8 @@ if __name__ == "__main__":
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+
+        torch.save(agent.state_dict(), 'model.pt')
 
     envs.close()
     writer.close()
