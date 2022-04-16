@@ -49,21 +49,21 @@ def parse_args():
         help="the id of the environment")
     parser.add_argument("--total-timesteps", type=int, default=500_000_000,
         help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=2.5e-4,
+    parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=8*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
     parser.add_argument("--num-cpus", type=int, default=8,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=32,
+    parser.add_argument("--num-steps", type=int, default=256,
         help="the number of steps to run in each environment per policy rollout")
-    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
     parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Use GAE for advantage computation")
     parser.add_argument("--gamma", type=float, default=0.99,
         help="the discount factor gamma")
-    parser.add_argument("--gae-lambda", type=float, default=0.95,
+    parser.add_argument("--gae-lambda", type=float, default=1.0,
         help="the lambda for the general advantage estimation")
     parser.add_argument("--num-minibatches", type=int, default=512,
         help="the number of mini-batches")
@@ -71,13 +71,13 @@ def parse_args():
         help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.1,
+    parser.add_argument("--clip-coef", type=float, default=0.3,
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=0.01,
+    parser.add_argument("--ent-coef", type=float, default=0.0,
         help="coefficient of the entropy")
-    parser.add_argument("--vf-coef", type=float, default=0.5,
+    parser.add_argument("--vf-coef", type=float, default=1.0,
         help="coefficient of the value function")
     parser.add_argument("--max-grad-norm", type=float, default=0.5,
         help="the maximum norm for the gradient clipping")
@@ -101,7 +101,8 @@ class Agent(nn.Module):
         self.input  = io.Input(config,
                 embeddings=io.MixedEmbedding,
                 attributes=subnets.SelfAttention)
-        self.output = nn.Linear(config.HIDDEN, 304)
+        #self.output = nn.Linear(config.HIDDEN, 4)# 304)
+        self.output = io.Output(config)
         self.value  = nn.Linear(config.HIDDEN, 1)
         self.policy = policy.Simple(config)
 
@@ -120,8 +121,8 @@ class Agent(nn.Module):
  
     def _compute_hidden(self, x, lstm_state, done):
         x         = nmmo.emulation.unpack_obs(self.config, x)
-        x         = self.input(x)
-        hidden, _ = self.policy(x)
+        lookup    = self.input(x)
+        hidden, _ = self.policy(lookup)
 
         batch_size = lstm_state[0].shape[1]
         hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
@@ -137,27 +138,37 @@ class Agent(nn.Module):
             )
             new_hidden += [h]
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
-        return new_hidden, lstm_state
+        return new_hidden, lookup, lstm_state
 
     def forward(self, obs, lstm_state):
         #Done = ?
         action, _, _, _, state = self.get_action_and_value(obs, lstm_state, done, action=None):
 
     def get_value(self, x, lstm_state, done):
-        x, _ = self._compute_hidden(x, lstm_state, done)
+        x, _, _ = self._compute_hidden(x, lstm_state, done)
         return self.value(x)
 
     def get_action_and_value(self, x, lstm_state, done, action=None):
-        x, lstm_state = self._compute_hidden(x, lstm_state, done)
-        logits        = self.output(x)
-        value         = self.value(x)
+        x, lookup, lstm_state = self._compute_hidden(x, lstm_state, done)
+        logits                = self.output(x, lookup)
+        value                 = self.value(x)
 
-        probs = Categorical(logits=logits)
+        flat_logits = []
+        for atn in nmmo.Action.edges:
+            for arg in atn.edges:
+                flat_logits.append(logits[atn][arg]) 
+
+        mulit_categorical = [Categorical(logits=l) for l in flat_logits]
 
         if action is None:
-            action = probs.sample()
+            action = torch.stack([c.sample() for c in mulit_categorical])
+        else:
+            action = action.view(-1, action.shape[-1]).T
 
-        return action, probs.log_prob(action), probs.entropy(), value, lstm_state
+        logprob = torch.stack([c.log_prob(a) for c, a in zip(mulit_categorical, action)]).T
+        entropy = torch.stack([c.entropy() for c in mulit_categorical]).T
+
+        return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
@@ -180,6 +191,8 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = False #True
+
+    NUM_ARGUMENTS = 3
 
 if __name__ == "__main__":
     args = parse_args()
@@ -217,15 +230,14 @@ if __name__ == "__main__":
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
-    evaluator = evalute.Evaluator(config, Agent)
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
-
     agent = Agent(config).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    evaluator = evalute.Evaluator(config, Agent)
+
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
+    actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,)).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -272,7 +284,7 @@ if __name__ == "__main__":
 
                 wandb.log(stats)
 
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            rewards[step] = torch.tensor(reward).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
 
             for item in info:
@@ -289,8 +301,9 @@ if __name__ == "__main__":
                 next_lstm_state,
                 next_done,
             ).reshape(1, -1)
+
             if args.gae:
-                advantages = torch.zeros_like(rewards).to(device)
+                advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
@@ -303,7 +316,7 @@ if __name__ == "__main__":
                     advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
                 returns = advantages + values
             else:
-                returns = torch.zeros_like(rewards).to(device)
+                returns = torch.zeros_like(rewards)
                 for t in reversed(range(args.num_steps)):
                     if t == args.num_steps - 1:
                         nextnonterminal = 1.0 - next_done
@@ -315,9 +328,9 @@ if __name__ == "__main__":
                 advantages = returns - values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
+        b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_actions = actions.reshape((-1,) + (Config.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
@@ -341,10 +354,10 @@ if __name__ == "__main__":
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
 
                 _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
-                    b_obs[mb_inds],
+                    b_obs[mb_inds].to(device),
                     (initial_lstm_state[0][:, mbenvinds], initial_lstm_state[1][:, mbenvinds]),
-                    b_dones[mb_inds],
-                    b_actions.long()[mb_inds],
+                    b_dones[mb_inds].to(device),
+                    b_actions.long()[mb_inds].to(device),
                 )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
@@ -410,6 +423,8 @@ if __name__ == "__main__":
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+
+        torch.save(agent.state_dict(), 'model.pt')
 
     envs.close()
     writer.close()
