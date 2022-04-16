@@ -18,5 +18,9 @@ if __name__ == '__main__':
     policy = policy.Baseline(config)
 
     evaluator = evaluate.Evaluator(config, policy)
-    evaluator.render()
+    #evaluator.render()
     #evaluator.evaluate()
+    async_handles = evaluator.ray_evaluate(rollouts=3)
+    evaluator.ray_sync(async_handles)
+
+    print(evaluator)

@@ -25,6 +25,7 @@ from stable_baselines3.common.atari_wrappers import (  # isort:skip
 )
 
 import nmmo
+import evaluate
 from neural import policy, io, subnets
 import tasks
 
@@ -111,6 +112,12 @@ class Agent(nn.Module):
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
 
+    def get_initial_state(self, batch):
+        return (
+            torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
+            torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
+        )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
+ 
     def _compute_hidden(self, x, lstm_state, done):
         x         = nmmo.emulation.unpack_obs(self.config, x)
         x         = self.input(x)
@@ -131,6 +138,10 @@ class Agent(nn.Module):
             new_hidden += [h]
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
         return new_hidden, lstm_state
+
+    def forward(self, obs, lstm_state):
+        #Done = ?
+        action, _, _, _, state = self.get_action_and_value(obs, lstm_state, done, action=None):
 
     def get_value(self, x, lstm_state, done):
         x, _ = self._compute_hidden(x, lstm_state, done)
@@ -205,6 +216,8 @@ if __name__ == "__main__":
     config = Config()
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
+
+    evaluator = evalute.Evaluator(config, Agent)
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     agent = Agent(config).to(device)
@@ -223,10 +236,7 @@ if __name__ == "__main__":
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset()).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
-    next_lstm_state = (
-        torch.zeros(agent.lstm.num_layers, args.num_envs, agent.lstm.hidden_size).to(device),
-        torch.zeros(agent.lstm.num_layers, args.num_envs, agent.lstm.hidden_size).to(device),
-    )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
+    next_lstm_state = agent.get_initial_state(args.num_envs)
     num_updates = args.total_timesteps // args.batch_size
 
     for update in range(1, num_updates + 1):
@@ -313,6 +323,10 @@ if __name__ == "__main__":
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
+        # Async evaluate the policy
+        evaluator.load_model(agent.state_dict())
+        async_handles = evaluator.ray_evaluate(rollouts=num_cpus)
+
         # Optimizing the policy and value network
         assert args.num_envs % args.num_minibatches == 0
         envsperbatch = args.num_envs // args.num_minibatches
@@ -380,6 +394,10 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        # Sync policy evaluations
+        evaluator.ray_sync(async_handles)
+        wandb.log(evaluator.stats)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)

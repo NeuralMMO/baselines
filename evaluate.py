@@ -6,6 +6,12 @@ from collections import defaultdict
 import torch
 from torch.distributions.categorical import Categorical
 
+try:
+    import ray
+    ray.init()
+except:
+    pass
+
 import nmmo
 
 from scripted import baselines
@@ -61,7 +67,7 @@ class Policy:
         return unpack_action
 
 class Evaluator:
-    def __init__(self, config, torch_model=None):
+    def __init__(self, config, torch_policy_cls=None, device='cuda:1', *args):
         self.config = config
 
         config.EMULATE_FLAT_OBS   = True
@@ -74,12 +80,39 @@ class Evaluator:
 
         self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
 
-        if torch_model:
-            self.policy  = Policy(config, torch_model)
+        if torch_policy_cls:
+            self.device  = device
+            torch_policy = torch_policy_cls(config, *args)
+            self.policy  = Policy(config, torch_policy)
+
+    def load_model(state_dict):
+        self.policy.load_state_dict(state_dict)
+
+    def __str__(self):
+        return ', '.join(f'{p.__name__}: {int(r.mu)}'
+                for p, r in self.ratings.ratings.items())
+
+    @property
+    def stats(self):
+        return self.ratings.ratings
 
     def render(self):
         self.config.RENDER = True
         self.rollout()
+
+    def ray_evaluate(self, rollouts=10):
+
+        @ray.remote
+        def rollout():
+            return self.rollout()
+
+        return [rollout.remote() for  i in range(rollouts)]
+
+    def ray_sync(self, async_handles):
+        for stats in ray.get(async_handles):
+            ratings = self.ratings.update(
+                    policy_ids=stats['PolicyID'],
+                    scores=stats['Task_Reward']) 
 
     def evaluate(self, rollouts=10):
         for i in range(rollouts):
@@ -88,9 +121,6 @@ class Evaluator:
             ratings = self.ratings.update(
                     policy_ids=stats['PolicyID'],
                     scores=stats['Task_Reward']) 
-
-            for policy, rating in ratings.items():
-                print(f'{policy.__name__}: {rating.mu}')
 
     def rollout(self):
         config = self.config
