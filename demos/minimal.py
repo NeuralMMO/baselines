@@ -12,7 +12,10 @@ def simulate(env, config, render=False, horizon=float('inf')):
     '''Simulate an environment for a fixed horizon'''
 
     # Environment accepts a config object
-    env = env(config())
+    config        = config()
+    config.RENDER = render
+
+    env = env(config)
     env.reset()
 
     t = 0
@@ -48,7 +51,6 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
 
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = True
-
 
 
 if __name__ == '__main__':
