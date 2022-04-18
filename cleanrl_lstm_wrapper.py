@@ -26,8 +26,9 @@ from stable_baselines3.common.atari_wrappers import (  # isort:skip
 
 import nmmo
 import evaluate
-from neural import policy, io, subnets
 import tasks
+from scripted import baselines
+from neural import policy, io, subnets
 
 def parse_args():
     # fmt: off
@@ -53,9 +54,9 @@ def parse_args():
         help="the learning rate of the optimizer")
     parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=8,
+    parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=256,
+    parser.add_argument("--num-steps", type=int, default=512,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -114,6 +115,7 @@ class Agent(nn.Module):
                 nn.init.orthogonal_(param, 1.0)
 
     def get_initial_state(self, batch):
+        device = self.value.weight.device
         return (
             torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
             torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
@@ -141,8 +143,13 @@ class Agent(nn.Module):
         return new_hidden, lookup, lstm_state
 
     def forward(self, obs, lstm_state):
-        #Done = ?
-        action, _, _, _, state = self.get_action_and_value(obs, lstm_state, done, action=None):
+        device = self.value.weight.device
+        self.input.tileWeight = self.input.tileWeight.to(device)
+        self.input.entWeight  = self.input.entWeight.to(device)
+ 
+        done = torch.zeros(len(obs)).to('cuda:1')#.to(self.device)
+        action, _, _, _, state = self.get_action_and_value(obs, lstm_state, done, action=None)
+        return action, state
 
     def get_value(self, x, lstm_state, done):
         x, _, _ = self._compute_hidden(x, lstm_state, done)
@@ -232,8 +239,10 @@ if __name__ == "__main__":
 
     agent = Agent(config).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
-
-    evaluator = evalute.Evaluator(config, Agent)
+    
+    eval_config = Config()
+    eval_config.AGENTS = [baselines.Forage, baselines.Combat, nmmo.Agent]
+    evaluator = evaluate.Evaluator(eval_config, Agent)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
@@ -338,7 +347,8 @@ if __name__ == "__main__":
 
         # Async evaluate the policy
         evaluator.load_model(agent.state_dict())
-        async_handles = evaluator.ray_evaluate(rollouts=num_cpus)
+        #async_handles = evaluator.ray_evaluate(rollouts=args.num_cpus)
+        evaluator.evaluate(rollouts=1)#args.num_cpus)
 
         # Optimizing the policy and value network
         assert args.num_envs % args.num_minibatches == 0
@@ -409,7 +419,7 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # Sync policy evaluations
-        evaluator.ray_sync(async_handles)
+        #evaluator.ray_sync(async_handles)
         wandb.log(evaluator.stats)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes

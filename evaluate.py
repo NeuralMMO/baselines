@@ -18,7 +18,7 @@ from scripted import baselines
 from neural import overlays
 
 class Policy:
-    def __init__(self, config, torch_model, device='cuda:0'):
+    def __init__(self, config, torch_model, device):
         self.model  = torch_model
         self.config = config
         self.device = device
@@ -39,12 +39,17 @@ class Policy:
         obs_keys = obs.keys()
         obs = np.stack(obs.values())
         obs = torch.tensor(obs).float()
-        obs = nmmo.emulation.unpack_obs(self.config, obs)
+        obs = obs.to(self.device)
+        #obs = nmmo.emulation.unpack_obs(self.config, obs)
 
         if self.state:
             logits, self.state = self.model(obs, self.state)
         else:
             logits = self.model(obs)
+
+        actions = logits.cpu().numpy()
+        actions = {key: atn for key, atn in zip(obs_keys, actions)}
+        return actions
     
         if self.config.EMULATE_FLAT_ATN:
             return self.sample_logits(logits)
@@ -71,6 +76,7 @@ class Evaluator:
         self.config = config
 
         config.EMULATE_FLAT_OBS   = True
+        config.EMULATE_FLAT_ATN   = True
         config.EMULATE_CONST_NENT = True
 
         # Generate maps once at the start
@@ -82,11 +88,12 @@ class Evaluator:
 
         if torch_policy_cls:
             self.device  = device
-            torch_policy = torch_policy_cls(config, *args)
-            self.policy  = Policy(config, torch_policy)
+            torch_policy = torch_policy_cls(config, *args).to(device)
+            self.policy  = Policy(config, torch_policy, device)
 
-    def load_model(state_dict):
-        self.policy.load_state_dict(state_dict)
+    def load_model(self, state_dict):
+        state_dict = {key: val.to(self.device) for key, val in state_dict.items()}
+        self.policy.model.load_state_dict(state_dict)
 
     def __str__(self):
         return ', '.join(f'{p.__name__}: {int(r.mu)}'
@@ -94,7 +101,7 @@ class Evaluator:
 
     @property
     def stats(self):
-        return self.ratings.ratings
+        return {p.__name__: int(r.mu) for p, r in self.ratings.ratings.items()}
 
     def render(self):
         self.config.RENDER = True
