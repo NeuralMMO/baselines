@@ -50,12 +50,8 @@ class Input(nn.Module):
 
       
       #TODO: implement obs scaling in a less hackey place
-      self.tileWeight = torch.Tensor([1.0, 0.0, 0.02, 0.02])
-      self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.00, 0.02, 0.02, 0.1, 0.01, 0.1, 0.1, 0.1, 0.3])
-
-      if torch.cuda.is_available():
-          self.tileWeight = self.tileWeight.cuda()
-          self.entWeight  = self.entWeight.cuda()
+      self.register_buffer('tileWeight', torch.Tensor([1.0, 0.0, 0.02, 0.02]))
+      self.register_buffer('entWeight', torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.00, 0.02, 0.02, 0.1, 0.01, 0.1, 0.1, 0.1, 0.3]))
 
    def forward(self, inp):
       '''Produces tensor representations from an IO object
