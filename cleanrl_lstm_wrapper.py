@@ -10,8 +10,13 @@ import wandb
 import gym
 import numpy as np
 import supersuit as ss
+
 import torch
+torch.set_num_threads(1)
+
 import torch.nn as nn
+import torch.distributed as dist
+import torch.multiprocessing as mp
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
@@ -52,11 +57,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=8*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=8,
+    parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=32,
+    parser.add_argument("--num-steps", type=int, default=512,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -201,36 +206,48 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     NUM_ARGUMENTS = 3
 
-if __name__ == "__main__":
+def init_process(rank, size, fn, backend="gloo"):
+    """Initialize the distributed environment."""
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = "29500"
+    dist.init_process_group(backend, rank=rank, world_size=size)
+    fn(rank, size)
+
+def train(rank, size):
     args = parse_args()
+    args.num_envs = int(args.num_envs / size)
+    args.batch_size = int(args.num_envs * args.num_steps)
+    args.minibatch_size = int(args.batch_size // args.num_minibatches)
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-    wandb.init(
-        project=args.wandb_project_name,
-        entity=args.wandb_entity,
-        sync_tensorboard=True,
-        config=vars(args),
-        name=run_name,
-        monitor_gym=True,
-        save_code=True)
+    if rank == 0:
+        run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True)
 
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
+        writer = SummaryWriter(f"runs/{run_name}")
+        writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        )
 
     # TRY NOT TO MODIFY: seeding
+    args.seed += rank
     random.seed(args.seed)
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    torch.manual_seed(args.seed - rank)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() and args.cuda else "cpu")
 
     # NMMO Integration
     config = Config()
@@ -414,18 +431,33 @@ if __name__ == "__main__":
         wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
-        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-        writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
-        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        if rank == 0:
+            writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
+            writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+            writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
+            writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+            writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
+            writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
+            writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
+            writer.add_scalar("losses/explained_variance", explained_var, global_step)
+            print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
+            writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        torch.save(agent.state_dict(), 'model.pt')
+            torch.save(agent.state_dict(), 'model.pt')
 
     envs.close()
-    writer.close()
+    if rank == 0:
+        writer.close()
+        wandb.finish()
+
+if __name__ == "__main__":
+    size = 2
+    processes = []
+    mp.set_start_method("spawn")
+    for rank in range(size):
+        p = mp.Process(target=init_process, args=(rank, size, train))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
