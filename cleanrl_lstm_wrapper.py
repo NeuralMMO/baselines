@@ -52,11 +52,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=8*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=16,
+    parser.add_argument("--num-cpus", type=int, default=8,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=512,
+    parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -240,10 +240,6 @@ if __name__ == "__main__":
     agent = Agent(config).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
-    eval_config = Config()
-    eval_config.AGENTS = [baselines.Forage, baselines.Combat, nmmo.Agent]
-    evaluator = evaluate.Evaluator(eval_config, Agent)
-
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
     actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,)).to(device)
@@ -345,11 +341,6 @@ if __name__ == "__main__":
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
-        # Async evaluate the policy
-        evaluator.load_model(agent.state_dict())
-        #async_handles = evaluator.ray_evaluate(rollouts=args.num_cpus)
-        evaluator.evaluate(rollouts=1)#args.num_cpus)
-
         # Optimizing the policy and value network
         assert args.num_envs % args.num_minibatches == 0
         envsperbatch = args.num_envs // args.num_minibatches
@@ -419,8 +410,8 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # Sync policy evaluations
-        #evaluator.ray_sync(async_handles)
-        wandb.log(evaluator.stats)
+        ratings = np.load('ratings.npy', allow_pickle=True).item()
+        wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)

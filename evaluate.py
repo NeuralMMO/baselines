@@ -35,9 +35,6 @@ class Policy:
 
     def compute_action(self, obs):
         config = self.config
-
-        obs_keys = obs.keys()
-        obs = np.stack(obs.values())
         obs = torch.tensor(obs).float()
         obs = obs.to(self.device)
         #obs = nmmo.emulation.unpack_obs(self.config, obs)
@@ -48,7 +45,6 @@ class Policy:
             logits = self.model(obs)
 
         actions = logits.cpu().numpy()
-        actions = {key: atn for key, atn in zip(obs_keys, actions)}
         return actions
     
         if self.config.EMULATE_FLAT_ATN:
@@ -72,7 +68,9 @@ class Policy:
         return unpack_action
 
 class Evaluator:
-    def __init__(self, config, torch_policy_cls=None, device='cuda:1', *args):
+    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:1', *args):
+        self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls, num_cpus, num_cpus)
+        config      = config_cls()
         self.config = config
 
         config.EMULATE_FLAT_OBS   = True
@@ -85,6 +83,12 @@ class Evaluator:
             config.FORCE_MAP_GENERATION = False
 
         self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
+
+        # Load ratings
+        if rating_stats:
+            for (mu, sigma), r in zip(rating_stats, self.ratings.ratings.values()):
+                r.sigma = sigma
+                r.mu    = mu
 
         if torch_policy_cls:
             self.device  = device
@@ -107,48 +111,57 @@ class Evaluator:
         self.config.RENDER = True
         self.rollout()
 
-    def ray_evaluate(self, rollouts=10):
-
-        @ray.remote
-        def rollout():
-            return self.rollout()
-
-        return [rollout.remote() for  i in range(rollouts)]
-
-    def ray_sync(self, async_handles):
-        for stats in ray.get(async_handles):
-            ratings = self.ratings.update(
-                    policy_ids=stats['PolicyID'],
-                    scores=stats['Task_Reward']) 
-
-    def evaluate(self, rollouts=10):
-        for i in range(rollouts):
-            stats = self.rollout()
-
-            ratings = self.ratings.update(
-                    policy_ids=stats['PolicyID'],
-                    scores=stats['Task_Reward']) 
-
-    def rollout(self):
+    def evaluate(self):
         config = self.config
+        obs    = self.envs.reset()
+        for i in range(config.HORIZON):
+            with torch.no_grad():
+                actions = self.policy.compute_action(obs)
+            obs, _, _, infos = self.envs.step(actions)
 
+            for e in infos:
+                if 'logs' not in e:
+                    continue
+
+                stats = e['logs']
+                ratings = self.ratings.update(
+                        policy_ids=stats['PolicyID'],
+                        scores=stats['Task_Reward']) 
+
+        return self.stats
+
+    def render(self):
         # Init env with extra overlays
-        env          = nmmo.Env(config)
+        env          = nmmo.Env(self.config)
         env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
 
-        t   = 0  
         obs = env.reset()
         while True:
             with torch.no_grad():
                 actions = self.policy.compute_action(obs)
 
-            if config.RENDER:
-                env.render()
-            elif t == config.HORIZON:
-                break
-
+            env.render()
             obs, rewards, dones, infos = env.step(actions)
-            t += 1
 
-        return env.terminal()['Stats']
-        
+if __name__ == '__main__':
+    import cleanrl_lstm_wrapper
+    from scripted import baselines
+    import time
+
+    class EvalConfig(cleanrl_lstm_wrapper.Config):
+        AGENTS = [baselines.Forage, baselines.Combat, nmmo.Agent]
+
+    evaluator = Evaluator(EvalConfig, cleanrl_lstm_wrapper.Agent)
+    device = 'cuda:1'
+    while True:
+        try:
+            model = torch.load('model.pt', map_location=device)
+        except:
+            time.sleep(1)
+            continue
+
+        evaluator.load_model(model)
+        evaluator.evaluate()
+
+        np.save('ratings.npy', evaluator.stats, allow_pickle=True)
+
