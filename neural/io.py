@@ -66,7 +66,6 @@ class Input(nn.Module):
       #Pack entities of each attribute set
       entityLookup = {}
 
-      device                       = inp['Tile']['Continuous'].device
       inp['Tile']['Continuous']   *= self.tileWeight
       inp['Entity']['Continuous'] *= self.entWeight
  

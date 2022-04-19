@@ -10,13 +10,8 @@ import wandb
 import gym
 import numpy as np
 import supersuit as ss
-
 import torch
-torch.set_num_threads(1)
-
 import torch.nn as nn
-import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
@@ -120,10 +115,9 @@ class Agent(nn.Module):
                 nn.init.orthogonal_(param, 1.0)
 
     def get_initial_state(self, batch):
-        device = self.value.weight.device
         return (
-            torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
-            torch.zeros(self.lstm.num_layers, batch, self.lstm.hidden_size).to(device),
+            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size),
+            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size),
         )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
  
     def _compute_hidden(self, x, lstm_state, done):
@@ -147,14 +141,14 @@ class Agent(nn.Module):
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
         return new_hidden, lookup, lstm_state
 
-    def forward(self, obs, lstm_state):
-        device = self.value.weight.device
-        self.input.tileWeight = self.input.tileWeight.to(device)
-        self.input.entWeight  = self.input.entWeight.to(device)
- 
-        done = torch.zeros(len(obs)).to('cuda:1')#.to(self.device)
-        action, _, _, _, state = self.get_action_and_value(obs, lstm_state, done, action=None)
-        return action, state
+    def forward(self, x, lstm_state, done, action=None, value_only=False):
+        lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
+
+        if value_only:
+            return self.get_value(x, lstm_state, done)
+        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, done, action)
+        lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
+        return action, logprob, entropy, value, lstm_state
 
     def get_value(self, x, lstm_state, done):
         x, _, _ = self._compute_hidden(x, lstm_state, done)
@@ -206,71 +200,59 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     NUM_ARGUMENTS = 3
 
-def init_process(rank, size, fn, backend="gloo"):
-    """Initialize the distributed environment."""
-    os.environ["MASTER_ADDR"] = "127.0.0.1"
-    os.environ["MASTER_PORT"] = "29500"
-    dist.init_process_group(backend, rank=rank, world_size=size)
-    fn(rank, size)
-
-def train(rank, size):
+if __name__ == "__main__":
     args = parse_args()
-    args.num_envs = int(args.num_envs / size)
-    args.batch_size = int(args.num_envs * args.num_steps)
-    args.minibatch_size = int(args.batch_size // args.num_minibatches)
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
-    if rank == 0:
-        run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True)
+    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    wandb.init(
+        project=args.wandb_project_name,
+        entity=args.wandb_entity,
+        sync_tensorboard=True,
+        config=vars(args),
+        name=run_name,
+        monitor_gym=True,
+        save_code=True)
 
-        writer = SummaryWriter(f"runs/{run_name}")
-        writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-        )
+    writer = SummaryWriter(f"runs/{run_name}")
+    writer.add_text(
+        "hyperparameters",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
 
     # TRY NOT TO MODIFY: seeding
-    args.seed += rank
     random.seed(args.seed)
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed - rank)
+    torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
-
-    device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() and args.cuda else "cpu")
 
     # NMMO Integration
     config = Config()
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
-    agent = Agent(config).to(device)
+    agent = Agent(config).cuda()
+    agent = torch.nn.DataParallel(agent, device_ids=[0, 1])
+
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
-    actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,)).to(device)
-    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,))
+    logprobs = torch.zeros((args.num_steps, args.num_envs))
+    rewards = torch.zeros((args.num_steps, args.num_envs))
+    dones = torch.zeros((args.num_steps, args.num_envs))
+    values = torch.zeros((args.num_steps, args.num_envs))
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
-    next_obs = torch.Tensor(envs.reset()).to(device)
-    next_done = torch.zeros(args.num_envs).to(device)
-    next_lstm_state = agent.get_initial_state(args.num_envs)
+    next_obs = torch.Tensor(envs.reset())
+    next_done = torch.zeros(args.num_envs)
+    next_lstm_state = agent.module.get_initial_state(args.num_envs)
     num_updates = args.total_timesteps // args.batch_size
 
     for update in range(1, num_updates + 1):
@@ -288,7 +270,7 @@ def train(rank, size):
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
-                action, logprob, _, value, next_lstm_state = agent.get_action_and_value(next_obs, next_lstm_state, next_done)
+                action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state, next_done)
                 values[step] = value.flatten()
             actions[step] = action
             logprobs[step] = logprob
@@ -307,7 +289,7 @@ def train(rank, size):
                 wandb.log(stats)
 
             rewards[step] = torch.tensor(reward).view(-1)
-            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(done).to(device)
+            next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
 
             for item in info:
                 if "episode" in item.keys():
@@ -318,11 +300,12 @@ def train(rank, size):
 
         # bootstrap value if not done
         with torch.no_grad():
-            next_value = agent.get_value(
+            next_value = agent(
                 next_obs,
                 next_lstm_state,
                 next_done,
-            ).reshape(1, -1)
+                value_only=True,
+            ).reshape(1, -1).cpu()
 
             if args.gae:
                 advantages = torch.zeros_like(rewards)
@@ -371,12 +354,18 @@ def train(rank, size):
                 mbenvinds = envinds[start:end]
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
 
-                _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
-                    b_obs[mb_inds].to(device),
-                    (initial_lstm_state[0][:, mbenvinds], initial_lstm_state[1][:, mbenvinds]),
-                    b_dones[mb_inds].to(device),
-                    b_actions.long()[mb_inds].to(device),
+                _, newlogprob, entropy, newvalue, _ = agent(
+                    b_obs[mb_inds],
+                    (initial_lstm_state[0][mbenvinds, :], initial_lstm_state[1][mbenvinds, :]),
+                    b_dones[mb_inds],
+                    b_actions.long()[mb_inds],
                 )
+
+                # Must be done on CPU for multiGPU
+                newlogprob = newlogprob.cpu()
+                entropy    = entropy.cpu()
+                newvalue   = newvalue.cpu()
+
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
 
@@ -431,33 +420,18 @@ def train(rank, size):
         wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        if rank == 0:
-            writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
-            writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-            writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-            writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-            writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-            writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-            writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-            writer.add_scalar("losses/explained_variance", explained_var, global_step)
-            print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
-            writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
+        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
+        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+        writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
+        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
+        writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
+        writer.add_scalar("losses/explained_variance", explained_var, global_step)
+        print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
+        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-            torch.save(agent.state_dict(), 'model.pt')
+        torch.save(agent.state_dict(), 'model.pt')
 
     envs.close()
-    if rank == 0:
-        writer.close()
-        wandb.finish()
-
-if __name__ == "__main__":
-    size = 2
-    processes = []
-    mp.set_start_method("spawn")
-    for rank in range(size):
-        p = mp.Process(target=init_process, args=(rank, size, train))
-        p.start()
-        processes.append(p)
-
-    for p in processes:
-        p.join()
+    writer.close()
