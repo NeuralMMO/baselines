@@ -216,6 +216,6 @@ if __name__ == '__main__':
 
     SAVE_TO = 'combined'
 
-    plot_combined()
+    #plot_combined()
 
-    #test_scripted()
+    test_scripted()
