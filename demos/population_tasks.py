@@ -12,10 +12,12 @@ from config import baselines
 
 class PopulationTaskEnv(rllib_wrapper.RLlibEnv):
     def reward(self, player):
-        reward, info = super().reward(player)
+        _, info = super().reward(player)
 
         if player.entID not in self.realm.players:
             return -1, info
+
+        pop = player.pop
 
         if __debug__:
             err = f'This is a 4 pop demo; got {pop}'
@@ -28,9 +30,14 @@ class PopulationTaskEnv(rllib_wrapper.RLlibEnv):
         elif pop == 2:
             task = 'exploration'
         elif pop == 3:
-            task = 'exploration'
+            task = 'foraging'
 
-        return infos[task], info
+        reward = 0
+        for k, v in info.items():
+            if k.startswith(task):
+               reward += v
+
+        return reward, info
 
 
 class PopulationTaskConfig(baselines.Medium):

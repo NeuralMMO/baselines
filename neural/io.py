@@ -53,13 +53,9 @@ class Input(nn.Module):
 
       
       #TODO: implement obs scaling in a less hackey place
-      self.tileWeight = torch.Tensor([1.0, 0.0, 0.02, 0.02])
-      self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
-      self.itemWeight = torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0])
-
-      if torch.cuda.is_available():
-          self.tileWeight = self.tileWeight.cuda()
-          self.entWeight  = self.entWeight.cuda()
+      self.register_buffer('tileWeight', torch.Tensor([1.0, 0.0, 0.02, 0.02]))
+      self.register_buffer('entWeight', torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]))
+      self.register_buffer('itemWeight', torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0]))
 
    def forward(self, inp):
       '''Produces tensor representations from an IO object
@@ -74,7 +70,6 @@ class Input(nn.Module):
       #Pack entities of each attribute set
       entityLookup = {}
 
-      device                       = inp['Tile']['Continuous'].device
       inp['Tile']['Continuous']   *= self.tileWeight
       inp['Entity']['Continuous'] *= self.entWeight
  

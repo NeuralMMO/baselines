@@ -1,224 +1,168 @@
+'''Main file for NMMO baselines
+
+rllib_wrapper.py contains all necessary RLlib wrappers to train and
+evaluate capable policies on Neural MMO as well as rendering,
+logging, and visualization tools.
+
+TODO: Still need to add per pop / diff task demo and Tiled support
+
+Associated docs and tutorials are hosted on neuralmmo.github.io.'''
 from pdb import set_trace as T
-import numpy as np
-
 from collections import defaultdict
+from copy import deepcopy
+from operator import attrgetter
+import numpy as np
+import os
 
+from fire import Fire
 from tqdm import tqdm
-import gym
-import wandb
 
 import torch
 from torch import nn
-from torch.nn.utils import rnn
 
-from ray import rllib
+import ray
+from ray import rllib, tune
+from ray.tune import CLIReporter
+from ray.tune.integration.wandb import WandbLoggerCallback
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 
 import nmmo
 
-from neural.policy import Recurrent
+from neural import io, subnets, policy
 from scripted import baselines
 
+import config as base_config
+from config import scale
+
+
+def PPO(config):
+   from ray.rllib.agents.ppo.ppo import PPOTrainer
+   class PPO(Trainer, PPOTrainer): pass
+   extra_config = {
+            'train_batch_size': config.TRAIN_BATCH_SIZE,
+            'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+            'num_sgd_iter': 1}
+   return PPO, extra_config
+
+def APPO(config):
+   from ray.rllib.agents.ppo.appo import APPOTrainer
+   class APPO(Trainer, APPOTrainer): pass
+   return APPO, {}
+
+def DDPPO(config):
+   from ray.rllib.agents.ppo.ddppo import DDPPOTrainer
+   class DDPPO(Trainer, DDPPOTrainer): pass
+   extra_config = {
+           'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE,
+           'num_sgd_iter': 1,
+           'num_gpus_per_worker': 0,
+           'num_gpus': 0}
+   return DDPPO, extra_config
+
+def Impala(config):
+   from ray.rllib.agents.impala.impala import ImpalaTrainer
+   class Impala(Trainer, ImpalaTrainer): pass
+   return Impala, {}
+
+def QMix(config):
+   from ray.rllib.agents.qmix.qmix import QMixTrainer
+   class QMix(Trainer, QMixTrainer): pass
+   return QMix, {}
+
+###############################################################################
+### Policy integration
 class RLlibPolicy(RecurrentNetwork, nn.Module):
    '''Wrapper class for using our baseline models with RLlib'''
+   #def __init__(self, observation_space, action_space, config):
    def __init__(self, *args, **kwargs):
-      self.config = kwargs.pop('config')
+      #self.config = config
+      config = kwargs.pop('config')
+      self.config = config 
       super().__init__(*args, **kwargs)
       nn.Module.__init__(self)
 
-      #self.space  = actionSpace(self.config).spaces
-      self.model  = Recurrent(self.config)
+      self.input  = io.Input(config,
+            embeddings=io.MixedEmbedding,
+            attributes=subnets.SelfAttention)
+
+      if config.EMULATE_FLAT_ATN:
+         self.output = nn.Linear(self.config.HIDDEN, 304)
+      else:
+         self.output = io.Output(config)
+
+      self.model  = policy.Recurrent(self.config)
+      self.valueF = nn.Linear(config.HIDDEN, 1)
 
    #Initial hidden state for RLlib Trainer
    def get_initial_state(self):
-      return [self.model.valueF.weight.new(1, self.config.HIDDEN).zero_(),
-              self.model.valueF.weight.new(1, self.config.HIDDEN).zero_()]
+      return [self.valueF.weight.new(1, self.config.HIDDEN).zero_(),
+              self.valueF.weight.new(1, self.config.HIDDEN).zero_()]
 
    def forward(self, input_dict, state, seq_lens):
-      logitDict, state = self.model(input_dict['obs'], state, seq_lens)
+      obs = input_dict['obs']
+      if self.config.EMULATE_FLAT_OBS:
+         obs = nmmo.emulation.unpack_obs(self.config, obs)
 
-      logits = []
+      entityLookup  = self.input(obs)
+      hidden, state = self.model(entityLookup, state, seq_lens)
+      self.value    = self.valueF(hidden).squeeze(1)
+
+      if self.config.EMULATE_FLAT_ATN:
+         output = self.output(hidden)
+         return output, state
+
       #Flatten structured logits for RLlib
       #TODO: better to use the space directly here in case of missing keys
-      for atnKey, atn in sorted(logitDict.items()):
+      logits = []
+      output = self.output(hidden, entityLookup)
+      for atnKey, atn in sorted(output.items()):
          for argKey, arg in sorted(atn.items()):
             logits.append(arg)
 
       return torch.cat(logits, dim=1), state
 
    def value_function(self):
-      return self.model.value
+      return self.value
 
    def attention(self):
-      return self.model.attn
+      return self.attn
 
 
-class RLlibEnv(nmmo.Env, rllib.MultiAgentEnv):
-   '''Wrapper class for using Neural MMO with RLlib'''
-   def __init__(self, config):
-      self.config = config['config']
-      super().__init__(self.config)
+###############################################################################
+### Logging integration
+class RLlibLogCallbacks(DefaultCallbacks):
+   def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
+      assert len(base_env.envs) == 1, 'One env per worker'
+      env    = base_env.envs[0]#.env
 
-   def render(self):
-      #Patch for RLlib dupe rendering bug
-      if not self.config.RENDER:
-         return
+      inv_map = {agent.policyID: agent for agent in env.config.AGENTS}
 
-      super().render()
+      stats      = env.terminal()['Stats']
+      policy_ids = stats.pop('PolicyID')
+ 
+      for key, vals in stats.items():
+         policy_stat = defaultdict(list)
 
-   def step(self, decisions):
-      obs, rewards, dones, infos = super().step(decisions)
-      config = self.config
-      ts = config.TEAM_SPIRIT
-      
-      if config.COOPERATIVE:
-          #Union of task rewards across population
-          team_rewards = defaultdict(lambda: defaultdict(int))
-          populations = {}
-          for entID, info in infos.items():
-              pop = info.pop('population')
-              populations[entID] = pop
-              team = team_rewards[pop]
-              for task, reward in info.items():
-                  team[task] = max(team[task], reward)
+         # Per-population metrics
+         for policy_id, v in zip(policy_ids, vals):
+             policy_stat[policy_id].append(v)
 
-          #Team spirit interpolated between agent and team summed task rewards
-          for entID, reward in rewards.items():
-              pop = populations[entID]
-              rewards[entID] = ts*sum(team_rewards[pop].values()) + (1-ts)*reward
+         for policy_id, vals in policy_stat.items():
+             policy = inv_map[policy_id].__name__
 
-      dones['__all__'] = False
-      test = config.EVALUATE or config.RENDER
-      
-      if config.EVALUATE:
-         horizon = config.EVALUATION_HORIZON
-      else:
-         horizon = config.TRAIN_HORIZON
+             k = f'{policy}_{policy_id}_{key}'
+             episode.custom_metrics[k] = np.mean(vals)
 
-      population  = len(self.realm.players) == 0
-      hit_horizon = self.realm.tick >= horizon
-      
-      if not config.RENDER and (hit_horizon or population):
-         dones['__all__'] = True
+      if not env.config.EVALUATE:
+         return 
 
-      return obs, rewards, dones, infos
-
-class RLlibOverlayRegistry(nmmo.OverlayRegistry):
-   '''Host class for RLlib Map overlays'''
-   def __init__(self, realm):
-      super().__init__(realm.config, realm)
-
-      self.overlays['values']       = Values
-      self.overlays['attention']    = Attention
-      self.overlays['tileValues']   = TileValues
-      self.overlays['entityValues'] = EntityValues
-
-class RLlibOverlay(nmmo.Overlay):
-   '''RLlib Map overlay wrapper'''
-   def __init__(self, config, realm, trainer, model):
-      super().__init__(config, realm)
-      self.trainer = trainer
-      self.model   = model
-
-class Attention(RLlibOverlay):
-   def register(self, obs):
-      '''Computes local attentional maps with respect to each agent'''
-      tiles      = self.realm.realm.map.tiles
-      players    = self.realm.realm.players
-
-      attentions = defaultdict(list)
-      for idx, playerID in enumerate(obs):
-         if playerID not in players:
-            continue
-         player = players[playerID]
-         r, c   = player.pos
-
-         rad     = self.config.NSTIM
-         obTiles = self.realm.realm.map.tiles[r-rad:r+rad+1, c-rad:c+rad+1].ravel()
-
-         for tile, a in zip(obTiles, self.model.attention()[idx]):
-            attentions[tile].append(float(a))
-
-      sz    = self.config.TERRAIN_SIZE
-      data  = np.zeros((sz, sz))
-      for r, tList in enumerate(tiles):
-         for c, tile in enumerate(tList):
-            if tile not in attentions:
-               continue
-            data[r, c] = np.mean(attentions[tile])
-
-      colorized = nmmo.overlay.twoTone(data)
-      self.realm.register(colorized)
-
-class Values(RLlibOverlay):
-   def update(self, obs):
-      '''Computes a local value function by painting tiles as agents
-      walk over them. This is fast and does not require additional
-      network forward passes'''
-      players = self.realm.realm.players
-      for idx, playerID in enumerate(obs):
-         if playerID not in players:
-            continue
-         r, c = players[playerID].base.pos
-         self.values[r, c] = float(self.model.value_function()[idx])
-
-   def register(self, obs):
-      colorized = nmmo.overlay.twoTone(self.values[:, :])
-      self.realm.register(colorized)
-
-def zeroOb(ob, key):
-   for k in ob[key]:
-      ob[key][k] *= 0
-
-class GlobalValues(RLlibOverlay):
-   '''Abstract base for global value functions'''
-   def init(self, zeroKey):
-      if self.trainer is None:
-         return
-
-      print('Computing value map...')
-      model     = self.trainer.get_policy('policy_0').model
-      obs, ents = self.realm.dense()
-      values    = 0 * self.values
-
-      #Compute actions to populate model value function
-      BATCH_SIZE = 128
-      batch = {}
-      final = list(obs.keys())[-1]
-      for agentID in tqdm(obs):
-         ob             = obs[agentID]
-         batch[agentID] = ob
-         zeroOb(ob, zeroKey)
-         if len(batch) == BATCH_SIZE or agentID == final:
-            self.trainer.compute_actions(batch, state={}, policy_id='policy_0')
-            for idx, agentID in enumerate(batch):
-               r, c         = ents[agentID].base.pos
-               values[r, c] = float(self.model.value_function()[idx])
-            batch = {}
-
-      print('Value map computed')
-      self.colorized = nmmo.overlay.twoTone(values)
-
-   def register(self, obs):
-      print('Computing Global Values. This requires one NN pass per tile')
-      self.init()
-
-      self.realm.register(self.colorized)
-
-class TileValues(GlobalValues):
-   def init(self, zeroKey='Entity'):
-      '''Compute a global value function map excluding other agents. This
-      requires a forward pass for every tile and will be slow on large maps'''
-      super().init(zeroKey)
-
-class EntityValues(GlobalValues):
-   def init(self, zeroKey='Tile'):
-      '''Compute a global value function map excluding tiles. This
-      requires a forward pass for every tile and will be slow on large maps'''
-      super().init(zeroKey)
+      episode.custom_metrics['Raw_Policy_IDs']   = policy_ids
+      episode.custom_metrics['Raw_Task_Rewards'] = stats['Task_Reward']
 
 
+###############################################################################
+### Custom tournament evaluation computes SR
 class Trainer:
    def __init__(self, config, env=None, logger_creator=None):
       super().__init__(config, env, logger_creator)
@@ -244,6 +188,7 @@ class Trainer:
       return stats
 
    def evaluate(self):
+      return {}
       stat_dict = super().evaluate()
       stats = stat_dict['evaluation']['custom_metrics']
 
@@ -266,48 +211,207 @@ class Trainer:
         
       return stat_dict
 
+class ConsoleLog(CLIReporter):
+   def report(self, trials, done, *sys_info):
+      #os.system('cls' if os.name == 'nt' else 'clear') 
+      print(nmmo.motd + '\n')
+      super().report(trials, done, *sys_info)
 
-def PPO(config):
-   class PPO(Trainer, rllib.agents.ppo.ppo.PPOTrainer): pass
-   extra_config = {'sgd_minibatch_size': config.SGD_MINIBATCH_SIZE}
-   return PPO, extra_config
+def run_tune_experiment(config, trainer_wrapper, rllib_env=nmmo.integrations.rllib_env_cls()):
+   '''Ray[RLlib, Tune] integration for Neural MMO
 
-def APPO(config):
-   class APPO(Trainer, rllib.agents.ppo.appo.APPOTrainer): pass
-   return APPO, {}
+   Setup custom environment, observations/actions, policies,
+   and parallel training/evaluation'''
 
-def Impala(config):
-   class Impala(Trainer, rllib.agents.impala.impala.ImpalaTrainer): pass
-   return Impala, {}
-
-###############################################################################
-### Logging
-class RLlibLogCallbacks(DefaultCallbacks):
-   def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
-      assert len(base_env.envs) == 1, 'One env per worker'
-      env    = base_env.envs[0]
-
-      inv_map = {agent.policyID: agent for agent in env.config.PLAYERS}
-
-      stats      = env.terminal()['Stats']
-      policy_ids = stats.pop('PolicyID')
+   #Round and round the num_threads flags go
+   #Which are needed nobody knows!
+   torch.set_num_threads(1)
+   os.environ['MKL_NUM_THREADS']     = '1'
+   os.environ['OMP_NUM_THREADS']     = '1'
+   os.environ['NUMEXPR_NUM_THREADS'] = '1'
  
-      for key, vals in stats.items():
-         policy_stat = defaultdict(list)
+   ray.init(local_mode=config.LOCAL_MODE)
 
-         # Per-population metrics
-         for policy_id, v in zip(policy_ids, vals):
-             policy_stat[policy_id].append(v)
+   #Register custom env and policies
+   grouping = lambda e: 'group1'
+   #{'group1': [i for i in range(1, config.NENT+1)]}
+   ray.tune.registry.register_env("Neural_MMO",
+         lambda config: rllib_env(config))
 
-         for policy_id, vals in policy_stat.items():
-             policy = inv_map[policy_id].__name__
+   rllib.models.ModelCatalog.register_custom_model(
+         'godsword', RLlibPolicy)
 
-             k = f'{policy}_{policy_id}_{key}'
-             episode.custom_metrics[k] = np.mean(vals)
+   mapPolicy = lambda agentID : 'policy_{0}'
 
-      if not env.config.EVALUATE:
+   #mapPolicy = lambda agentID : 'policy_{}'.format(
+   #      agentID % config.NPOLICIES)
+
+   policies = {}
+   env = rllib_env({'config': config})
+   for i in range(config.NPOLICIES):
+      params = {
+            "agent_id": i,
+            "obs_space_dict": env.observation_space(i),
+            "act_space_dict": env.action_space(i)}
+      key           = mapPolicy(i)
+      policies[key] = (None, env.observation_space(i), env.action_space(i), params)
+
+   #Evaluation config
+   eval_config = deepcopy(config)
+   eval_config.EVALUATE = True
+   eval_config.AGENTS   = eval_config.EVAL_AGENTS
+
+   trainer_cls, extra_config = trainer_wrapper(config)
+
+   #Create rllib config
+   rllib_config = {
+      'num_workers': config.NUM_WORKERS,
+      'num_gpus_per_worker': config.NUM_GPUS_PER_WORKER,
+      'num_gpus': config.NUM_GPUS,
+      'num_envs_per_worker': 1,
+      'simple_optimizer': True,
+      'rollout_fragment_length': config.ROLLOUT_FRAGMENT_LENGTH,
+      'timesteps_per_iteration': 10,
+      'framework': 'torch',
+      'horizon': np.inf,
+      'soft_horizon': False, 
+      'no_done_at_end': False,
+      'env': 'Neural_MMO',
+      'env_config': {
+         'config': config
+      },
+      'evaluation_config': {
+         'env_config': {
+            'config': eval_config
+         },
+      },
+      'multiagent': {
+         'policies': policies,
+         'policy_mapping_fn': mapPolicy,
+         'count_steps_by': 'agent_steps'
+      },
+      'model': {
+         'custom_model': 'godsword',
+         'custom_model_config': {'config': config},
+         'max_seq_len': config.LSTM_BPTT_HORIZON
+      },
+      'render_env': config.RENDER,
+      'callbacks': RLlibLogCallbacks,
+      'evaluation_interval': config.EVALUATION_INTERVAL,
+      'evaluation_num_episodes': config.EVALUATION_NUM_EPISODES,
+      'evaluation_num_workers': config.EVALUATION_NUM_WORKERS,
+      'evaluation_parallel_to_training': config.EVALUATION_PARALLEL,
+   }
+
+   #Alg-specific params
+   rllib_config = {**rllib_config, **extra_config}
+ 
+   restore     = None
+   config_name = config.__class__.__name__
+   algorithm   = trainer_cls.name()
+   if config.RESTORE:
+      if config.RESTORE_ID:
+         config_name = '{}_{}'.format(config_name, config.RESTORE_ID)
+
+      restore   = '{0}/{1}/{2}/checkpoint_{3:06d}/checkpoint-{3}'.format(
+            config.EXPERIMENT_DIR, algorithm, config_name, config.RESTORE_CHECKPOINT)
+
+   callbacks = []
+   wandb_api_key = 'wandb_api_key'
+   if os.path.exists(wandb_api_key):
+       callbacks=[WandbLoggerCallback(
+               project = 'NeuralMMO',
+               api_key_file = 'wandb_api_key',
+               log_config = False)]
+   else:
+       print('Running without WanDB. Create a file baselines/wandb_api_key and paste your API key to enable')
+
+   tune.run(trainer_cls,
+      config    = rllib_config,
+      name      = trainer_cls.name(),
+      verbose   = config.LOG_LEVEL,
+      stop      = {'training_iteration': config.TRAINING_ITERATIONS},
+      restore   = restore,
+      resume    = config.RESUME,
+      local_dir = config.EXPERIMENT_DIR,
+      keep_checkpoints_num = config.KEEP_CHECKPOINTS_NUM,
+      checkpoint_freq = config.CHECKPOINT_FREQ,
+      checkpoint_at_end = True,
+      trial_dirname_creator = lambda _: config_name,
+      progress_reporter = ConsoleLog(),
+      reuse_actors = True,
+      callbacks=callbacks,
+      )
+
+
+class CLI():
+   '''Neural MMO CLI powered by Google Fire
+
+   Main file for the RLlib demo included with Neural MMO.
+
+   Usage:
+      python main.py <COMMAND> --config=<CONFIG> --ARG1=<ARG1> ...
+
+   The User API documents core env flags. Additional config options specific
+   to this demo are available in projekt/config.py. 
+
+   The --config flag may be used to load an entire group of options at once.
+   Select one of the defaults from projekt/config.py or write your own.
+   '''
+   def __init__(self, **kwargs):
+      if 'help' in kwargs:
          return 
 
-      episode.custom_metrics['Raw_Policy_IDs']   = policy_ids
-      episode.custom_metrics['Raw_Task_Rewards'] = stats['Task_Reward']
+      config = 'baselines.Medium'
+      if 'config' in kwargs:
+          config = kwargs.pop('config')
 
+      config = attrgetter(config)(base_config)()
+      config.override(**kwargs)
+      #inv_map = {agent.policyID: agent for agent in env.config.PLAYERS}
+
+      if 'scale' in kwargs:
+          config_scale = kwargs.pop('scale')
+          config = getattr(scale, config_scale)()
+          config.override(config_scale)
+
+      assert hasattr(config, 'NUM_GPUS'), 'Missing NUM_GPUS (did you specify a scale?)'
+      assert hasattr(config, 'NUM_WORKERS'), 'Missing NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_WORKERS'), 'Missing EVALUATION_NUM_WORKERS (did you specify a scale?)'
+      assert hasattr(config, 'EVALUATION_NUM_EPISODES'), 'Missing EVALUATION_NUM_EPISODES (did you specify a scale?)'
+
+      self.config = config
+      self.trainer_wrapper = PPO
+
+   def generate(self, **kwargs):
+      '''Manually generates maps using the current --config setting'''
+      nmmo.MapGenerator(self.config).generate_all_maps()
+
+   def train(self, **kwargs):
+      '''Train a model using the current --config setting'''
+      run_tune_experiment(self.config, self.trainer_wrapper)
+
+   def evaluate(self, **kwargs):
+      '''Evaluate a model against EVAL_AGENTS models'''
+      self.config.TRAINING_ITERATIONS     = 0
+      self.config.EVALUATE                = True
+      self.config.EVALUATION_NUM_WORKERS  = self.config.NUM_WORKERS
+      self.config.EVALUATION_NUM_EPISODES = self.config.NUM_WORKERS
+
+      run_tune_experiment(self.config, self.trainer_wrapper)
+
+   def render(self, **kwargs):
+      '''Start a WebSocket server that autoconnects to the 3D Unity client'''
+      self.config.RENDER                  = True
+      self.config.NUM_WORKERS             = 1
+      self.evaluate(**kwargs)
+
+
+if __name__ == '__main__':
+   def Display(lines, out):
+        text = "\n".join(lines) + "\n"
+        out.write(text)
+
+   from fire import core
+   core.Display = Display
+   Fire(CLI)

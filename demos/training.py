@@ -38,7 +38,6 @@ class SmallExploreEnv(nmmo.Env):
 class SmallExploreRLlibEnv(rllib_wrapper.RLlibEnv, SmallExploreEnv):
     pass
 
-
 class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Terrain, nmmo.config.Resource):
     '''Config for NMMO default environment with concurrent spawns'''
 
