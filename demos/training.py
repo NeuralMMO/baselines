@@ -10,6 +10,7 @@ from scripted import baselines
 import tasks
 import rllib_wrapper
 from demos import minimal
+import config
 from config import bases, scale
 from main import run_tune_experiment
 
@@ -34,18 +35,18 @@ class SmallExploreEnv(nmmo.Env):
 
         return reward, info
 
-class SmallExploreRLlibEnv(SmallExploreEnv, rllib_wrapper.RLlibEnv):
-   pass
+class SmallExploreRLlibEnv(rllib_wrapper.RLlibEnv, SmallExploreEnv):
+    pass
 
-class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Resource):
+class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Terrain, nmmo.config.Resource):
     '''Config for NMMO default environment with concurrent spawns'''
 
-    # Always trains from scratch, enable 1 GPU
+    # Always trains from scratch, enable 1 GPU if you have one
     RESTORE  = False
-    NUM_GPUS = 1
+    NUM_GPUS = 0
 
     # Render maps during generation for user to preview
-    GENERATE_MAP_PREVIEWS = True
+    MAP_GENERATE_PREVIEWS = True
 
     # Spawn all agents at t=0
     @property
@@ -54,21 +55,21 @@ class SmallExploreConfig(scale.Debug, bases.Small, nmmo.config.Resource):
 
 
 class ForageBaseline(SmallExploreConfig):
-    AGENTS = [baselines.Forage]
+    PLAYERS = [baselines.Forage]
 
 class MeanderBaseline(SmallExploreConfig):
-    AGENTS = [baselines.Meander]
+    PLAYERS = [baselines.Meander]
 
 class CLI:
     '''Google Fire CLI for this simple training demo. Commands: baselines, neural'''
     def baselines(self):
         '''Scripted baselines for demo'''
         lifetime = minimal.simulate(SmallExploreEnv, ForageBaseline,
-                horizon=128)['Stats']['Lifetime']
+                horizon=128)['Stats']['Forage_Lifetime']
         print(f'Average Scripted Forage Lifetime: {np.mean(lifetime)}')
 
         lifetime = minimal.simulate(SmallExploreEnv, MeanderBaseline,
-                horizon=128)['Stats']['Lifetime']
+                horizon=128)['Stats']['Meander_Lifetime']
         print(f'Average Scripted Meander Lifetime: {np.mean(lifetime)}')
 
         print('Note that these are noisy estimates on one env')
