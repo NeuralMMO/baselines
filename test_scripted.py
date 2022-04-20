@@ -37,10 +37,5 @@ def test_scripted():
     for key, vals in stats.items():
         print(f'{key}: {min(vals)}, {np.mean(vals)}, {max(vals)}')
 
-    max_lifetime = max(stats['Lifetime'])
-    print(max_lifetime)
-
-    assert max_lifetime > 100, 'Best scripted model should live > 100 steps'
-
 if __name__ == '__main__':
     test_scripted()
