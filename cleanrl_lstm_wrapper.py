@@ -16,14 +16,6 @@ import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
-from stable_baselines3.common.atari_wrappers import (  # isort:skip
-    ClipRewardEnv,
-    EpisodicLifeEnv,
-    FireResetEnv,
-    MaxAndSkipEnv,
-    NoopResetEnv,
-)
-
 import nmmo
 import evaluate
 import tasks
@@ -114,10 +106,10 @@ class Agent(nn.Module):
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
 
-    def get_initial_state(self, batch):
+    def get_initial_state(self, batch, device='cpu'):
         return (
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size),
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size),
+            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
+            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
         )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
  
     def _compute_hidden(self, x, lstm_state, done):
@@ -141,7 +133,10 @@ class Agent(nn.Module):
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
         return new_hidden, lookup, lstm_state
 
-    def forward(self, x, lstm_state, done, action=None, value_only=False):
+    def forward(self, x, lstm_state, done=None, action=None, value_only=False):
+        if done is None:
+            done = torch.zeros(len(x)).to('cuda:0')
+
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
 
         if value_only:
@@ -235,7 +230,7 @@ if __name__ == "__main__":
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
     agent = Agent(config).cuda()
-    agent = torch.nn.DataParallel(agent, device_ids=[0, 1])
+    agent = torch.nn.DataParallel(agent, device_ids=[0])
 
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     

@@ -28,7 +28,7 @@ class Policy:
         # Set initial state for recurrent models
         self.state = None
         if hasattr(self.model, 'get_initial_state'):
-            self.state = self.model.get_initial_state(batch)
+            self.state = self.model.get_initial_state(batch, device)
 
     def sample_logits(self, logits):
         return Categorical(logits=logits).sample()
@@ -40,9 +40,9 @@ class Policy:
         #obs = nmmo.emulation.unpack_obs(self.config, obs)
 
         if self.state:
-            logits, self.state = self.model(obs, self.state)
+            logits, _, _, _, self.state = self.model(obs, self.state)
         else:
-            logits = self.model(obs)
+            logits, _, _, _ = self.model(obs)
 
         actions = logits.cpu().numpy()
         return actions
@@ -68,7 +68,7 @@ class Policy:
         return unpack_action
 
 class Evaluator:
-    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:1', *args):
+    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:0', *args):
         self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls, num_cpus, num_cpus)
         config      = config_cls()
         self.config = config
@@ -96,7 +96,7 @@ class Evaluator:
             self.policy  = Policy(config, torch_policy, device)
 
     def load_model(self, state_dict):
-        state_dict = {key: val.to(self.device) for key, val in state_dict.items()}
+        state_dict = {key.lstrip('module')[1:]: val.to(self.device) for key, val in state_dict.items()}
         self.policy.model.load_state_dict(state_dict)
 
     def __str__(self):
