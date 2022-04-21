@@ -52,11 +52,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=4*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=16,
+    parser.add_argument("--num-cpus", type=int, default=4,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=512,
+    parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -66,7 +66,7 @@ def parse_args():
         help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=1.0,
         help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=512,
+    parser.add_argument("--num-minibatches", type=int, default=32,
         help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=1,
         help="the K epochs to update the policy")
@@ -160,7 +160,7 @@ class Agent(nn.Module):
         value                 = self.value(x)
 
         flat_logits = []
-        for atn in nmmo.Action.edges:
+        for atn in nmmo.Action.edges(self.config):
             for arg in atn.edges:
                 flat_logits.append(logits[atn][arg]) 
 
@@ -198,7 +198,7 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = False #True
 
-    NUM_ARGUMENTS = 3
+    NUM_ARGUMENTS = 8
 
 if __name__ == "__main__":
     args = parse_args()
@@ -234,8 +234,8 @@ if __name__ == "__main__":
     envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
-    agent = Agent(config).cuda()
-    agent = torch.nn.DataParallel(agent, device_ids=[0, 1])
+    agent = Agent(config)#.cuda()
+    agent = torch.nn.DataParallel(agent, device_ids=[])#0, 1])
 
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
