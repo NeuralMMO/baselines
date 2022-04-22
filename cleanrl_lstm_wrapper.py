@@ -44,7 +44,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=24*Config.NENT,
         help="the number of parallel game environments")
     parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
@@ -169,8 +169,8 @@ class Agent(nn.Module):
         return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
-    HIDDEN             = 48
-    EMBED              = 48
+    HIDDEN             = 64
+    EMBED              = 64
 
     NENT = 128
 
