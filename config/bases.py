@@ -6,6 +6,65 @@ import nmmo
 
 from scripted import baselines
 
+class Base:
+   N_TRAIN_MAPS = 256
+   N_EVAL_MAPS  = 32
+
+   def PATH_MAPS(self):
+      maps = super().PATH_MAPS
+      if self.EVALUATE:
+          self.TERRAIN_FLIP_SEED = True
+          return os.path.join(maps, 'evaluation')
+      return os.path.join(maps, 'training')
+
+   @property
+   def NMAPS(self):
+      if not self.EVALUATE:
+          return self.N_TRAIN_MAPS
+      return super().NMAPS
+
+   #Policy specification
+   EVAL_AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
+   AGENTS      = [nmmo.Agent]
+
+   LOG_LEVEL               = 1
+
+class CleanRL(Base):
+    EXP_NAME = 'CleanRL'
+    SEED     = 1
+    TORCH_DETERMINISTIC = True
+    CUDA = [0]
+    WANDB_PROJECT_NAME = 'cleanRL'
+    WANDB_ENTITY = None
+    ENV_ID = 'nmmo'
+    TOTAL_TIMESTEPS = 500_000_000
+    LEARNING_RATE = 5e-5
+
+    @property
+    def NUM_ENVS(self):
+        return 2 * self.NENT
+
+    NUM_CPUS = 2
+    NUM_STEPS = 32
+    ANNEAL_LR = False
+    GAE = True
+    GAMME = 0.99
+    GAE_LAMBDA = 1.0
+    NUM_MINIBATCHES = 32
+    UPDATE_EPOCHS = 1
+    NORM_ADV = True
+    CLIP_COEF = 0.3
+    CLIP_VLOSS = True
+    ENT_COEF = 0.0
+    VF_COEF = 1.0
+    MAX_GRAD_NORM = 0.5
+    TARGET_KL = None
+
+    @property
+    def BATCH_SIZE(self):
+        return int(self.NUM_ENVS * self.NUM_STEPS)
+
+
 
 class RLlib:
    '''Base config for RLlib Models

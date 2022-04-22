@@ -17,6 +17,7 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
 import nmmo
+from config.bases import CleanRL
 import evaluate
 import tasks
 from scripted import baselines
@@ -44,11 +45,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=2*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=16,
+    parser.add_argument("--num-cpus", type=int, default=2,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=512,
+    parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -58,7 +59,7 @@ def parse_args():
         help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=1.0,
         help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=512,
+    parser.add_argument("--num-minibatches", type=int, default=32,
         help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=1,
         help="the K epochs to update the policy")
@@ -171,7 +172,7 @@ class Agent(nn.Module):
 
         return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
-class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
+class Config(CleanRL, nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
     EMBED              = 64
 
@@ -196,18 +197,18 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     NUM_ARGUMENTS = 3
 
 if __name__ == "__main__":
-    args = parse_args()
+    config = Config()
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{config.ENV_ID}__{config.EXP_NAME}__{config.SEED}__{int(time.time())}"
     wandb.init(
-        project=args.wandb_project_name,
-        entity=args.wandb_entity,
+        project=config.WANDB_PROJECT_NAME,
+        entity=config.WANDB_ENTITY,
         sync_tensorboard=True,
-        config=vars(args),
+        config=vars(config),
         name=run_name,
         monitor_gym=True,
         save_code=True)
@@ -215,51 +216,50 @@ if __name__ == "__main__":
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.items()])),
     )
 
     # TRY NOT TO MODIFY: seeding
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = args.torch_deterministic
+    random.seed(config.SEED)
+    np.random.seed(config.SEED)
+    torch.manual_seed(config.SEED)
+    torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
     # NMMO Integration
-    config = Config()
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
+    envs = nmmo.integrations.cleanrl_vec_envs(Config, config.NUM_ENVS // config.NENT, config.NUM_CPUS)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
     agent = Agent(config).cuda()
     agent = torch.nn.DataParallel(agent, device_ids=[0])
 
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.observation_space.shape)
-    actions = torch.zeros((args.num_steps, args.num_envs) + (Config.NUM_ARGUMENTS,))
-    logprobs = torch.zeros((args.num_steps, args.num_envs))
-    rewards = torch.zeros((args.num_steps, args.num_envs))
-    dones = torch.zeros((args.num_steps, args.num_envs))
-    values = torch.zeros((args.num_steps, args.num_envs))
+    obs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + envs.observation_space.shape)
+    actions = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + (config.NUM_ARGUMENTS,))
+    logprobs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    rewards = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(args.num_envs)
-    next_lstm_state = agent.module.get_initial_state(args.num_envs)
-    num_updates = args.total_timesteps // args.batch_size
+    next_done = torch.zeros(config.NUM_ENVS)
+    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS)
+    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
     for update in range(1, num_updates + 1):
         initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
         # Annealing the rate if instructed to do so.
-        if args.anneal_lr:
+        if config.ANNEAL_LR:
             frac = 1.0 - (update - 1.0) / num_updates
-            lrnow = frac * args.learning_rate
+            lrnow = frac * config.LEARNING_RATE
             optimizer.param_groups[0]["lr"] = lrnow
 
-        for step in range(0, args.num_steps):
-            global_step += 1 * args.num_envs
+        for step in range(0, config.NUM_STEPS):
+            global_step += 1 * config.NUM_ENVS
             obs[step] = next_obs
             dones[step] = next_done
 
@@ -302,29 +302,29 @@ if __name__ == "__main__":
                 value_only=True,
             ).reshape(1, -1).cpu()
 
-            if args.gae:
+            if config.GAE:
                 advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
-                for t in reversed(range(args.num_steps)):
-                    if t == args.num_steps - 1:
+                for t in reversed(range(config.NUM_STEPS)):
+                    if t == config.NUM_STEPS - 1:
                         nextnonterminal = 1.0 - next_done
                         nextvalues = next_value
                     else:
                         nextnonterminal = 1.0 - dones[t + 1]
                         nextvalues = values[t + 1]
-                    delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-                    advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
+                    delta = rewards[t] + config.GAMMA * nextvalues * nextnonterminal - values[t]
+                    advantages[t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
                 returns = advantages + values
             else:
                 returns = torch.zeros_like(rewards)
-                for t in reversed(range(args.num_steps)):
-                    if t == args.num_steps - 1:
+                for t in reversed(range(config.NUM_STEPS)):
+                    if t == config.NUM_STEPS - 1:
                         nextnonterminal = 1.0 - next_done
                         next_return = next_value
                     else:
                         nextnonterminal = 1.0 - dones[t + 1]
                         next_return = returns[t + 1]
-                    returns[t] = rewards[t] + args.gamma * nextnonterminal * next_return
+                    returns[t] = rewards[t] + config.GAMMA * nextnonterminal * next_return
                 advantages = returns - values
 
         # flatten the batch
@@ -337,14 +337,14 @@ if __name__ == "__main__":
         b_values = values.reshape(-1)
 
         # Optimizing the policy and value network
-        assert args.num_envs % args.num_minibatches == 0
-        envsperbatch = args.num_envs // args.num_minibatches
-        envinds = np.arange(args.num_envs)
-        flatinds = np.arange(args.batch_size).reshape(args.num_steps, args.num_envs)
+        assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
+        envsperbatch = config.NUM_ENVS // config.NUM_MINIBATCHES
+        envinds = np.arange(config.NUM_ENVS)
+        flatinds = np.arange(config.BATCH_SIZE).reshape(config.NUM_STEPS, config.NUM_ENVS)
         clipfracs = []
-        for epoch in range(args.update_epochs):
+        for epoch in range(config.UPDATE_EPOCHS):
             np.random.shuffle(envinds)
-            for start in range(0, args.num_envs, envsperbatch):
+            for start in range(0, config.NUM_ENVS, envsperbatch):
                 end = start + envsperbatch
                 mbenvinds = envinds[start:end]
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
@@ -368,25 +368,25 @@ if __name__ == "__main__":
                     # calculate approx_kl http://joschu.net/blog/kl-approx.html
                     old_approx_kl = (-logratio).mean()
                     approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
+                    clipfracs += [((ratio - 1.0).abs() > config.CLIP_COEF).float().mean().item()]
 
                 mb_advantages = b_advantages[mb_inds]
-                if args.norm_adv:
+                if config.NORM_ADV:
                     mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
-                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
+                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - config.CLIP_COEF, 1 + config.CLIP_COEF)
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
                 newvalue = newvalue.view(-1)
-                if args.clip_vloss:
+                if config.CLIP_VLOSS:
                     v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
                     v_clipped = b_values[mb_inds] + torch.clamp(
                         newvalue - b_values[mb_inds],
-                        -args.clip_coef,
-                        args.clip_coef,
+                        -config.CLIP_COEF,
+                        config.CLIP_COEF,
                     )
                     v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
                     v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
@@ -395,15 +395,15 @@ if __name__ == "__main__":
                     v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
                 entropy_loss = entropy.mean()
-                loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+                loss = pg_loss - config.ENT_COEF * entropy_loss + v_loss * config.VF_COEF
 
                 optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
+                nn.utils.clip_grad_norm_(agent.parameters(), config.MAX_GRAD_NORM)
                 optimizer.step()
 
-            if args.target_kl is not None:
-                if approx_kl > args.target_kl:
+            if config.TARGET_KL is not None:
+                if approx_kl > config.TARGET_KL:
                     break
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
