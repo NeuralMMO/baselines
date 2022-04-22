@@ -5,13 +5,6 @@ from collections import defaultdict
 
 import torch
 from torch.distributions.categorical import Categorical
-
-try:
-    import ray
-    ray.init()
-except:
-    pass
-
 import nmmo
 
 from scripted import baselines

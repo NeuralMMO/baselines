@@ -16,14 +16,6 @@ import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
-from stable_baselines3.common.atari_wrappers import (  # isort:skip
-    ClipRewardEnv,
-    EpisodicLifeEnv,
-    FireResetEnv,
-    MaxAndSkipEnv,
-    NoopResetEnv,
-)
-
 import nmmo
 import evaluate
 import tasks
@@ -52,11 +44,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=4*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=4,
+    parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=32,
+    parser.add_argument("--num-steps", type=int, default=512,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -66,7 +58,7 @@ def parse_args():
         help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=1.0,
         help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=32,
+    parser.add_argument("--num-minibatches", type=int, default=512,
         help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=1,
         help="the K epochs to update the policy")
@@ -177,8 +169,8 @@ class Agent(nn.Module):
         return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
-    HIDDEN             = 64
-    EMBED              = 64
+    HIDDEN             = 48
+    EMBED              = 48
 
     NENT = 128
 
@@ -235,7 +227,7 @@ if __name__ == "__main__":
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
     agent = Agent(config)#.cuda()
-    agent = torch.nn.DataParallel(agent, device_ids=[])#0, 1])
+    agent = torch.nn.DataParallel(agent, device_ids=[0])
 
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
@@ -416,8 +408,8 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # Sync policy evaluations
-        ratings = np.load('ratings.npy', allow_pickle=True).item()
-        wandb.log(ratings)
+        #ratings = np.load('ratings.npy', allow_pickle=True).item()
+        #wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
