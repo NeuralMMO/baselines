@@ -44,11 +44,11 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=16*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=2*Config.NENT,
         help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=16,
+    parser.add_argument("--num-cpus", type=int, default=2,
         help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=512,
+    parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -58,7 +58,7 @@ def parse_args():
         help="the discount factor gamma")
     parser.add_argument("--gae-lambda", type=float, default=1.0,
         help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=512,
+    parser.add_argument("--num-minibatches", type=int, default=32,
         help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=1,
         help="the K epochs to update the policy")
@@ -181,8 +181,8 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     TASKS              = tasks.All
 
     @property
-    def SPAWN(self):
-        return self.SPAWN_CONCURRENT
+    def PLAYER_SPAWN_FUNCTION(self):
+        return nmmo.spawn.spawn_concurrent
 
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
