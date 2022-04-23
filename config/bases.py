@@ -10,6 +10,7 @@ class Base:
    N_TRAIN_MAPS = 256
    N_EVAL_MAPS  = 32
 
+   @property
    def PATH_MAPS(self):
       maps = super().PATH_MAPS
       if self.EVALUATE:
@@ -29,7 +30,9 @@ class Base:
 
    LOG_LEVEL               = 1
 
-class CleanRL(Base):
+class CleanRL(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
+    EVALUATE = False
+
     EXP_NAME = 'CleanRL'
     SEED     = 1
     TORCH_DETERMINISTIC = True
@@ -42,13 +45,17 @@ class CleanRL(Base):
 
     @property
     def NUM_ENVS(self):
-        return 2 * self.NENT
+        return 1 * self.NENT
+
+    @property
+    def NUM_EVAL_ENVS(self):
+        return 1 * self.NENT
 
     NUM_CPUS = 2
     NUM_STEPS = 32
     ANNEAL_LR = False
     GAE = True
-    GAMME = 0.99
+    GAMMA = 0.99
     GAE_LAMBDA = 1.0
     NUM_MINIBATCHES = 32
     UPDATE_EPOCHS = 1
@@ -64,6 +71,21 @@ class CleanRL(Base):
     def BATCH_SIZE(self):
         return int(self.NUM_ENVS * self.NUM_STEPS)
 
+    HIDDEN = 64
+    EMBED  = 64
+
+    NENT   = 128
+
+    import tasks
+    tasks = tasks.All
+
+    @property
+    def SPAWN(self):
+        return self.SPAWN_CONCURRENT
+
+    FORCE_MAP_GENERATION = False
+
+    NUM_ARGUMENTS = 3
 
 
 class RLlib:

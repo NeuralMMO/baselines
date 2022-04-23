@@ -1,15 +1,14 @@
 from pdb import set_trace as T
 
-import argparse
 import os
 import random
 import time
-from distutils.util import strtobool
 
 import wandb
 import gym
 import numpy as np
 import supersuit as ss
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -17,76 +16,13 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
 import nmmo
-from config.bases import CleanRL
 import evaluate
 import tasks
+
+from config.bases import CleanRL as Config
 from scripted import baselines
 from neural import policy, io, subnets
 
-def parse_args():
-    # fmt: off
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default=os.path.basename(__file__).rstrip(".py"),
-        help="the name of this experiment")
-    parser.add_argument("--seed", type=int, default=1,
-        help="seed of the experiment")
-    parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, `torch.backends.cudnn.deterministic=False`")
-    parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--wandb-project-name", type=str, default="cleanRL",
-        help="the wandb's project name")
-    parser.add_argument("--wandb-entity", type=str, default=None,
-        help="the entity (team) of wandb's project")
-    # Algorithm specific arguments
-    parser.add_argument("--env-id", type=str, default="nmmo",
-        help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=500_000_000,
-        help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=5e-5,
-        help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=2*Config.NENT,
-        help="the number of parallel game environments")
-    parser.add_argument("--num-cpus", type=int, default=2,
-        help="the number of parallel CPU cores")
-    parser.add_argument("--num-steps", type=int, default=32,
-        help="the number of steps to run in each environment per policy rollout")
-    parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="Toggle learning rate annealing for policy and value networks")
-    parser.add_argument("--gae", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Use GAE for advantage computation")
-    parser.add_argument("--gamma", type=float, default=0.99,
-        help="the discount factor gamma")
-    parser.add_argument("--gae-lambda", type=float, default=1.0,
-        help="the lambda for the general advantage estimation")
-    parser.add_argument("--num-minibatches", type=int, default=32,
-        help="the number of mini-batches")
-    parser.add_argument("--update-epochs", type=int, default=1,
-        help="the K epochs to update the policy")
-    parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.3,
-        help="the surrogate clipping coefficient")
-    parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
-        help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=0.0,
-        help="coefficient of the entropy")
-    parser.add_argument("--vf-coef", type=float, default=1.0,
-        help="coefficient of the value function")
-    parser.add_argument("--max-grad-norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
-    parser.add_argument("--target-kl", type=float, default=None,
-        help="the target KL divergence threshold")
-    args = parser.parse_args()
-    args.batch_size = int(args.num_envs * args.num_steps)
-    # fmt: on
-    return args
-
-
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
-    return layer
 
 class Agent(nn.Module):
     def __init__(self, config):
@@ -172,29 +108,6 @@ class Agent(nn.Module):
 
         return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
 
-class Config(CleanRL, nmmo.config.Medium, nmmo.config.AllGameSystems):
-    HIDDEN             = 64
-    EMBED              = 64
-
-    NENT = 128
-
-    #Large map pool
-    NMAPS = 256
-
-    #Enable task-based
-    TASKS              = tasks.All
-
-    @property
-    def SPAWN(self):
-        return self.SPAWN_CONCURRENT
-
-    #Set a unique path for demo maps
-    PATH_MAPS = 'maps/demos'
-
-    #Force terrain generation -- avoids unexpected behavior from caching
-    FORCE_MAP_GENERATION = False #True
-
-    NUM_ARGUMENTS = 3
 
 if __name__ == "__main__":
     config = Config()
@@ -226,11 +139,13 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
     # NMMO Integration
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, config.NUM_ENVS // config.NENT, config.NUM_CPUS)
+    envs = nmmo.integrations.cleanrl_vec_envs(Config, (config.NUM_ENVS + config.NUM_EVAL_ENVS) // config.NENT, config.NUM_CPUS)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
     agent = Agent(config).cuda()
     agent = torch.nn.DataParallel(agent, device_ids=[0])
+
+    ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
@@ -246,12 +161,12 @@ if __name__ == "__main__":
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(config.NUM_ENVS)
-    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS)
+    next_done = torch.zeros(config.NUM_ENVS + config.NUM_EVAL_ENVS)
+    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + config.NUM_EVAL_ENVS)
     num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
     for update in range(1, num_updates + 1):
-        initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
+        initial_lstm_state = (next_lstm_state[0][:config.NUM_ENVS].clone(), next_lstm_state[1][:config.NUM_ENVS].clone())
         # Annealing the rate if instructed to do so.
         if config.ANNEAL_LR:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -260,20 +175,21 @@ if __name__ == "__main__":
 
         for step in range(0, config.NUM_STEPS):
             global_step += 1 * config.NUM_ENVS
-            obs[step] = next_obs
-            dones[step] = next_done
+            obs[step] = next_obs[:config.NUM_ENVS]
+            dones[step] = next_done[:config.NUM_ENVS]
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
                 action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state, next_done)
-                values[step] = value.flatten()
-            actions[step] = action
-            logprobs[step] = logprob
+                values[step] = value[:config.NUM_ENVS].flatten()
+            actions[step] = action[:config.NUM_ENVS]
+            logprobs[step] = logprob[:config.NUM_ENVS]
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
 
-            for e in info:
+            # Training logs
+            for e in info[:config.NUM_ENVS]:
                 if 'logs' not in e:
                     continue
 
@@ -283,7 +199,24 @@ if __name__ == "__main__":
 
                 wandb.log(stats)
 
-            rewards[step] = torch.tensor(reward).view(-1)
+            # Evaluation logs
+            for e in info[config.NUM_ENVS:]:
+                if 'logs' not in e:
+                    continue
+
+                stats = {}
+                for k, v in e['logs'].items():
+                    stats['evaluation_' + k] = np.mean(v).item()
+
+                ratings.update(
+                    policy_ids=e['logs']['PolicyID'],
+                    scores=e['logs']['Task_Reward'])
+
+                stats = {**stats, **ratings.stats}
+                wandb.log(stats)
+
+
+            rewards[step] = torch.tensor(reward)[:config.NUM_ENVS].view(-1)
             next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
 
             for item in info:
@@ -300,14 +233,14 @@ if __name__ == "__main__":
                 next_lstm_state,
                 next_done,
                 value_only=True,
-            ).reshape(1, -1).cpu()
+            )[:config.NUM_ENVS].reshape(1, -1).cpu()
 
             if config.GAE:
                 advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
                 for t in reversed(range(config.NUM_STEPS)):
                     if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done
+                        nextnonterminal = 1.0 - next_done[:config.NUM_ENVS]
                         nextvalues = next_value
                     else:
                         nextnonterminal = 1.0 - dones[t + 1]
@@ -411,8 +344,8 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # Sync policy evaluations
-        ratings = np.load('ratings.npy', allow_pickle=True).item()
-        wandb.log(ratings)
+        #ratings = np.load('ratings.npy', allow_pickle=True).item()
+        #wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
