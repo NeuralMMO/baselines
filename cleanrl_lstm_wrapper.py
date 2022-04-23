@@ -44,7 +44,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=24*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=16*Config.NENT,
         help="the number of parallel game environments")
     parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
