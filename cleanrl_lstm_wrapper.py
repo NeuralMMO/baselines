@@ -72,7 +72,7 @@ class Agent(nn.Module):
 
     def forward(self, x, lstm_state, done=None, action=None, value_only=False):
         if done is None:
-            done = torch.zeros(len(x)).to('cuda:0')
+            done = torch.zeros(len(x))#.to('cuda:0')
 
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
 
