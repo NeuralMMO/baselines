@@ -11,9 +11,13 @@ import tasks
 
 from scripted import baselines
 
-class MediumAllSystems(config.Small, config.AllGameSystems):
-    PATH_MAPS = os.path.join(config.Small.PATH_MAPS, 'evaluation')
+class MediumAllSystems(config.Medium, config.AllGameSystems):
+    PATH_MAPS = os.path.join(config.Medium.PATH_MAPS, 'evaluation')
     MAP_FORCE_GENERATION = True
+
+    @property
+    def PLAYER_SPAWN_FUNCTION(self):
+        return nmmo.spawn.spawn_concurrent
 
     TASKS     = tasks.All
     PLAYERS   = [
@@ -27,7 +31,7 @@ def test_scripted():
     env  = nmmo.Env(conf)
     env.reset()
 
-    for i in tqdm(range(128)):
+    for i in tqdm(range(1024)):
         #env.render()
         env.step({})
 
