@@ -18,6 +18,11 @@ if __name__ == '__main__':
 
         SPECIALIZE = 'specialist'
 
+        #MAP_GENERATE_PREVIEWS = True
+        #MAP_FORCE_GENERATION  = True
+
+    #nmmo.MapGenerator(EvalConfig()).generate_all_maps()
+
     model = 'model_2xt4-32vcpu_1-6_137m.pt'
     state_dict = torch.load(model, map_location='cpu')
     state_dict = {k.lstrip('module')[1:]: v for k, v in state_dict.items()}

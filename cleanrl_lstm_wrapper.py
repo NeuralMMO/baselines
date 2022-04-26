@@ -172,9 +172,7 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
     EMBED              = 64
 
-    # This is the one param that changed between runs -- maybe need more agents in 1.6?
-    PLAYER_N = 256
-    #PLAYER_N = 128
+    PLAYER_N = 128
 
     #Large map pool
     MAP_N = 256
