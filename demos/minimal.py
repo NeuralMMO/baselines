@@ -51,6 +51,9 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
 
     #Force terrain generation -- avoids unexpected behavior from caching
     FORCE_MAP_GENERATION = True
+    
+    #Add render flag
+    RENDER = True
 
 
 if __name__ == '__main__':
