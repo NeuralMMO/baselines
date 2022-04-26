@@ -72,9 +72,9 @@ class Evaluator:
         config.EMULATE_CONST_NENT = True
 
         # Generate maps once at the start
-        if config.FORCE_MAP_GENERATION:
+        if config.MAP_FORCE_GENERATION:
             nmmo.MapGenerator(self.config).generate_all_maps()
-            config.FORCE_MAP_GENERATION = False
+            config.MAP_FORCE_GENERATION = False
 
         self.ratings = nmmo.OpenSkillRating(config.PLAYERS, baselines.Combat)
 
@@ -108,7 +108,9 @@ class Evaluator:
     def evaluate(self, print_ratings=True):
         config = self.config
         obs    = self.envs.reset()
-        for i in range(config.HORIZON):
+
+        from tqdm import tqdm
+        for i in tqdm(range(config.HORIZON)):
             with torch.no_grad():
                 actions = self.policy.compute_action(obs)
             obs, _, _, infos = self.envs.step(actions)

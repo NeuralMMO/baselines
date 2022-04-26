@@ -172,7 +172,9 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
     EMBED              = 64
 
-    PLAYER_N = 128
+    # This is the one param that changed between runs -- maybe need more agents in 1.6?
+    PLAYER_N = 256
+    #PLAYER_N = 128
 
     #Large map pool
     MAP_N = 256
@@ -188,7 +190,7 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     PATH_MAPS = 'maps/demos'
 
     #Force terrain generation -- avoids unexpected behavior from caching
-    FORCE_MAP_GENERATION = False #True
+    MAP_FORCE_GENERATION = False
 
     NUM_ARGUMENTS = 8
 
