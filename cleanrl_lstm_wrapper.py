@@ -44,7 +44,7 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5e-5,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32*Config.NENT,
+    parser.add_argument("--num-envs", type=int, default=32*Config.PLAYER_N,
         help="the number of parallel game environments")
     parser.add_argument("--num-cpus", type=int, default=16,
         help="the number of parallel CPU cores")
@@ -172,10 +172,10 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     HIDDEN             = 64
     EMBED              = 64
 
-    NENT = 128
+    PLAYER_N = 128
 
     #Large map pool
-    NMAPS = 256
+    MAP_N = 256
 
     #Enable task-based
     TASKS              = tasks.All
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     # NMMO Integration
     config = Config()
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.NENT, args.num_cpus)
+    envs = nmmo.integrations.cleanrl_vec_envs(Config, args.num_envs // Config.PLAYER_N, args.num_cpus)
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
 
     agent = Agent(config).cuda()
