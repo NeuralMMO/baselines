@@ -16,7 +16,7 @@ class Policy:
         self.config = config
         self.device = device
 
-        batch = config.NENT
+        batch = config.PLAYER_N
 
         # Set initial state for recurrent models
         self.state = None
@@ -33,7 +33,8 @@ class Policy:
         #obs = nmmo.emulation.unpack_obs(self.config, obs)
 
         if self.state:
-            logits, self.state = self.model(obs, self.state)
+            done = torch.zeros(len(obs))
+            logits, _, _, _, self.state = self.model(obs, self.state, done)
         else:
             logits = self.model(obs)
 
@@ -61,7 +62,7 @@ class Policy:
         return unpack_action
 
 class Evaluator:
-    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:1', *args):
+    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=4, device='cuda:1', *args):
         self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls, num_cpus, num_cpus)
         config      = config_cls()
         self.config = config
@@ -75,7 +76,7 @@ class Evaluator:
             nmmo.MapGenerator(self.config).generate_all_maps()
             config.FORCE_MAP_GENERATION = False
 
-        self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
+        self.ratings = nmmo.OpenSkillRating(config.PLAYERS, baselines.Combat)
 
         # Load ratings
         if rating_stats:
@@ -104,7 +105,7 @@ class Evaluator:
         self.config.RENDER = True
         self.rollout()
 
-    def evaluate(self):
+    def evaluate(self, print_ratings=True):
         config = self.config
         obs    = self.envs.reset()
         for i in range(config.HORIZON):
@@ -120,6 +121,9 @@ class Evaluator:
                 ratings = self.ratings.update(
                         policy_ids=stats['PolicyID'],
                         scores=stats['Task_Reward']) 
+
+                if print_ratings:
+                    print(self)
 
         return self.stats
 
@@ -142,7 +146,7 @@ if __name__ == '__main__':
     import time
 
     class EvalConfig(cleanrl_lstm_wrapper.Config):
-        AGENTS = [baselines.Forage, baselines.Combat, nmmo.Agent]
+        PLAYERS = [baselines.Forage, baselines.Combat, nmmo.Agent]
 
     evaluator = Evaluator(EvalConfig, cleanrl_lstm_wrapper.Agent)
     device = 'cuda:1'
