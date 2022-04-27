@@ -68,8 +68,9 @@ class CleanRLTeam(Team):
             self.dummy = observations[0]
 
         # Actually run the policy
-        observations = torch.Tensor(observations)
-        atns = self.policy.compute_action(observations)
+        with torch.no_grad():
+            observations = torch.Tensor(observations)
+            atns = self.policy.compute_action(observations)
 
         # Undo pad observation keys
         atns = [atns[k] for k in obs_keys]
