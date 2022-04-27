@@ -188,7 +188,7 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     PATH_MAPS = 'maps/demos'
 
     #Force terrain generation -- avoids unexpected behavior from caching
-    FORCE_MAP_GENERATION = False #True
+    MAP_FORCE_GENERATION = False
 
     NUM_ARGUMENTS = 8
 
