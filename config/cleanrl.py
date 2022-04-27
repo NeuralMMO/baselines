@@ -47,13 +47,17 @@ class CleanRL(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     def NUM_ENVS(self):
         return 1 * self.NENT
 
-    NUM_CPUS = 30
-    NUM_STEPS = 512
+    @property
+    def NUM_EVAL_ENVS(self):
+        return 1 * self.NENT
+
+    NUM_CPUS = 2
+    NUM_STEPS = 32
     ANNEAL_LR = False
     GAE = True
     GAMMA = 0.99
     GAE_LAMBDA = 1.0
-    NUM_MINIBATCHES = 512
+    NUM_MINIBATCHES = 32
     UPDATE_EPOCHS = 1
     NORM_ADV = True
     CLIP_COEF = 0.3
@@ -83,11 +87,6 @@ class CleanRL(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     NUM_ARGUMENTS = 3
 
-class CleanRLEval(CleanRL):
-    AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
-    EVAL_AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
-
-    NUM_CPUS = 2
 
 class RLlib:
    '''Base config for RLlib Models
@@ -165,49 +164,3 @@ class RLlib:
    #Reward
    COOPERATIVE             = False
    TEAM_SPIRIT             = 0.0
-
-
-class Small(RLlib, nmmo.config.Small):
-   '''Small scale Neural MMO training setting
-
-   Features up to 64 concurrent agents and 32 concurrent NPCs,
-   64 x 64 maps (excluding the border), and 128 timestep horizons'''
-   
-   
-   #Memory/Batch Scale
-   ROLLOUT_FRAGMENT_LENGTH = 128
-   SGD_MINIBATCH_SIZE      = 128
- 
-   #Horizon
-   TRAIN_HORIZON           = 128
-   EVALUATION_HORIZON      = 128
-
-
-class Medium(RLlib, nmmo.config.Medium):
-   '''Medium scale Neural MMO training setting
-
-   Features up to 256 concurrent agents and 128 concurrent NPCs,
-   128 x 128 maps (excluding the border), and 1024 timestep horizons'''
- 
-   #Memory/Batch Scale
-   ROLLOUT_FRAGMENT_LENGTH = 256
-   SGD_MINIBATCH_SIZE      = 128
- 
-   #Horizon
-   TRAIN_HORIZON           = 1024
-   EVALUATION_HORIZON      = 1024
-
-
-class Large(RLlib, nmmo.config.Large):
-   '''Large scale Neural MMO training setting
-
-   Features up to 2048 concurrent agents and 1024 concurrent NPCs,
-   1024 x 1024 maps (excluding the border), and 8192 timestep horizons'''
- 
-   #Memory/Batch Scale
-   ROLLOUT_FRAGMENT_LENGTH = 32
-   SGD_MINIBATCH_SIZE      = 128
-
-   #Horizon
-   TRAIN_HORIZON           = 8192
-   EVALUATION_HORIZON      = 8192

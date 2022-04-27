@@ -20,6 +20,7 @@ import evaluate
 import tasks
 
 from config.bases import CleanRL as Config
+from config.bases import CleanRLEval as Eval
 from scripted import baselines
 from neural import policy, io, subnets
 
@@ -110,7 +111,8 @@ class Agent(nn.Module):
 
 
 if __name__ == "__main__":
-    config = Config()
+    config      = Config()
+    eval_config = Eval()
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
@@ -138,14 +140,30 @@ if __name__ == "__main__":
     torch.manual_seed(config.SEED)
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
+    envs = nmmo.integrations.cleanrl_vec_envs(Config, Eval)
+    '''
     # NMMO Integration
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, (config.NUM_ENVS + config.NUM_EVAL_ENVS) // config.NENT, config.NUM_CPUS)
+    def make_env_fn(*args, **kwargs):
+        def make_env():
+            return nmmo.integrations.cleanrl_vec_envs(*args, **kwargs)
+        return make_env
+
+    dummy_env  = nmmo.integrations.CleanRLEnv(Config())
+    train_envs = make_env_fn(Config, config.NUM_ENVS  // config.NENT, config.NUM_CPUS)
+    eval_envs = make_env_fn(Eval, eval_config.NUM_ENVS // config.NENT, config.NUM_CPUS)
+    envs = ss.vector.MakeCPUAsyncConstructor(2)(
+            [train_envs, eval_envs],
+            obs_space=dummy_env.observation_space(1),
+            act_space=dummy_env.action_space(1))
+
     envs = gym.wrappers.RecordEpisodeStatistics(envs)
+    envs.is_vector_env = True
+    '''
 
     agent = Agent(config).cuda()
     agent = torch.nn.DataParallel(agent, device_ids=[0])
 
-    ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
+    ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
@@ -161,8 +179,8 @@ if __name__ == "__main__":
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(config.NUM_ENVS + config.NUM_EVAL_ENVS)
-    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + config.NUM_EVAL_ENVS)
+    next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
+    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
     num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
     for update in range(1, num_updates + 1):
@@ -211,6 +229,7 @@ if __name__ == "__main__":
                 ratings.update(
                     policy_ids=e['logs']['PolicyID'],
                     scores=e['logs']['Task_Reward'])
+                print(ratings)
 
                 stats = {**stats, **ratings.stats}
                 wandb.log(stats)
