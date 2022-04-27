@@ -28,8 +28,10 @@ class Policy:
 
     def compute_action(self, obs):
         config = self.config
-        obs = torch.tensor(obs).float()
-        obs = obs.to(self.device)
+
+        obs_keys = obs.keys()
+        obs      = torch.Tensor(list(obs.values())).float()
+        obs       = obs.to(self.device)
         #obs = nmmo.emulation.unpack_obs(self.config, obs)
 
         if self.state:
@@ -38,7 +40,9 @@ class Policy:
         else:
             logits = self.model(obs)
 
-        actions = logits.cpu().numpy()
+        atns = logits.cpu().numpy()
+        actions = {k: v for k, v in zip(obs_keys, atns)}
+
         return actions
     
         if self.config.EMULATE_FLAT_ATN:
@@ -103,7 +107,7 @@ class Evaluator:
 
     def render(self):
         self.config.RENDER = True
-        self.rollout()
+        self.evaluate()
 
     def evaluate(self, print_ratings=True):
         config = self.config
@@ -132,7 +136,7 @@ class Evaluator:
     def render(self):
         # Init env with extra overlays
         env          = nmmo.Env(self.config)
-        env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
+        #env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
 
         obs = env.reset()
         while True:
