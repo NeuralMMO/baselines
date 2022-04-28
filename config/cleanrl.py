@@ -28,7 +28,7 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     TOTAL_TIMESTEPS         = 500_000_000
     CUDA                    = [0]
-    NUM_CPUS                = 30
+    NUM_CPUS                = 16
 
     NUM_STEPS               = 512
     NUM_MINIBATCHES         = 512

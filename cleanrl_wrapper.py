@@ -116,7 +116,11 @@ class Agent(nn.Module):
 
 if __name__ == "__main__":
     config      = Train()
-    eval_config = Eval()
+
+    #DISABLE FOR NOW DUE TO SS BUG
+    #eval_config = Eval()
+    class eval_config:
+        NUM_ENVS = 0
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
@@ -144,15 +148,15 @@ if __name__ == "__main__":
     torch.manual_seed(config.SEED)
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
-    # Create environment and agents
-    envs = nmmo.integrations.cleanrl_vec_envs(Train, Eval)
+    # Create environment and agents -- DISABLE EVAL FOR NOW DUE TO SS BUG
+    envs = nmmo.integrations.cleanrl_vec_envs(Train)#, Eval)
 
     agent = Agent(config)
     if config.CUDA:
         agent = agent.cuda()
     agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
-    ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
+    #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
