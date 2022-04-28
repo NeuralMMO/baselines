@@ -19,10 +19,15 @@ import nmmo
 import evaluate
 import tasks
 
-from config.bases import CleanRL as Config
-from config.bases import CleanRLEval as Eval
 from scripted import baselines
 from neural import policy, io, subnets
+
+from config.cleanrl import Train
+from config.cleanrl import Eval
+
+### Switch for Debug mode (fast, low hardware usage)
+#from config.cleanrl import Debug as Train
+#from config.cleanrl import DebugEval as Eval
 
 
 class Agent(nn.Module):
@@ -32,7 +37,6 @@ class Agent(nn.Module):
         self.input  = io.Input(config,
                 embeddings=io.MixedEmbedding,
                 attributes=subnets.SelfAttention)
-        #self.output = nn.Linear(config.HIDDEN, 4)# 304)
         self.output = io.Output(config)
         self.value  = nn.Linear(config.HIDDEN, 1)
         self.policy = policy.Simple(config)
@@ -48,7 +52,7 @@ class Agent(nn.Module):
         return (
             torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
             torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
-        )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
+        )
  
     def _compute_hidden(self, x, lstm_state, done):
         x         = nmmo.emulation.unpack_obs(self.config, x)
@@ -73,7 +77,7 @@ class Agent(nn.Module):
 
     def forward(self, x, lstm_state, done=None, action=None, value_only=False):
         if done is None:
-            done = torch.zeros(len(x))#.to('cuda:0')
+            done = torch.zeros(len(x)).to(lstm_state[0].device)
 
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
 
@@ -111,7 +115,7 @@ class Agent(nn.Module):
 
 
 if __name__ == "__main__":
-    config      = Config()
+    config      = Train()
     eval_config = Eval()
 
     # WanDB integration                                                       
@@ -140,28 +144,13 @@ if __name__ == "__main__":
     torch.manual_seed(config.SEED)
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
-    envs = nmmo.integrations.cleanrl_vec_envs(Config, Eval)
-    '''
-    # NMMO Integration
-    def make_env_fn(*args, **kwargs):
-        def make_env():
-            return nmmo.integrations.cleanrl_vec_envs(*args, **kwargs)
-        return make_env
+    # Create environment and agents
+    envs = nmmo.integrations.cleanrl_vec_envs(Train, Eval)
 
-    dummy_env  = nmmo.integrations.CleanRLEnv(Config())
-    train_envs = make_env_fn(Config, config.NUM_ENVS  // config.NENT, config.NUM_CPUS)
-    eval_envs = make_env_fn(Eval, eval_config.NUM_ENVS // config.NENT, config.NUM_CPUS)
-    envs = ss.vector.MakeCPUAsyncConstructor(2)(
-            [train_envs, eval_envs],
-            obs_space=dummy_env.observation_space(1),
-            act_space=dummy_env.action_space(1))
-
-    envs = gym.wrappers.RecordEpisodeStatistics(envs)
-    envs.is_vector_env = True
-    '''
-
-    agent = Agent(config).cuda()
-    agent = torch.nn.DataParallel(agent, device_ids=[0])
+    agent = Agent(config)
+    if config.CUDA:
+        agent = agent.cuda()
+    agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
@@ -229,7 +218,6 @@ if __name__ == "__main__":
                 ratings.update(
                     policy_ids=e['logs']['PolicyID'],
                     scores=e['logs']['Task_Reward'])
-                print(ratings)
 
                 stats = {**stats, **ratings.stats}
                 wandb.log(stats)
@@ -282,7 +270,7 @@ if __name__ == "__main__":
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (Config.NUM_ARGUMENTS,))
+        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
@@ -361,10 +349,6 @@ if __name__ == "__main__":
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-
-        # Sync policy evaluations
-        #ratings = np.load('ratings.npy', allow_pickle=True).item()
-        #wandb.log(ratings)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
