@@ -64,7 +64,7 @@ class Evaluator:
             self.policy  = Policy(config, torch_policy, device)
 
     def load_model(self, state_dict):
-        state_dict = {key.lstrip('module')[1:]: val.to(self.device) for key, val in state_dict.items()}
+        state_dict = {key.lstrip('module')[1:]: val for key, val in state_dict.items()}
         self.policy.model.load_state_dict(state_dict)
 
     def __str__(self):
@@ -116,14 +116,13 @@ if __name__ == '__main__':
     from main import Agent
 
     model  = 'models/1xt4_32vcpu_160m.pt'
-    state_dict = torch.load(model)
-    #Config.RENDER = True
+    device = 'cpu'
 
-
-    evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS)
+    state_dict = torch.load(model, map_location=device)
+    evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)
     evaluator.load_model(state_dict)
 
-    # Set Config.RENDER=True to render -- don't just delete this check
+    # Config.RENDER = True # Uncomment to render -- don't delete the check
     # The param is required by the env to generate packets
     # Open the Unity client separately (this just starts the render server)
     if Config.RENDER:
