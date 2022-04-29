@@ -8,7 +8,7 @@ from config.bases import Base, make_eval_config
 class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     @property
     def NUM_ENVS(self):
-        return 2 * self.NUM_CPUS * self.NENT
+        return 2 * self.NUM_CPUS * self.PLAYER_N
 
     @property
     def BATCH_SIZE(self):

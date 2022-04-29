@@ -17,11 +17,11 @@ class Base:
    def SPAWN(self):
        return self.SPAWN_CONCURRENT
 
-   AGENTS   = [nmmo.Agent]
+   PLAYERS  = [nmmo.Agent]
    TASKS    = tasks.All
 
-   NMAPS    = 256
-   NENT     = 128
+   MAP_N    = 256
+   PLAYER_N = 128
 
    HIDDEN   = 64
    EMBED    = 64
@@ -29,16 +29,20 @@ class Base:
 
 def make_eval_config(config_cls):
     class Eval(config_cls):
-        AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
+        PLAYERS = [baselines.Meander,
+                   baselines.Fisher, baselines.Herbalist, baselines.Prospector,
+                   baselines.Carver, baselines.Alchemist,
+                   baselines.Melee, baselines.Range, baselines.Mage]
 
-        NUM_CPUS = 1
+        NUM_CPUS          = 1
+        MAP_N             = 32
 
         TERRAIN_FLIP_SEED = True
+        SPECIALIZE        = True
 
         @property
         def PATH_MAPS(self):
           return os.path.join(super().PATH_MAPS, 'evaluation')
 
-        NMAPS = 32
 
     return Eval

@@ -97,7 +97,7 @@ class Agent(nn.Module):
         value                 = self.value(x)
 
         flat_logits = []
-        for atn in nmmo.Action.edges:
+        for atn in nmmo.Action.edges(self.config):
             for arg in atn.edges:
                 flat_logits.append(logits[atn][arg]) 
 

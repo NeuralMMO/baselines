@@ -70,8 +70,8 @@ def meander(config, ob, actions):
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def explore(config, ob, actions, spawnR, spawnC):
-   vision = config.NSTIM
-   sz     = config.TERRAIN_SIZE
+   vision = config.PLAYER_VISION_RADIUS
+   sz     = config.MAP_SIZE
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
@@ -97,7 +97,7 @@ def evade(config, ob, actions, attacker):
    pathfind(config, ob, actions, rr, cc)
 
 def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
-   vision = config.NSTIM
+   vision = config.PLAYER_VISION_RADIUS
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
@@ -168,10 +168,115 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
    direction = towards(goal)
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
+def findResource(config, ob, resource):
+    vision = config.PLAYER_VISION_RADIUS
+    Tile   = Stimulus.Tile
+             
+    resource_index = resource.index
+
+    for r in range(-vision, vision+1):
+        for c in range(-vision, vision+1):
+            tile = ob.tile(r, c)
+            material_index = nmmo.scripting.Observation.attribute(tile, Tile.Index)
+        
+        if material_index == resource_index:
+            return (r, c)
+
+    return False
+
+def gatherAStar(config, ob, actions, resource, cutoff=100):
+    resource_pos = findResource(config, ob, resource)
+    if not resource_pos:
+        return
+
+    rr, cc = resource_pos
+    next_pos = aStar(config, ob, actions, rr, cc, cutoff=cutoff)
+    if not next_pos or next_pos == (0, 0):
+        return
+
+    direction = towards(next_pos)
+    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
+    return True
+
+def gatherBFS(config, ob, actions, resource, cutoff=100):
+    vision = config.PLAYER_VISION_RADIUS
+    Entity = nmmo.Serialized.Entity
+    Tile   = nmmo.Serialized.Tile
+
+    agent  = ob.agent
+    start  = (0, 0)
+
+    backtrace = {start: None}
+
+    queue = Queue()
+    queue.put(start)
+
+    found = False
+    while not queue.empty():
+        cutoff -= 1
+        if cutoff <= 0:
+            return False
+
+        cur = queue.get()
+        for nxt in adjacentPos(cur):
+            if found:
+                break
+
+            if nxt in backtrace:
+                continue
+        
+            if not inSight(*nxt, vision):
+                continue
+                                                       
+            tile     = ob.tile(*nxt)
+            matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
+            occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
+
+            if material.Fish in resource and material.Fish.index == matl:
+                found = nxt
+                backtrace[nxt] = cur
+                break
+
+            if not vacant(tile):
+                continue
+
+            if matl in (e.index for e in resource):
+                found = nxt
+                backtrace[nxt] = cur
+                break
+
+            for pos in adjacentPos(nxt):
+                if not inSight(*pos, vision):
+                    continue
+
+                tile = ob.tile(*pos)
+                matl = nmmo.scripting.Observation.attribute(tile, Tile.Index)
+
+                if matl == material.Fish.index:
+                    backtrace[nxt] = cur
+                    break
+
+            queue.put(nxt)
+            backtrace[nxt] = cur
+
+    #Ran out of tiles
+    if not found:
+        return False
+
+    found_orig = found
+    while found in backtrace and backtrace[found] != start:
+        found = backtrace[found]
+
+    direction = towards(found)
+    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
+
+    return True
+
+
 def aStar(config, ob, actions, rr, cc, cutoff=100):
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
-   vision = config.NSTIM
+   vision = config.PLAYER_VISION_RADIUS
 
    start = (0, 0)
    goal  = (rr, cc)
@@ -240,6 +345,7 @@ def aStar(config, ob, actions, rr, cc, cutoff=100):
    #if goal not in backtrace:
    #   goal = closestPos
 
+   goal = closestPos
    while goal in backtrace and backtrace[goal] != start:
       goal = backtrace[goal]
 

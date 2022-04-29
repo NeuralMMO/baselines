@@ -8,7 +8,6 @@ import torch
 from torch.distributions.categorical import Categorical
 
 import nmmo
-
 from scripted import baselines
 from neural import overlays
 
@@ -18,7 +17,7 @@ class Policy:
         self.config = config
         self.device = device
 
-        batch = config.NENT
+        batch = config.PLAYER_N
 
         # Set initial state for recurrent models
         self.state = None
@@ -40,17 +39,17 @@ class Policy:
         return atns.cpu().numpy()
     
 class Evaluator:
-    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:0', *args):
+    def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=4, device='cuda:0', *args):
         self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls)
         config      = config_cls()
         self.config = config
 
         # Generate maps once at the start
-        if config.FORCE_MAP_GENERATION:
+        if config.MAP_FORCE_GENERATION:
             nmmo.MapGenerator(self.config).generate_all_maps()
-            config.FORCE_MAP_GENERATION = False
+            config.MAP_FORCE_GENERATION = False
 
-        self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
+        self.ratings = nmmo.OpenSkillRating(config.PLAYERS, baselines.Combat)
 
         # Load ratings
         if rating_stats:
@@ -75,9 +74,11 @@ class Evaluator:
     def stats(self):
         return {p.__name__: int(r.mu) for p, r in self.ratings.ratings.items()}
 
-    def evaluate(self):
+    def evaluate(self, print_ratings=True):
         config = self.config
         obs    = self.envs.reset()
+
+        from tqdm import tqdm
         for i in tqdm(range(config.HORIZON)):
             with torch.no_grad():
                 actions = self.policy.compute_action(obs)
@@ -91,6 +92,9 @@ class Evaluator:
                 ratings = self.ratings.update(
                         policy_ids=stats['PolicyID'],
                         scores=stats['Task_Reward']) 
+
+                if print_ratings:
+                    print(self)
 
         return self.stats
 
@@ -115,7 +119,7 @@ if __name__ == '__main__':
     from config.cleanrl import Eval as Config
     from main import Agent
 
-    model  = 'models/1xt4_32vcpu_160m.pt'
+    model  = 'models/model_2xt4-32vcpu_1-6_157m_atnfix.pt'
     device = 'cuda:0'
     Config.NUM_CPUS=2
 
@@ -129,9 +133,6 @@ if __name__ == '__main__':
     if Config.RENDER:
         evaluator.render()
 
-    # Runs evaluations forever
-    # Less accurate at 100% win rate (slowly pushes SR apart forever)
-    # Best used to determine if one policy is worse, better, or significantly better than another
     while True:
         evaluator.evaluate()
         print(evaluator)
