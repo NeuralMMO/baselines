@@ -116,7 +116,8 @@ if __name__ == '__main__':
     from main import Agent
 
     model  = 'models/1xt4_32vcpu_160m.pt'
-    device = 'cpu'
+    device = 'cuda:0'
+    Config.NUM_CPUS=2
 
     state_dict = torch.load(model, map_location=device)
     evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)

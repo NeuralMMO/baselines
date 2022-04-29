@@ -149,6 +149,10 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
     # Create environment and agents -- DISABLE EVAL FOR NOW DUE TO SS BUG
+    # This is part of the new (not yet documented) integrations API that makes NMMO
+    # look like a simple environment from the perspective of infra frameworks while
+    # actually maintaining all the same internal complexity. For now, just pass it a config
+    # Note that it relies on config.NUM_CPUS and config.NENT to define scale
     envs = nmmo.integrations.cleanrl_vec_envs(Train)#, Eval)
 
     agent = Agent(config)
