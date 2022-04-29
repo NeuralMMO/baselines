@@ -1,6 +1,7 @@
 from pdb import set_trace as T
 import numpy as np
 
+from tqdm import tqdm
 from collections import defaultdict
 
 import torch
@@ -28,48 +29,21 @@ class Policy:
         return Categorical(logits=logits).sample()
 
     def compute_action(self, obs):
-        config = self.config
-        obs = torch.tensor(obs).float()
-        obs = obs.to(self.device)
-        #obs = nmmo.emulation.unpack_obs(self.config, obs)
+        obs = torch.Tensor(obs).float().to(self.device)
 
         if self.state:
-            logits, _, _, _, self.state = self.model(obs, self.state)
+            done = torch.zeros(len(obs)).to(self.device)
+            atns, _, _, _, self.state = self.model(obs, self.state, done)
         else:
-            logits, _, _, _ = self.model(obs)
+            atns, _, _, _ = self.model(obs)
 
-        actions = logits.cpu().numpy()
-        return actions
+        return atns.cpu().numpy()
     
-        if self.config.EMULATE_FLAT_ATN:
-            return self.sample_logits(logits)
-
-        # Big mess for unpacking observations
-        action = {} 
-        for atnKey, atn in sorted(logits.items()):                              
-            action[atnKey] = {}
-            for argKey, arg in sorted(atn.items()):
-                action[atnKey][argKey] = self.sample_logits(arg)
-
-        unpack_action = {}
-        for idx, ob_key in enumerate(obs_keys):
-            unpack_action[ob_key] = {}
-            for atnKey, atn in sorted(logits.items()):                              
-               unpack_action[ob_key][atnKey] = {}
-               for argKey, arg in sorted(atn.items()):
-                   unpack_action[ob_key][atnKey][argKey] = action[atnKey][argKey][idx]
-
-        return unpack_action
-
 class Evaluator:
     def __init__(self, config_cls, torch_policy_cls=None, rating_stats=None, num_cpus=8, device='cuda:0', *args):
-        self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls, num_cpus, num_cpus)
+        self.envs   = nmmo.integrations.cleanrl_vec_envs(config_cls)
         config      = config_cls()
         self.config = config
-
-        config.EMULATE_FLAT_OBS   = True
-        config.EMULATE_FLAT_ATN   = True
-        config.EMULATE_CONST_NENT = True
 
         # Generate maps once at the start
         if config.FORCE_MAP_GENERATION:
@@ -101,14 +75,10 @@ class Evaluator:
     def stats(self):
         return {p.__name__: int(r.mu) for p, r in self.ratings.ratings.items()}
 
-    def render(self):
-        self.config.RENDER = True
-        self.rollout()
-
     def evaluate(self):
         config = self.config
         obs    = self.envs.reset()
-        for i in range(config.HORIZON):
+        for i in tqdm(range(config.HORIZON)):
             with torch.no_grad():
                 actions = self.policy.compute_action(obs)
             obs, _, _, infos = self.envs.step(actions)
@@ -125,37 +95,46 @@ class Evaluator:
         return self.stats
 
     def render(self):
-        # Init env with extra overlays
-        env          = nmmo.Env(self.config)
-        env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
+        env          = nmmo.integrations.CleanRLEnv(self.config)
+
+        # Extra overlays -- have to fix these for CleanRL models
+        #env.registry = overlays.NeuralOverlayRegistry(env).init(self.policy)
 
         obs = env.reset()
         while True:
             with torch.no_grad():
+                obs_keys = obs.keys()
+                obs = torch.Tensor(list(obs.values()))
                 actions = self.policy.compute_action(obs)
+                actions = {k: v for k, v in zip(obs_keys, actions)}
 
             env.render()
             obs, rewards, dones, infos = env.step(actions)
 
 if __name__ == '__main__':
-    import cleanrl_lstm_wrapper
-    from scripted import baselines
-    import time
+    from config.cleanrl import Eval as Config
+    from main import Agent
 
-    class EvalConfig(cleanrl_lstm_wrapper.Config):
-        AGENTS = [baselines.Forage, baselines.Combat, nmmo.Agent]
+    model  = 'models/1xt4_32vcpu_160m.pt'
+    state_dict = torch.load(model)
+    #Config.RENDER = True
 
-    evaluator = Evaluator(EvalConfig, cleanrl_lstm_wrapper.Agent)
-    device = 'cuda:1'
+
+    evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS)
+    evaluator.load_model(state_dict)
+
+    # Set Config.RENDER=True to render -- don't just delete this check
+    # The param is required by the env to generate packets
+    # Open the Unity client separately (this just starts the render server)
+    if Config.RENDER:
+        evaluator.render()
+
+    # Runs evaluations forever
+    # Less accurate at 100% win rate (slowly pushes SR apart forever)
+    # Best used to determine if one policy is worse, better, or significantly better than another
     while True:
-        try:
-            model = torch.load('model.pt', map_location=device)
-        except:
-            time.sleep(1)
-            continue
-
-        evaluator.load_model(model)
         evaluator.evaluate()
+        print(evaluator)
 
         np.save('ratings.npy', evaluator.stats, allow_pickle=True)
 

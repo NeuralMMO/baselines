@@ -14,7 +14,8 @@ import nmmo
 
 from ijcai2022nmmo import Team
 
-from cleanrl_wrapper import Agent, Config
+from main import Agent
+from config.cleanrl import Train as Config
 from evaluate import Policy
 
 
