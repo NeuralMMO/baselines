@@ -171,6 +171,7 @@ if __name__ == "__main__":
     rewards = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    mask = torch.zeros((config.NUM_STEPS, config.NUM_ENVS)).bool()
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
@@ -202,6 +203,7 @@ if __name__ == "__main__":
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
+            mask[step] = torch.Tensor([i['live'] for i in info])
 
             # Training logs
             for e in info[:config.NUM_ENVS]:
@@ -283,6 +285,7 @@ if __name__ == "__main__":
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
+        b_mask   = mask.reshape(-1)
 
         # Optimizing the policy and value network
         assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
@@ -325,7 +328,7 @@ if __name__ == "__main__":
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
                 pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - config.CLIP_COEF, 1 + config.CLIP_COEF)
-                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+                pg_loss = torch.max(pg_loss1, pg_loss2)
 
                 # Value loss
                 newvalue = newvalue.view(-1)
@@ -338,12 +341,17 @@ if __name__ == "__main__":
                     )
                     v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
                     v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                    v_loss = 0.5 * v_loss_max.mean()
+                    v_loss = 0.5 * v_loss_max
                 else:
-                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2)
 
-                entropy_loss = entropy.mean()
-                loss = pg_loss - config.ENT_COEF * entropy_loss + v_loss * config.VF_COEF
+                mb_mask = b_mask[mb_inds]
+                data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
+                entropy_loss = torch.masked_select(entropy, mb_mask).mean()
+                pg_loss = torch.masked_select(pg_loss, mb_mask).mean()
+                v_loss = torch.masked_select(v_loss, mb_mask).mean()
+
+                loss = data_frac * (pg_loss - config.ENT_COEF * entropy_loss + v_loss * config.VF_COEF)
 
                 optimizer.zero_grad()
                 loss.backward()
