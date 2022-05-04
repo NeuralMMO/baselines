@@ -307,12 +307,20 @@ if __name__ == "__main__":
                     b_actions.long()[mb_inds],
                 )
 
-                # Must be done on CPU for multiGPU
-                newlogprob = newlogprob.cpu()
-                entropy    = entropy.cpu()
-                newvalue   = newvalue.cpu()
+                # Apply batch mask
+                mb_mask = b_mask[mb_inds]
+                data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
 
-                logratio = newlogprob - b_logprobs[mb_inds]
+                # Perform loss computation on CPU. DataParallel will correctly bptt to GPU.
+                newlogprob    = torch.masked_select(newlogprob.cpu(), mb_mask)
+                entropy       = torch.masked_select(entropy.cpu(), mb_mask).mean()
+                newvalue      = torch.masked_select(newvalue.view(-1).cpu(), mb_mask)
+                mb_values     = torch.masked_select(b_values[mb_inds].cpu(), mb_mask)
+                mb_logprobs   = torch.masked_select(b_logprobs[mb_inds].cpu(), mb_mask)
+                mb_advantages = torch.masked_select(b_advantages[mb_inds].cpu(), mb_mask)
+                mb_returns    = torch.masked_select(b_returns[mb_inds].cpu(), mb_mask)
+ 
+                logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
 
                 with torch.no_grad():
@@ -321,40 +329,36 @@ if __name__ == "__main__":
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clipfracs += [((ratio - 1.0).abs() > config.CLIP_COEF).float().mean().item()]
 
-                mb_advantages = b_advantages[mb_inds]
                 if config.NORM_ADV:
                     mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
                 pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - config.CLIP_COEF, 1 + config.CLIP_COEF)
-                pg_loss = torch.max(pg_loss1, pg_loss2)
+                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
                 newvalue = newvalue.view(-1)
                 if config.CLIP_VLOSS:
-                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                    v_clipped = b_values[mb_inds] + torch.clamp(
-                        newvalue - b_values[mb_inds],
+                    v_loss_unclipped = (newvalue - mb_returns) ** 2
+                    v_clipped = mb_values + torch.clamp(
+                        newvalue - mb_values,
                         -config.CLIP_COEF,
                         config.CLIP_COEF,
                     )
-                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_clipped = (v_clipped - mb_returns) ** 2
                     v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                    v_loss = 0.5 * v_loss_max
+                    v_loss = 0.5 * v_loss_max.mean()
                 else:
-                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2)
+                    v_loss = 0.5 * ((newvalue - mb_returns) ** 2).mean()
 
-                mb_mask = b_mask[mb_inds]
-                data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
-                entropy_loss = torch.masked_select(entropy, mb_mask).mean()
-                pg_loss = torch.masked_select(pg_loss, mb_mask).mean()
-                v_loss = torch.masked_select(v_loss, mb_mask).mean()
-
-                loss = data_frac * (pg_loss - config.ENT_COEF * entropy_loss + v_loss * config.VF_COEF)
+                loss = data_frac * (pg_loss
+                        - config.ENT_COEF * entropy
+                        + config.VF_COEF * v_loss)
 
                 optimizer.zero_grad()
                 loss.backward()
+
                 nn.utils.clip_grad_norm_(agent.parameters(), config.MAX_GRAD_NORM)
                 optimizer.step()
 
@@ -370,7 +374,7 @@ if __name__ == "__main__":
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+        writer.add_scalar("losses/entropy", entropy.item(), global_step)
         writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
