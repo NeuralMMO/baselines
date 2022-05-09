@@ -29,6 +29,35 @@ from config.cleanrl import Eval
 #from config.cleanrl import Debug as Train
 #from config.cleanrl import DebugEval as Eval
 
+def pad_to_pack(tensor, dones):
+    steps, ents = dones.shape
+    trajectories = []
+    traj_lens = []
+    for ent in range(ents):
+        read_zero = False
+        traj = []
+
+        for step in range(steps):
+            # Got a step of agent data
+            if dones[step][ent] == 0:
+                traj.append(tensor[step][ent])
+                read_zero = True
+
+            #Trajectory bound
+            elif dones[step][ent] == 1 and read_zero:
+                traj_lens.append(len(traj))
+                trajectories += traj
+
+                read_zero = False
+                traj = []
+
+        if read_zero:
+            traj_lens.append(len(traj))
+            trajectories += traj
+
+    assert len(trajectories) == sum(traj_lens), f'{len(trajectories)}, {sum(traj_lens)}'
+    return torch.stack(trajectories), traj_lens
+
 
 class Agent(nn.Module):
     def __init__(self, config):
@@ -101,7 +130,10 @@ class Agent(nn.Module):
             for arg in atn.edges:
                 flat_logits.append(logits[atn][arg]) 
 
-        mulit_categorical = [Categorical(logits=l) for l in flat_logits]
+        try:
+            mulit_categorical = [Categorical(logits=l) for l in flat_logits]
+        except:
+            T()
 
         if action is None:
             action = torch.stack([c.sample() for c in mulit_categorical])
@@ -127,6 +159,7 @@ if __name__ == "__main__":
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
     run_name = f"{config.ENV_ID}__{config.EXP_NAME}__{config.SEED}__{int(time.time())}"
+
     wandb.init(
         project=config.WANDB_PROJECT_NAME,
         entity=config.WANDB_ENTITY,
@@ -156,8 +189,9 @@ if __name__ == "__main__":
     envs = nmmo.integrations.cleanrl_vec_envs(Train)#, Eval)
 
     agent = Agent(config)
+    #agent.load_state_dict({k.lstrip('module')[1:]: v for k, v in torch.load('model_flatlr.pt').items()})
     if config.CUDA:
-        agent = agent.cuda()
+        agent = agent.to('cuda:2')
     agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
@@ -171,13 +205,14 @@ if __name__ == "__main__":
     rewards = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    mask = torch.zeros((config.NUM_STEPS, config.NUM_ENVS)).bool()
+    ent_dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
     next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
+    next_ent_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
     next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
     num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
@@ -191,8 +226,9 @@ if __name__ == "__main__":
 
         for step in range(0, config.NUM_STEPS):
             global_step += 1 * config.NUM_ENVS
-            obs[step] = next_obs[:config.NUM_ENVS]
-            dones[step] = next_done[:config.NUM_ENVS]
+            obs[step]       = next_obs[:config.NUM_ENVS]
+            dones[step]     = next_done[:config.NUM_ENVS]
+            ent_dones[step] = next_ent_done[:config.NUM_ENVS]
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
@@ -203,7 +239,6 @@ if __name__ == "__main__":
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
-            mask[step] = torch.Tensor([i['live'] for i in info])
 
             # Training logs
             for e in info[:config.NUM_ENVS]:
@@ -235,6 +270,7 @@ if __name__ == "__main__":
 
             rewards[step] = torch.tensor(reward)[:config.NUM_ENVS].view(-1)
             next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
+            next_ent_done = torch.Tensor([i['done'] for i in info])
 
             for item in info:
                 if "episode" in item.keys():
@@ -257,10 +293,10 @@ if __name__ == "__main__":
                 lastgaelam = 0
                 for t in reversed(range(config.NUM_STEPS)):
                     if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done[:config.NUM_ENVS]
+                        nextnonterminal = 1.0 - next_ent_done[:config.NUM_ENVS]
                         nextvalues = next_value
                     else:
-                        nextnonterminal = 1.0 - dones[t + 1]
+                        nextnonterminal = 1.0 - ent_dones[t + 1]
                         nextvalues = values[t + 1]
                     delta = rewards[t] + config.GAMMA * nextvalues * nextnonterminal - values[t]
                     advantages[t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
@@ -269,15 +305,25 @@ if __name__ == "__main__":
                 returns = torch.zeros_like(rewards)
                 for t in reversed(range(config.NUM_STEPS)):
                     if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done
+                        nextnonterminal = 1.0 - next_ent_done
                         next_return = next_value
                     else:
-                        nextnonterminal = 1.0 - dones[t + 1]
+                        nextnonterminal = 1.0 - ent_dones[t + 1]
                         next_return = returns[t + 1]
                     returns[t] = rewards[t] + config.GAMMA * nextnonterminal * next_return
                 advantages = returns - values
 
         # flatten the batch
+        '''
+        b_obs = pad_to_pack(obs, ent_dones)
+        b_logprobs = pad_to_pack(logprobs, ent_dones)
+        b_actions = pad_to_pack(actions, ent_dones)
+        b_dones = pad_to_pack(dones, ent_dones)
+        b_advantages = pad_to_pack(advantages, ent_dones)
+        b_returns = pad_to_pack(returns, ent_dones)
+        b_values = pad_to_pack(values, ent_dones)
+        '''
+
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
         b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
@@ -285,7 +331,12 @@ if __name__ == "__main__":
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
-        b_mask   = mask.reshape(-1)
+
+        b_mask = (1 - ent_dones.reshape(-1)).bool()
+        b_data_frac = int(torch.sum(b_mask)) / len(b_mask)
+
+        all_advantage = torch.masked_select(b_advantages, b_mask)
+        advantage_mean, advantage_std = all_advantage.mean(), all_advantage.std()
 
         # Optimizing the policy and value network
         assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
@@ -309,7 +360,10 @@ if __name__ == "__main__":
 
                 # Apply batch mask
                 mb_mask = b_mask[mb_inds]
-                data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
+                mb_data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
+                #if mb_data_frac < 0.025:
+                #    print(torch.sum(mb_mask), mb_data_frac)
+                #    continue
 
                 # Perform loss computation on CPU. DataParallel will correctly bptt to GPU.
                 newlogprob    = torch.masked_select(newlogprob.cpu(), mb_mask)
@@ -330,7 +384,8 @@ if __name__ == "__main__":
                     clipfracs += [((ratio - 1.0).abs() > config.CLIP_COEF).float().mean().item()]
 
                 if config.NORM_ADV:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+                    mb_advantages = (mb_advantages - advantage_mean) / (advantage_std + 1e-8)
+                    #mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
@@ -352,9 +407,7 @@ if __name__ == "__main__":
                 else:
                     v_loss = 0.5 * ((newvalue - mb_returns) ** 2).mean()
 
-                loss = data_frac * (pg_loss
-                        - config.ENT_COEF * entropy
-                        + config.VF_COEF * v_loss)
+                loss = pg_loss - config.ENT_COEF * entropy + config.VF_COEF * v_loss
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -366,11 +419,13 @@ if __name__ == "__main__":
                 if approx_kl > config.TARGET_KL:
                     break
 
-        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
+        y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
+        y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("charts/data_frac", b_data_frac, global_step)
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
@@ -382,7 +437,9 @@ if __name__ == "__main__":
         print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        torch.save(agent.state_dict(), 'model.pt')
+        torch.save(agent.state_dict(), 'model_test.pt')
 
     envs.close()
     writer.close()
+
+
