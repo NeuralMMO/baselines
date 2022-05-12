@@ -1,6 +1,7 @@
 from pdb import set_trace as T
 
 import os
+import sys
 import random
 import time
 
@@ -22,12 +23,13 @@ import tasks
 from scripted import baselines
 from neural import policy, io, subnets
 
-from config.cleanrl import Train
-from config.cleanrl import Eval
-
 ### Switch for Debug mode (fast, low hardware usage)
-#from config.cleanrl import Debug as Train
-#from config.cleanrl import DebugEval as Eval
+if len(sys.argv) > 1 and sys.argv[1] == 'debug':
+    from config.cleanrl import Debug as Train
+    from config.cleanrl import DebugEval as Eval
+else:
+    from config.cleanrl import Train
+    from config.cleanrl import Eval
 
 def pad_to_pack(tensor, dones):
     steps, ents = dones.shape
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     #agent.load_state_dict({k.lstrip('module')[1:]: v for k, v in torch.load('model_flatlr.pt').items()})
     if config.CUDA:
         agent = agent.to('cuda:2')
-    agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
+        agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
@@ -213,7 +215,10 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(envs.reset())
     next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
     next_ent_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
-    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+    if config.CUDA:
+        next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+    else:
+        next_lstm_state = agent.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
     num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
     for update in range(1, num_updates + 1):
@@ -335,7 +340,7 @@ if __name__ == "__main__":
         b_mask = (1 - ent_dones.reshape(-1)).bool()
         b_data_frac = int(torch.sum(b_mask)) / len(b_mask)
 
-        all_advantage = torch.masked_select(b_advantages, b_mask)
+        all_advantage = b_advantages#torch.masked_select(b_advantages, b_mask)
         advantage_mean, advantage_std = all_advantage.mean(), all_advantage.std()
 
         # Optimizing the policy and value network
@@ -366,6 +371,16 @@ if __name__ == "__main__":
                 #    continue
 
                 # Perform loss computation on CPU. DataParallel will correctly bptt to GPU.
+                newlogprob    = newlogprob.cpu()
+                entropy       = entropy.cpu().mean()
+                newvalue      = newvalue.view(-1).cpu()
+                mb_values     = b_values[mb_inds].cpu()
+                mb_logprobs   = b_logprobs[mb_inds].cpu()
+                mb_advantages = b_advantages[mb_inds].cpu()
+                mb_returns    = b_returns[mb_inds].cpu()
+ 
+ 
+                '''
                 newlogprob    = torch.masked_select(newlogprob.cpu(), mb_mask)
                 entropy       = torch.masked_select(entropy.cpu(), mb_mask).mean()
                 newvalue      = torch.masked_select(newvalue.view(-1).cpu(), mb_mask)
@@ -373,6 +388,7 @@ if __name__ == "__main__":
                 mb_logprobs   = torch.masked_select(b_logprobs[mb_inds].cpu(), mb_mask)
                 mb_advantages = torch.masked_select(b_advantages[mb_inds].cpu(), mb_mask)
                 mb_returns    = torch.masked_select(b_returns[mb_inds].cpu(), mb_mask)
+                '''
  
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
@@ -419,8 +435,12 @@ if __name__ == "__main__":
                 if approx_kl > config.TARGET_KL:
                     break
 
-        y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
-        y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
+        #y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
+        #y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
+
+        y_pred = b_values.cpu().numpy()
+        y_true = b_returns.cpu().numpy()
+
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
