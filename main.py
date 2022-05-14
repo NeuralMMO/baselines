@@ -31,6 +31,38 @@ else:
     from config.cleanrl import Train
     from config.cleanrl import Eval
 
+def pack_indices(dones):
+    steps, ents = dones.shape
+    flat_indices, traj_lens = [], []
+    idx = 0
+    for ent in range(ents):
+        read_zero = False
+        traj = []
+
+        for step in range(steps):
+            # Got a step of agent data
+            if dones[step][ent] == 0:
+                traj.append(idx)
+                read_zero = True
+
+            #Trajectory bound
+            elif dones[step][ent] == 1 and read_zero:
+                traj_lens.append(len(traj))
+                flat_indices += traj
+
+                read_zero = False
+                traj = []
+
+            idx += 1
+
+        if read_zero:
+            traj_lens.append(len(traj))
+            flat_indices += traj
+
+    assert len(flat_indices) == sum(traj_lens), f'{len(trajectories)}, {sum(traj_lens)}'
+    return flat_indices, traj_lens
+
+
 def pad_to_pack(tensor, dones):
     steps, ents = dones.shape
     trajectories = []
@@ -72,7 +104,7 @@ class Agent(nn.Module):
         self.value  = nn.Linear(config.HIDDEN, 1)
         self.policy = policy.Simple(config)
 
-        self.lstm = nn.LSTM(config.HIDDEN, config.HIDDEN)
+        self.lstm = subnets.RaggedLSTM(config.HIDDEN, config.HIDDEN)
         for name, param in self.lstm.named_parameters():
             if "bias" in name:
                 nn.init.constant_(param, 0)
@@ -85,14 +117,19 @@ class Agent(nn.Module):
             torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
         )
  
-    def _compute_hidden(self, x, lstm_state, done):
+    def _compute_hidden(self, x, lstm_state, lens):
         x         = nmmo.emulation.unpack_obs(self.config, x)
         lookup    = self.input(x)
         hidden, _ = self.policy(lookup)
 
-        batch_size = lstm_state[0].shape[1]
-        hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
-        done = done.reshape((-1, batch_size))
+        if lens is None:
+            lens = [1 for _ in hidden]
+
+        #batch_size = lstm_state[0].shape[1]
+        #hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
+        #done = done.reshape((-1, batch_size))
+        new_hidden, lstm_state = self.lstm(hidden, lstm_state, lens)
+        '''
         new_hidden = []
         for h, d in zip(hidden, done):
             h, lstm_state = self.lstm(
@@ -104,26 +141,24 @@ class Agent(nn.Module):
             )
             new_hidden += [h]
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
+        '''
         return new_hidden, lookup, lstm_state
 
-    def forward(self, x, lstm_state, done=None, action=None, value_only=False):
-        if done is None:
-            done = torch.zeros(len(x)).to(lstm_state[0].device)
-
+    def forward(self, x, lstm_state, lens=None, action=None, value_only=False):
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
 
         if value_only:
-            return self.get_value(x, lstm_state, done)
-        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, done, action)
+            return self.get_value(x, lstm_state, lens)
+        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, lens, action)
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
         return action, logprob, entropy, value, lstm_state
 
-    def get_value(self, x, lstm_state, done):
-        x, _, _ = self._compute_hidden(x, lstm_state, done)
+    def get_value(self, x, lstm_state, lens):
+        x, _, _ = self._compute_hidden(x, lstm_state, lens)
         return self.value(x)
 
-    def get_action_and_value(self, x, lstm_state, done, action=None):
-        x, lookup, lstm_state = self._compute_hidden(x, lstm_state, done)
+    def get_action_and_value(self, x, lstm_state, lens, action=None):
+        x, lookup, lstm_state = self._compute_hidden(x, lstm_state, lens)
         logits                = self.output(x, lookup)
         value                 = self.value(x)
 
@@ -237,7 +272,7 @@ if __name__ == "__main__":
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
-                action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state, next_done)
+                action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state)
                 values[step] = value[:config.NUM_ENVS].flatten()
             actions[step] = action[:config.NUM_ENVS]
             logprobs[step] = logprob[:config.NUM_ENVS]
@@ -289,7 +324,6 @@ if __name__ == "__main__":
             next_value = agent(
                 next_obs,
                 next_lstm_state,
-                next_done,
                 value_only=True,
             )[:config.NUM_ENVS].reshape(1, -1).cpu()
 
@@ -340,7 +374,8 @@ if __name__ == "__main__":
         b_mask = (1 - ent_dones.reshape(-1)).bool()
         b_data_frac = int(torch.sum(b_mask)) / len(b_mask)
 
-        all_advantage = b_advantages#torch.masked_select(b_advantages, b_mask)
+        flat_indices, traj_lens = pack_indices(ent_dones)
+        all_advantage = b_advantages.view(-1)[flat_indices]
         advantage_mean, advantage_std = all_advantage.mean(), all_advantage.std()
 
         # Optimizing the policy and value network
@@ -356,10 +391,12 @@ if __name__ == "__main__":
                 mbenvinds = envinds[start:end]
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
 
+                # Here's a screwup! B_dones?
+                T()
                 _, newlogprob, entropy, newvalue, _ = agent(
                     b_obs[mb_inds],
                     (initial_lstm_state[0][mbenvinds, :], initial_lstm_state[1][mbenvinds, :]),
-                    b_dones[mb_inds],
+                    ent_dones[mb_inds],
                     b_actions.long()[mb_inds],
                 )
 
@@ -388,7 +425,16 @@ if __name__ == "__main__":
                 mb_logprobs   = torch.masked_select(b_logprobs[mb_inds].cpu(), mb_mask)
                 mb_advantages = torch.masked_select(b_advantages[mb_inds].cpu(), mb_mask)
                 mb_returns    = torch.masked_select(b_returns[mb_inds].cpu(), mb_mask)
+
+                newlogprob    = newlogprob[flat_indices].cpu()
+                entropy       = entropy[flat_indices].cpu()
+                newvalue      = newvalue.view(-1)[flat_indices].cpu()
+                mb_values     = b_values[flat_indices].cpu()
+                mb_logprobs   = b_logprobs[flat_indices].cpu()
+                mb_advantages = b_advantages[flat_indices].cpu()
+                mb_returns    = b_returns[flat_indices].cpu()
                 '''
+               
  
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()

@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.utils import rnn
 
 from collections import defaultdict
 
@@ -120,3 +121,68 @@ class BatchFirstLSTM(nn.LSTM):
       h          = h.transpose(0, 1)
       c          = c.transpose(0, 1)
       return hidden, [h, c]
+
+class RaggedLSTM(nn.LSTM):
+   def __init__(self, *args, **kwargs):
+      '''Recurrent baseline model'''
+      super().__init__(*args, batch_first=True, **kwargs)
+
+   #Note: seemingly redundant transposes are required to convert between 
+   #Pytorch (seq_len, batch, hidden) <-> RLlib (batch, seq_len, hidden)
+   def forward(self, x, state, lens):
+      #Attentional input preprocessor and batching
+      lens = lens.cpu() if type(lens) == torch.Tensor else lens
+      lens = torch.Tensor(lens)
+
+      # self.shotgun_to_foot_prob *= 0.5
+      assert len(x.shape) == 2
+      assert len(state) == 2
+      assert state[0].shape == state[1].shape
+      assert len(state[0].shape) == 3
+
+      h, c       = state
+
+      orig_x_shape = x.shape
+      orig_h_shape = h.shape
+      orig_c_shape = c.shape
+
+      #print(x.shape, h.shape, c.shape)
+
+      # Transpose state
+      h          = h.transpose(0, 1)
+      c          = c.transpose(0, 1)
+
+      TB  = x.size(0)      #Padded batch of size (seq x batch)
+      B   = len(lens)      #Sequence fragment time length
+      TT  = TB // B        #Trajectory batch size
+      H   = x.shape[1]     #Hidden state size
+
+      # Pack (batch x seq, hidden) -> (batch, seq, hidden)
+      x             = rnn.pack_padded_sequence(
+                         input=x.view(B, TT, H),
+                         lengths=lens,
+                         enforce_sorted=False,
+                         batch_first=True)
+
+      # Main recurrent network
+      #print(lens)
+      x, (h, c) = super().forward(x, state)
+
+      # Unpack (batch, seq, hidden) -> (batch x seq, hidden)
+      x, _          = rnn.pad_packed_sequence(
+                         sequence=x,
+                         batch_first=True,
+                         total_length=TT)
+      x = x.squeeze(1)
+
+      # Transpose state
+      #h = h.transpose(0, 1)
+      #c = c.transpose(0, 1)
+
+      assert x.shape == orig_x_shape
+      assert h.shape == orig_h_shape
+      assert c.shape == orig_c_shape
+
+      #print(x.shape, h.shape, c.shape)
+ 
+      return x.reshape(TB, H), [h, c]
