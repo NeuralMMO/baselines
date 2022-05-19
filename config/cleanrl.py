@@ -52,11 +52,12 @@ Eval = make_eval_config(Train)
 
 
 class Debug(Train):
-    HORIZON                 = 32
+    HORIZON                 = 16
 
+    NENT                    = 8
     NUM_CPUS                = 2
-    NUM_STEPS               = 32
-    NUM_MINIBATCHES         = 32
+    NUM_STEPS               = 16
+    MINIBATCH_SIZE          = 1024
     CUDA                    = []
 
 DebugEval = make_eval_config(Debug)
