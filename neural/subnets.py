@@ -131,8 +131,8 @@ class RaggedLSTM(nn.LSTM):
    #Pytorch (seq_len, batch, hidden) <-> RLlib (batch, seq_len, hidden)
    def forward(self, x, state, lens):
       #Attentional input preprocessor and batching
-      lens = lens.cpu() if type(lens) == torch.Tensor else lens
-      lens = torch.Tensor(lens)
+      #lens = lens.cpu() if type(lens) == torch.Tensor else lens
+      #lens = torch.Tensor(lens)
 
       # self.shotgun_to_foot_prob *= 0.5
       assert len(x.shape) == 2
@@ -152,28 +152,25 @@ class RaggedLSTM(nn.LSTM):
       h          = h.transpose(0, 1)
       c          = c.transpose(0, 1)
 
-      TB  = x.size(0)      #Padded batch of size (seq x batch)
-      B   = len(lens)      #Sequence fragment time length
-      TT  = TB // B        #Trajectory batch size
-      H   = x.shape[1]     #Hidden state size
+      #TB  = x.size(0)      #Padded batch of size (seq x batch)
+      #B   = len(lens)      #Sequence fragment time length
+      #TT  = TB // B        #Trajectory batch size
+      #H   = x.shape[1]     #Hidden state size
 
       # Pack (batch x seq, hidden) -> (batch, seq, hidden)
-      x             = rnn.pack_padded_sequence(
-                         input=x.view(B, TT, H),
-                         lengths=lens,
-                         enforce_sorted=False,
-                         batch_first=True)
+      #rnn.pack_sequence(x, enforce_sorted=False)
+      if lens is not None:
+         x = x.split(lens)
+         x = rnn.pack_sequence(x, enforce_sorted=False)
+      elif type(x) != rnn.PackedSequence:
+         x = rnn.pack_sequence([e.unsqueeze(0) for e in x], enforce_sorted=False)
 
       # Main recurrent network
       #print(lens)
       x, (h, c) = super().forward(x, state)
+      x = x.data
 
-      # Unpack (batch, seq, hidden) -> (batch x seq, hidden)
-      x, _          = rnn.pad_packed_sequence(
-                         sequence=x,
-                         batch_first=True,
-                         total_length=TT)
-      x = x.squeeze(1)
+      #x = x.squeeze(1)
 
       # Transpose state
       #h = h.transpose(0, 1)
@@ -184,5 +181,6 @@ class RaggedLSTM(nn.LSTM):
       assert c.shape == orig_c_shape
 
       #print(x.shape, h.shape, c.shape)
+      return x, [h, c]
  
       return x.reshape(TB, H), [h, c]

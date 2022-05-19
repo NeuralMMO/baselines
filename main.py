@@ -4,6 +4,9 @@ import os
 import sys
 import random
 import time
+import random
+
+from collections import defaultdict
 
 import wandb
 import gym
@@ -15,6 +18,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
+from torch.nn.utils import rnn
 
 import nmmo
 import evaluate
@@ -122,42 +126,26 @@ class Agent(nn.Module):
         lookup    = self.input(x)
         hidden, _ = self.policy(lookup)
 
-        if lens is None:
-            lens = [1 for _ in hidden]
-
         #batch_size = lstm_state[0].shape[1]
         #hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
         #done = done.reshape((-1, batch_size))
         new_hidden, lstm_state = self.lstm(hidden, lstm_state, lens)
-        '''
-        new_hidden = []
-        for h, d in zip(hidden, done):
-            h, lstm_state = self.lstm(
-                h.unsqueeze(0),
-                (
-                    (1.0 - d).view(1, -1, 1) * lstm_state[0],
-                    (1.0 - d).view(1, -1, 1) * lstm_state[1],
-                ),
-            )
-            new_hidden += [h]
-        new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
-        '''
         return new_hidden, lookup, lstm_state
 
-    def forward(self, x, lstm_state, lens=None, action=None, value_only=False):
+    def forward(self, x, lstm_state, action=None, value_only=False, lens=None):
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
 
         if value_only:
-            return self.get_value(x, lstm_state, lens)
-        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, lens, action)
+            return self.get_value(x, lstm_state)
+        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, action, lens)
         lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
         return action, logprob, entropy, value, lstm_state
 
-    def get_value(self, x, lstm_state, lens):
+    def get_value(self, x, lstm_state, lens=None):
         x, _, _ = self._compute_hidden(x, lstm_state, lens)
         return self.value(x)
 
-    def get_action_and_value(self, x, lstm_state, lens, action=None):
+    def get_action_and_value(self, x, lstm_state, action=None, lens=None):
         x, lookup, lstm_state = self._compute_hidden(x, lstm_state, lens)
         logits                = self.output(x, lookup)
         value                 = self.value(x)
@@ -236,6 +224,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
     # ALGO Logic: Storage setup
+    '''
     obs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + envs.observation_space.shape)
     actions = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + (config.NUM_ARGUMENTS,))
     logprobs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
@@ -243,42 +232,70 @@ if __name__ == "__main__":
     dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
     ent_dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    '''
+
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
-    next_ent_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
+    next_done = torch.zeros(config.NUM_ENVS)
     if config.CUDA:
         next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
     else:
         next_lstm_state = agent.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
-    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
+    resets = [0 for _ in range(config.NUM_ENVS)]
+    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
     for update in range(1, num_updates + 1):
-        initial_lstm_state = (next_lstm_state[0][:config.NUM_ENVS].clone(), next_lstm_state[1][:config.NUM_ENVS].clone())
+        env_keys = [f'env_{i}_reset_{r}' for i, r in enumerate(resets)]
+
+        obs = defaultdict(list)
+        actions = defaultdict(list)
+        logprobs = defaultdict(list)
+        rewards = defaultdict(list)
+        dones = defaultdict(list)
+        values = defaultdict(list)
+        advantages = defaultdict(list)
+     
+        initial_lstm_state = {f'env_{idx}_reset_{resets[idx]}': [next_lstm_state[0][idx], next_lstm_state[1][idx]] for idx in range(len(next_obs))}
+ 
         # Annealing the rate if instructed to do so.
         if config.ANNEAL_LR:
             frac = 1.0 - (update - 1.0) / num_updates
             lrnow = frac * config.LEARNING_RATE
             optimizer.param_groups[0]["lr"] = lrnow
 
-        for step in range(0, config.NUM_STEPS):
-            global_step += 1 * config.NUM_ENVS
-            obs[step]       = next_obs[:config.NUM_ENVS]
-            dones[step]     = next_done[:config.NUM_ENVS]
-            ent_dones[step] = next_ent_done[:config.NUM_ENVS]
+        samples_collected = 0
+        while samples_collected < config.BATCH_SIZE:
+            agent_steps = len(next_done) - sum(next_done)
+            global_step += agent_steps
+            samples_collected += agent_steps
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
                 action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state)
-                values[step] = value[:config.NUM_ENVS].flatten()
-            actions[step] = action[:config.NUM_ENVS]
-            logprobs[step] = logprob[:config.NUM_ENVS]
+
+            assert len(next_done) == config.NUM_ENVS
+            for idx, done in enumerate(next_done):
+                key = f'env_{idx}_reset_{resets[idx]}'
+                obs[key].append(next_obs[idx])
+                dones[key].append(next_done[idx])
+                values[key].append(value[idx])
+                actions[key].append(action[idx])
+                logprobs[key].append(logprob[idx])
+
+                if key not in initial_lstm_state:
+                    initial_lstm_state[key] = [next_lstm_state[0][idx], next_lstm_state[1][idx]]
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
+
+            for idx, done in enumerate(next_done):
+                key = f'env_{idx}_reset_{resets[idx]}'
+                rewards[key].append(reward[idx])
+                if done:
+                    resets[idx] += 1
 
             # Training logs
             for e in info[:config.NUM_ENVS]:
@@ -308,9 +325,8 @@ if __name__ == "__main__":
                 wandb.log(stats)
 
 
-            rewards[step] = torch.tensor(reward)[:config.NUM_ENVS].view(-1)
-            next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
-            next_ent_done = torch.Tensor([i['done'] for i in info])
+            next_obs = torch.Tensor(next_obs)
+            next_done = torch.tensor([i['done'] for i in info])[:config.NUM_ENVS]
 
             for item in info:
                 if "episode" in item.keys():
@@ -325,21 +341,29 @@ if __name__ == "__main__":
                 next_obs,
                 next_lstm_state,
                 value_only=True,
-            )[:config.NUM_ENVS].reshape(1, -1).cpu()
+            )[:config.NUM_ENVS].cpu()
+
+            for idx, done in enumerate(next_done):
+                key = f'env_{idx}_reset_{resets[idx]}'
+                if done:
+                    continue
+ 
+                dones[key].append(next_done[idx])
+                values[key].append(next_value[idx])
 
             if config.GAE:
-                advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
-                for t in reversed(range(config.NUM_STEPS)):
-                    if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_ent_done[:config.NUM_ENVS]
-                        nextvalues = next_value
-                    else:
-                        nextnonterminal = 1.0 - ent_dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = rewards[t] + config.GAMMA * nextvalues * nextnonterminal - values[t]
-                    advantages[t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
-                returns = advantages + values
+                returns = defaultdict(list)
+                for idx, traj in enumerate(obs.keys()):
+                    traj_len = len(obs[traj])
+                    advantages[traj] = torch.zeros(traj_len)
+                    returns[traj] = torch.zeros(traj_len)
+                    for t in reversed(range(traj_len-1)):
+                        nextnonterminal = 1.0 - dones[traj][t + 1].item()
+                        nextvalues = values[traj][t + 1]
+                        delta = rewards[traj][t] + config.GAMMA * nextvalues * nextnonterminal - values[traj][t]
+                        advantages[traj][t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
+                        returns[traj][t] = advantages[traj][t] + values[traj][t]
             else:
                 returns = torch.zeros_like(rewards)
                 for t in reversed(range(config.NUM_STEPS)):
@@ -361,7 +385,6 @@ if __name__ == "__main__":
         b_advantages = pad_to_pack(advantages, ent_dones)
         b_returns = pad_to_pack(returns, ent_dones)
         b_values = pad_to_pack(values, ent_dones)
-        '''
 
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
@@ -370,39 +393,58 @@ if __name__ == "__main__":
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
-
-        b_mask = (1 - ent_dones.reshape(-1)).bool()
-        b_data_frac = int(torch.sum(b_mask)) / len(b_mask)
-
-        flat_indices, traj_lens = pack_indices(ent_dones)
-        all_advantage = b_advantages.view(-1)[flat_indices]
-        advantage_mean, advantage_std = all_advantage.mean(), all_advantage.std()
+        '''
 
         # Optimizing the policy and value network
-        assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
-        envsperbatch = config.NUM_ENVS // config.NUM_MINIBATCHES
-        envinds = np.arange(config.NUM_ENVS)
-        flatinds = np.arange(config.BATCH_SIZE).reshape(config.NUM_STEPS, config.NUM_ENVS)
+        #assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
+        #envsperbatch = config.NUM_ENVS // config.NUM_MINIBATCHES
+        #envinds = np.arange(config.NUM_ENVS)
+        #flatinds = np.arange(config.BATCH_SIZE).reshape(config.NUM_STEPS, config.NUM_ENVS)
+
         clipfracs = []
         for epoch in range(config.UPDATE_EPOCHS):
-            np.random.shuffle(envinds)
-            for start in range(0, config.NUM_ENVS, envsperbatch):
-                end = start + envsperbatch
-                mbenvinds = envinds[start:end]
-                mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
+            shuffled_keys = random.sample(env_keys, len(env_keys))
 
-                # Here's a screwup! B_dones?
-                T()
+            b_obs = torch.cat([torch.stack(obs[k]) for k in shuffled_keys])
+            b_logprobs = torch.cat([torch.stack(logprobs[k]) for k in shuffled_keys])
+            b_actions = torch.cat([torch.stack(actions[k]) for k in shuffled_keys])
+            b_dones = torch.cat([torch.stack(dones[k]) for k in shuffled_keys])
+            b_values = torch.cat([torch.stack(values[k]) for k in shuffled_keys])
+
+            b_initial_h = torch.stack([initial_lstm_state[k][0] for k in shuffled_keys])
+            b_initial_c = torch.stack([initial_lstm_state[k][1] for k in shuffled_keys])
+
+            b_advantages = torch.cat([advantages[k] for k in shuffled_keys])
+            b_returns = torch.cat([returns[k] for k in shuffled_keys])
+
+            advantage_mean, advantage_std = b_advantages.mean(), b_advantages.std()
+
+            traj_lens = [len(obs[k]) for k in shuffled_keys]
+            cum_sum = np.cumsum(traj_lens)
+
+            start_sample = 0
+            start_traj   = 0
+            #np.random.shuffle(envinds)
+            #for start in range(0, config.NUM_ENVS, envsperbatch):
+            while start_sample < len(b_obs):
+                end_traj = np.argmax(cum_sum > (start_sample + config.MINIBATCH_SIZE))
+                if end_traj == 0:
+                    end_traj = len(traj_lens)
+                end_sample = cum_sum[end_traj - 1]
+                #end = start + envsperbatch
+                #mbenvinds = envinds[start:end]
+                #mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
+
+                lstm_state = agent.get_initial_state(end_traj - start_traj)
+
                 _, newlogprob, entropy, newvalue, _ = agent(
-                    b_obs[mb_inds],
-                    (initial_lstm_state[0][mbenvinds, :], initial_lstm_state[1][mbenvinds, :]),
-                    ent_dones[mb_inds],
-                    b_actions.long()[mb_inds],
-                )
+                    b_obs[start_sample:end_sample],
+                    [b_initial_h[start_traj:end_traj], b_initial_c[start_traj:end_traj]],
+                    b_actions[start_sample:end_sample],
+                    lens = traj_lens[start_sample:end_sample],
+                  )
 
                 # Apply batch mask
-                mb_mask = b_mask[mb_inds]
-                mb_data_frac = int(torch.sum(mb_mask)) / len(mb_mask)
                 #if mb_data_frac < 0.025:
                 #    print(torch.sum(mb_mask), mb_data_frac)
                 #    continue
@@ -411,10 +453,10 @@ if __name__ == "__main__":
                 newlogprob    = newlogprob.cpu()
                 entropy       = entropy.cpu().mean()
                 newvalue      = newvalue.view(-1).cpu()
-                mb_values     = b_values[mb_inds].cpu()
-                mb_logprobs   = b_logprobs[mb_inds].cpu()
-                mb_advantages = b_advantages[mb_inds].cpu()
-                mb_returns    = b_returns[mb_inds].cpu()
+                mb_values     = b_values[start_sample:end_sample].cpu()
+                mb_logprobs   = b_logprobs[start_sample:end_sample].cpu()
+                mb_advantages = b_advantages[start_sample:end_sample]#.cpu()
+                mb_returns    = b_returns[start_sample:end_sample]#.cpu()
  
  
                 '''
@@ -477,6 +519,9 @@ if __name__ == "__main__":
                 nn.utils.clip_grad_norm_(agent.parameters(), config.MAX_GRAD_NORM)
                 optimizer.step()
 
+                start_sample = end_sample
+                start_traj = end_traj
+
             if config.TARGET_KL is not None:
                 if approx_kl > config.TARGET_KL:
                     break
@@ -491,7 +536,7 @@ if __name__ == "__main__":
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        writer.add_scalar("charts/data_frac", b_data_frac, global_step)
+        #writer.add_scalar("charts/data_frac", b_data_frac, global_step)
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
