@@ -193,7 +193,7 @@ if __name__ == "__main__":
     agent = Agent(config)
     #agent.load_state_dict({k.lstrip('module')[1:]: v for k, v in torch.load('model_flatlr.pt').items()})
     if config.CUDA:
-        agent = agent.to('cuda:2')
+        agent = agent.to('cuda:0')
         agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
@@ -371,6 +371,7 @@ if __name__ == "__main__":
                 #    continue
 
                 # Perform loss computation on CPU. DataParallel will correctly bptt to GPU.
+                '''
                 newlogprob    = newlogprob.cpu()
                 entropy       = entropy.cpu().mean()
                 newvalue      = newvalue.view(-1).cpu()
@@ -378,9 +379,8 @@ if __name__ == "__main__":
                 mb_logprobs   = b_logprobs[mb_inds].cpu()
                 mb_advantages = b_advantages[mb_inds].cpu()
                 mb_returns    = b_returns[mb_inds].cpu()
- 
- 
                 '''
+
                 newlogprob    = torch.masked_select(newlogprob.cpu(), mb_mask)
                 entropy       = torch.masked_select(entropy.cpu(), mb_mask).mean()
                 newvalue      = torch.masked_select(newvalue.view(-1).cpu(), mb_mask)
@@ -388,7 +388,6 @@ if __name__ == "__main__":
                 mb_logprobs   = torch.masked_select(b_logprobs[mb_inds].cpu(), mb_mask)
                 mb_advantages = torch.masked_select(b_advantages[mb_inds].cpu(), mb_mask)
                 mb_returns    = torch.masked_select(b_returns[mb_inds].cpu(), mb_mask)
-                '''
  
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
@@ -435,11 +434,11 @@ if __name__ == "__main__":
                 if approx_kl > config.TARGET_KL:
                     break
 
-        #y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
-        #y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
+        y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
+        y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
 
-        y_pred = b_values.cpu().numpy()
-        y_true = b_returns.cpu().numpy()
+        #y_pred = b_values.cpu().numpy()
+        #y_true = b_returns.cpu().numpy()
 
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
