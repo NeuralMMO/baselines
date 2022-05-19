@@ -27,11 +27,12 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     SEED                    = 1
 
     TOTAL_TIMESTEPS         = 1_000_000_000
-    CUDA                    = [0]
+    CUDA                    = [1]
     NUM_CPUS                = 16
 
-    NUM_STEPS               = 512
-    NUM_MINIBATCHES         = 512
+    MINIBATCH_SIZE          = 2048
+
+    NUM_STEPS               = 32 # 128
     LEARNING_RATE           = 5e-5
     UPDATE_EPOCHS           = 1
 
@@ -58,6 +59,6 @@ class Debug(Train):
     NUM_CPUS                = 2
     NUM_STEPS               = 16
     MINIBATCH_SIZE          = 1024
-    CUDA                    = []
+    CUDA                    = [1]
 
 DebugEval = make_eval_config(Debug)

@@ -126,9 +126,6 @@ class Agent(nn.Module):
         lookup    = self.input(x)
         hidden, _ = self.policy(lookup)
 
-        #batch_size = lstm_state[0].shape[1]
-        #hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
-        #done = done.reshape((-1, batch_size))
         new_hidden, lstm_state = self.lstm(hidden, lstm_state, lens)
         return new_hidden, lookup, lstm_state
 
@@ -216,25 +213,13 @@ if __name__ == "__main__":
     agent = Agent(config)
     #agent.load_state_dict({k.lstrip('module')[1:]: v for k, v in torch.load('model_flatlr.pt').items()})
     if config.CUDA:
-        agent = agent.to('cuda:2')
+        agent = agent.to('cuda:1')
         agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
-    # ALGO Logic: Storage setup
-    '''
-    obs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + envs.observation_space.shape)
-    actions = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + (config.NUM_ARGUMENTS,))
-    logprobs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    rewards = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    ent_dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    '''
-
-
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
@@ -268,6 +253,7 @@ if __name__ == "__main__":
 
         samples_collected = 0
         while samples_collected < config.BATCH_SIZE:
+            print('Sample: ', samples_collected)
             agent_steps = len(next_done) - sum(next_done)
             global_step += agent_steps
             samples_collected += agent_steps
@@ -281,7 +267,7 @@ if __name__ == "__main__":
                 key = f'env_{idx}_reset_{resets[idx]}'
                 obs[key].append(next_obs[idx])
                 dones[key].append(next_done[idx])
-                values[key].append(value[idx])
+                values[key].append(value[idx].cpu())
                 actions[key].append(action[idx])
                 logprobs[key].append(logprob[idx])
 
@@ -376,31 +362,6 @@ if __name__ == "__main__":
                     returns[t] = rewards[t] + config.GAMMA * nextnonterminal * next_return
                 advantages = returns - values
 
-        # flatten the batch
-        '''
-        b_obs = pad_to_pack(obs, ent_dones)
-        b_logprobs = pad_to_pack(logprobs, ent_dones)
-        b_actions = pad_to_pack(actions, ent_dones)
-        b_dones = pad_to_pack(dones, ent_dones)
-        b_advantages = pad_to_pack(advantages, ent_dones)
-        b_returns = pad_to_pack(returns, ent_dones)
-        b_values = pad_to_pack(values, ent_dones)
-
-        b_obs = obs.reshape((-1,) + envs.observation_space.shape)
-        b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
-        b_dones = dones.reshape(-1)
-        b_advantages = advantages.reshape(-1)
-        b_returns = returns.reshape(-1)
-        b_values = values.reshape(-1)
-        '''
-
-        # Optimizing the policy and value network
-        #assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
-        #envsperbatch = config.NUM_ENVS // config.NUM_MINIBATCHES
-        #envinds = np.arange(config.NUM_ENVS)
-        #flatinds = np.arange(config.BATCH_SIZE).reshape(config.NUM_STEPS, config.NUM_ENVS)
-
         clipfracs = []
         for epoch in range(config.UPDATE_EPOCHS):
             shuffled_keys = random.sample(env_keys, len(env_keys))
@@ -424,30 +385,19 @@ if __name__ == "__main__":
 
             start_sample = 0
             start_traj   = 0
-            #np.random.shuffle(envinds)
-            #for start in range(0, config.NUM_ENVS, envsperbatch):
             while start_sample < len(b_obs):
+                print('Optimize: ', start_sample)
                 end_traj = np.argmax(cum_sum > (start_sample + config.MINIBATCH_SIZE))
                 if end_traj == 0:
                     end_traj = len(traj_lens)
                 end_sample = cum_sum[end_traj - 1]
-                #end = start + envsperbatch
-                #mbenvinds = envinds[start:end]
-                #mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
-
-                lstm_state = agent.get_initial_state(end_traj - start_traj)
 
                 _, newlogprob, entropy, newvalue, _ = agent(
                     b_obs[start_sample:end_sample],
                     [b_initial_h[start_traj:end_traj], b_initial_c[start_traj:end_traj]],
                     b_actions[start_sample:end_sample],
-                    lens = traj_lens[start_sample:end_sample],
+                    lens = traj_lens[start_traj:end_traj],
                   )
-
-                # Apply batch mask
-                #if mb_data_frac < 0.025:
-                #    print(torch.sum(mb_mask), mb_data_frac)
-                #    continue
 
                 # Perform loss computation on CPU. DataParallel will correctly bptt to GPU.
                 newlogprob    = newlogprob.cpu()
@@ -457,26 +407,6 @@ if __name__ == "__main__":
                 mb_logprobs   = b_logprobs[start_sample:end_sample].cpu()
                 mb_advantages = b_advantages[start_sample:end_sample]#.cpu()
                 mb_returns    = b_returns[start_sample:end_sample]#.cpu()
- 
- 
-                '''
-                newlogprob    = torch.masked_select(newlogprob.cpu(), mb_mask)
-                entropy       = torch.masked_select(entropy.cpu(), mb_mask).mean()
-                newvalue      = torch.masked_select(newvalue.view(-1).cpu(), mb_mask)
-                mb_values     = torch.masked_select(b_values[mb_inds].cpu(), mb_mask)
-                mb_logprobs   = torch.masked_select(b_logprobs[mb_inds].cpu(), mb_mask)
-                mb_advantages = torch.masked_select(b_advantages[mb_inds].cpu(), mb_mask)
-                mb_returns    = torch.masked_select(b_returns[mb_inds].cpu(), mb_mask)
-
-                newlogprob    = newlogprob[flat_indices].cpu()
-                entropy       = entropy[flat_indices].cpu()
-                newvalue      = newvalue.view(-1)[flat_indices].cpu()
-                mb_values     = b_values[flat_indices].cpu()
-                mb_logprobs   = b_logprobs[flat_indices].cpu()
-                mb_advantages = b_advantages[flat_indices].cpu()
-                mb_returns    = b_returns[flat_indices].cpu()
-                '''
-               
  
                 logratio = newlogprob - mb_logprobs
                 ratio = logratio.exp()
@@ -525,9 +455,6 @@ if __name__ == "__main__":
             if config.TARGET_KL is not None:
                 if approx_kl > config.TARGET_KL:
                     break
-
-        #y_pred = torch.masked_select(b_values.cpu(), b_mask).numpy()
-        #y_true = torch.masked_select(b_returns.cpu(), b_mask).numpy()
 
         y_pred = b_values.cpu().numpy()
         y_true = b_returns.cpu().numpy()

@@ -160,7 +160,10 @@ class RaggedLSTM(nn.LSTM):
       # Pack (batch x seq, hidden) -> (batch, seq, hidden)
       #rnn.pack_sequence(x, enforce_sorted=False)
       if lens is not None:
-         x = x.split(lens)
+         try:
+            x = x.split(lens)
+         except:
+            T()
          x = rnn.pack_sequence(x, enforce_sorted=False)
       elif type(x) != rnn.PackedSequence:
          x = rnn.pack_sequence([e.unsqueeze(0) for e in x], enforce_sorted=False)
