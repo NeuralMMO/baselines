@@ -17,6 +17,8 @@ class Base:
    def SPAWN(self):
        return self.SPAWN_CONCURRENT
 
+   RESPAWN  = True
+
    AGENTS   = [nmmo.Agent]
    TASKS    = tasks.All
 
@@ -34,6 +36,7 @@ def make_eval_config(config_cls):
         NUM_CPUS = 1
 
         TERRAIN_FLIP_SEED = True
+        RESPAWN = False
 
         @property
         def PATH_MAPS(self):

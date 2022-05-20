@@ -1,6 +1,7 @@
 from pdb import set_trace as T
 
 import os
+import sys
 import random
 import time
 
@@ -22,12 +23,14 @@ import tasks
 from scripted import baselines
 from neural import policy, io, subnets
 
-from config.cleanrl import Train
-from config.cleanrl import Eval
 
-### Switch for Debug mode (fast, low hardware usage)
-#from config.cleanrl import Debug as Train
-#from config.cleanrl import DebugEval as Eval
+# Switch for Debug mode (fast, low hardware usage)
+if len(sys.argv) == 2 and sys.argv[1] == 'debug':
+    from config.cleanrl import Debug as Train
+    from config.cleanrl import DebugEval as Eval
+else:
+    from config.cleanrl import Train
+    from config.cleanrl import Eval
 
 
 class Agent(nn.Module):
@@ -118,9 +121,9 @@ if __name__ == "__main__":
     config      = Train()
 
     #DISABLE FOR NOW DUE TO SS BUG
-    #eval_config = Eval()
-    class eval_config:
-        NUM_ENVS = 0
+    eval_config = Eval()
+    #class eval_config:
+    #    NUM_ENVS = 0
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
@@ -153,14 +156,14 @@ if __name__ == "__main__":
     # look like a simple environment from the perspective of infra frameworks while
     # actually maintaining all the same internal complexity. For now, just pass it a config
     # Note that it relies on config.NUM_CPUS and config.NENT to define scale
-    envs = nmmo.integrations.cleanrl_vec_envs(Train)#, Eval)
+    envs = nmmo.integrations.cleanrl_vec_envs(Train, Eval)
 
     agent = Agent(config)
     if config.CUDA:
         agent = agent.cuda()
     agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
-    #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
+    ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
