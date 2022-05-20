@@ -38,6 +38,7 @@ else:
 class Agent(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.device = 'cpu'
         self.config = config
         self.input  = io.Input(config,
                 embeddings=io.MixedEmbedding,
@@ -53,10 +54,10 @@ class Agent(nn.Module):
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
 
-    def get_initial_state(self, batch, device='cpu'):
+    def get_initial_state(self):
         return (
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
+            torch.zeros(self.lstm.num_layers, self.lstm.hidden_size).to(self.device),
+            torch.zeros(self.lstm.num_layers, self.lstm.hidden_size).to(self.device),
         )
  
     def _compute_hidden(self, x, lstm_state, lens):
@@ -120,6 +121,7 @@ if __name__ == "__main__":
 
     run_name = f"{config.ENV_ID}__{config.EXP_NAME}__{config.SEED}__{int(time.time())}"
 
+    '''
     wandb.init(
         project=config.WANDB_PROJECT_NAME,
         entity=config.WANDB_ENTITY,
@@ -128,6 +130,7 @@ if __name__ == "__main__":
         name=run_name,
         monitor_gym=True,
         save_code=True)
+    '''
 
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -151,7 +154,8 @@ if __name__ == "__main__":
     agent = Agent(config)
     #agent.load_state_dict({k.lstrip('module')[1:]: v for k, v in torch.load('model_flatlr.pt').items()})
     if config.CUDA:
-        agent = agent.to('cuda:1')
+        agent.device = 'cuda:2'
+        agent = agent.to('cuda:2')
         agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
 
     #ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
@@ -161,18 +165,29 @@ if __name__ == "__main__":
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
-    next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(config.NUM_ENVS)
-    if config.CUDA:
-        next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
-    else:
-        next_lstm_state = agent.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+    init_obs = torch.Tensor(envs.reset())
+
+    # Allocate initial buffer of dones and states. Assumes all agents are present at the start
+    next_obs = {}
+    next_done = {}
+    next_lstm_h = {}
+    next_lstm_c = {}
+
+    for i, ob in enumerate(init_obs):
+        key = f'env_{i}_reset_0'
+        next_obs[key] = ob
+
+        if config.CUDA:
+            init_state = agent.module.get_initial_state()
+        else:
+            init_state = agent.get_initial_state()
+
+        next_lstm_h[key], next_lstm_c[key] = init_state
+        next_done[key] = 0
 
     resets = [0 for _ in range(config.NUM_ENVS)]
     num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
     for update in range(1, num_updates + 1):
-        env_keys = [f'env_{i}_reset_{r}' for i, r in enumerate(resets)]
-
         obs = defaultdict(list)
         actions = defaultdict(list)
         logprobs = defaultdict(list)
@@ -180,9 +195,14 @@ if __name__ == "__main__":
         dones = defaultdict(list)
         values = defaultdict(list)
         advantages = defaultdict(list)
-     
-        initial_lstm_state = {f'env_{idx}_reset_{resets[idx]}': [next_lstm_state[0][idx], next_lstm_state[1][idx]] for idx in range(len(next_obs))}
- 
+
+        # Initialize lstm states for leftover partial trajectories
+        initial_lstm_h, initial_lstm_c = {}, {}
+        for key in next_lstm_h.keys():
+            initial_lstm_h[key] = next_lstm_h[key]
+            initial_lstm_c[key] = next_lstm_c[key]
+            dones[key].append(0)
+
         # Annealing the rate if instructed to do so.
         if config.ANNEAL_LR:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -192,35 +212,74 @@ if __name__ == "__main__":
         samples_collected = 0
         while samples_collected < config.BATCH_SIZE:
             print('Sample: ', samples_collected)
-            agent_steps = len(next_done) - sum(next_done)
+            # Batch obs and states for live agents
+            # Error here: all the agents were done at the same time. Probability is tiny with large batch. Not sure how to fix.
+            live_obs = torch.stack([next_obs[k] for k, done in next_done.items() if not done])
+            try:
+                live_lstm_c = torch.stack([next_lstm_c[k] for k, done in next_done.items() if not done])
+            except:
+                T()
+            live_lstm_h = torch.stack([next_lstm_h[k] for k, done in next_done.items() if not done])
+            live_keys = [k for k, done in next_done.items() if not done]
+            next_lstm_h, next_lstm_c = {}, {}
+
+            # Update statistics
+            agent_steps = len(live_keys)
             global_step += agent_steps
             samples_collected += agent_steps
 
-            # ALGO LOGIC: action logic
-            with torch.no_grad():
-                action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state)
+            # Sample in minibatches
+            num_live_agents = len(live_obs)
+            tensor_action = np.zeros((config.NUM_ENVS, 3), dtype=int)
+            for start in range(0, num_live_agents, config.SAMPLE_MINIBATCH_SIZE):
+                end = min(num_live_agents, start + config.SAMPLE_MINIBATCH_SIZE)
+                live_state = [live_lstm_c[start:end], live_lstm_h[start:end]]
 
-            assert len(next_done) == config.NUM_ENVS
-            for idx, done in enumerate(next_done):
-                key = f'env_{idx}_reset_{resets[idx]}'
-                obs[key].append(next_obs[idx])
-                dones[key].append(next_done[idx])
-                values[key].append(value[idx].cpu())
-                actions[key].append(action[idx])
-                logprobs[key].append(logprob[idx])
+                # ALGO LOGIC: action logic
+                with torch.no_grad():
+                    action, logprob, _, value, [live_lstm_c, live_lstm_h] = agent(live_obs[start:end], live_state)
 
-                if key not in initial_lstm_state:
-                    initial_lstm_state[key] = [next_lstm_state[0][idx], next_lstm_state[1][idx]]
+                # Store data for all agents
+                for idx, key in enumerate(live_keys[start:end]):
+                    next_lstm_c[key] = live_lstm_c[idx]
+                    next_lstm_h[key] = live_lstm_h[idx]
+            
+                    tensor_action[idx] = action[idx].cpu().numpy()
+                    actions[key].append(action[idx])
+                    obs[key].append(next_obs[key])
+                    logprobs[key].append(logprob[idx])
+                    values[key].append(value[idx].cpu())
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, done, info = envs.step(action.cpu().numpy())
+            flat_obs, reward, done, info = envs.step(tensor_action)
+            flat_obs = torch.Tensor(flat_obs)
 
-            for idx, done in enumerate(next_done):
+            next_obs, next_done = {}, {}
+            for idx, inf in enumerate(info):
                 key = f'env_{idx}_reset_{resets[idx]}'
                 rewards[key].append(reward[idx])
-                if done:
+                dones[key].append(int(inf['done']))
+                next_obs[key] = flat_obs[idx]
+                next_done[key] = int(inf['done'])
+
+                # Environment reset: initialize new trajectories
+                if done[idx]:
                     resets[idx] += 1
 
+                    key = f'env_{idx}_reset_{resets[idx]}'
+                    assert key not in initial_lstm_h
+                    assert key not in initial_lstm_h
+
+                    if config.CUDA:
+                        init_state = agent.module.get_initial_state()
+                    else:
+                        init_state = agent.get_initial_state()
+
+                    next_lstm_h[key], next_lstm_c[key] = init_state
+                    initial_lstm_h[key], initial_lstm_c[key] = init_state
+
+
+            '''
             # Training logs
             for e in info[:config.NUM_ENVS]:
                 if 'logs' not in e:
@@ -247,10 +306,7 @@ if __name__ == "__main__":
 
                 stats = {**stats, **ratings.stats}
                 wandb.log(stats)
-
-
-            next_obs = torch.Tensor(next_obs)
-            next_done = torch.tensor([i['done'] for i in info])[:config.NUM_ENVS]
+            '''
 
             for item in info:
                 if "episode" in item.keys():
@@ -261,19 +317,29 @@ if __name__ == "__main__":
 
         # bootstrap value if not done
         with torch.no_grad():
-            next_value = agent(
-                next_obs,
-                next_lstm_state,
-                value_only=True,
-            )[:config.NUM_ENVS].cpu()
 
-            for idx, done in enumerate(next_done):
-                key = f'env_{idx}_reset_{resets[idx]}'
-                if done:
-                    continue
- 
-                dones[key].append(next_done[idx])
-                values[key].append(next_value[idx])
+            n = len(next_lstm_c)
+            agent_keys = list(next_obs.keys())
+            for start in range(0, n, config.SAMPLE_MINIBATCH_SIZE):
+                end = min(num_live_agents, start + config.SAMPLE_MINIBATCH_SIZE)
+                minibatch_keys = agent_keys[start:end]
+                try:
+                    cur_obs = torch.stack([next_obs[k] for k in minibatch_keys])
+                except:
+                    T()
+                cur_lstm_c = torch.stack([next_lstm_c[k] for k in minibatch_keys])
+                cur_lstm_h = torch.stack([next_lstm_h[k] for k in minibatch_keys])
+
+                next_value = agent(
+                    cur_obs,
+                    [cur_lstm_h, cur_lstm_c],
+                    value_only=True,
+                )[:config.NUM_ENVS].cpu()
+
+                for minibatch_idx, key in enumerate(minibatch_keys):
+                    idx = start + minibatch_idx
+                    key = f'env_{idx}_reset_{resets[idx]}'
+                    values[key].append(next_value[minibatch_idx])
 
             if config.GAE:
                 lastgaelam = 0
@@ -283,7 +349,7 @@ if __name__ == "__main__":
                     advantages[traj] = torch.zeros(traj_len)
                     returns[traj] = torch.zeros(traj_len)
                     for t in reversed(range(traj_len-1)):
-                        nextnonterminal = 1.0 - dones[traj][t + 1].item()
+                        nextnonterminal = 1.0 - dones[traj][t + 1]
                         nextvalues = values[traj][t + 1]
                         delta = rewards[traj][t] + config.GAMMA * nextvalues * nextnonterminal - values[traj][t]
                         advantages[traj][t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
@@ -302,17 +368,17 @@ if __name__ == "__main__":
 
         clipfracs = []
         for epoch in range(config.UPDATE_EPOCHS):
-            shuffled_keys = random.sample(env_keys, len(env_keys))
+            shuffled_keys = random.sample(list(obs.keys()), len(obs))
 
             b_obs = torch.cat([torch.stack(obs[k]) for k in shuffled_keys])
             b_logprobs = torch.cat([torch.stack(logprobs[k]) for k in shuffled_keys])
             b_actions = torch.cat([torch.stack(actions[k]) for k in shuffled_keys])
-            b_dones = torch.cat([torch.stack(dones[k]) for k in shuffled_keys])
             b_values = torch.cat([torch.stack(values[k]) for k in shuffled_keys])
 
-            b_initial_h = torch.stack([initial_lstm_state[k][0] for k in shuffled_keys])
-            b_initial_c = torch.stack([initial_lstm_state[k][1] for k in shuffled_keys])
+            b_initial_h = torch.stack([initial_lstm_h[k] for k in shuffled_keys])
+            b_initial_c = torch.stack([initial_lstm_c[k] for k in shuffled_keys])
 
+            b_dones = torch.cat([torch.Tensor(dones[k]) for k in shuffled_keys])
             b_advantages = torch.cat([advantages[k] for k in shuffled_keys])
             b_returns = torch.cat([returns[k] for k in shuffled_keys])
 
@@ -325,7 +391,7 @@ if __name__ == "__main__":
             start_traj   = 0
             while start_sample < len(b_obs):
                 print('Optimize: ', start_sample)
-                end_traj = np.argmax(cum_sum > (start_sample + config.MINIBATCH_SIZE))
+                end_traj = np.argmax(cum_sum > (start_sample + config.OPTIM_MINIBATCH_SIZE))
                 if end_traj == 0:
                     end_traj = len(traj_lens)
                 end_sample = cum_sum[end_traj - 1]

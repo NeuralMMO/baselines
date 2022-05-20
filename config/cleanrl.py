@@ -30,7 +30,8 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     CUDA                    = [1]
     NUM_CPUS                = 16
 
-    MINIBATCH_SIZE          = 2048
+    OPTIM_MINIBATCH_SIZE    = 2048
+    SAMPLE_MINIBATCH_SIZE   = 2048
 
     NUM_STEPS               = 32 # 128
     LEARNING_RATE           = 5e-5
@@ -55,10 +56,10 @@ Eval = make_eval_config(Train)
 class Debug(Train):
     HORIZON                 = 16
 
-    NENT                    = 8
+    NENT                    = 128
     NUM_CPUS                = 2
     NUM_STEPS               = 16
     MINIBATCH_SIZE          = 1024
-    CUDA                    = [1]
+    CUDA                    = [2]
 
 DebugEval = make_eval_config(Debug)
