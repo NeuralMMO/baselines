@@ -160,8 +160,7 @@ if __name__ == "__main__":
 
     agent = Agent(config)
     if config.CUDA:
-        agent = agent.cuda()
-    agent = torch.nn.DataParallel(agent, device_ids=config.CUDA)
+        agent = torch.nn.DataParallel(agent.cuda(), device_ids=config.CUDA)
 
     ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
 
@@ -180,9 +179,13 @@ if __name__ == "__main__":
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
     next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
-    next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
-    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
 
+    if config.CUDA:
+        next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+    else:
+        next_lstm_state = agent.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+
+    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
     for update in range(1, num_updates + 1):
         initial_lstm_state = (next_lstm_state[0][:config.NUM_ENVS].clone(), next_lstm_state[1][:config.NUM_ENVS].clone())
         # Annealing the rate if instructed to do so.
