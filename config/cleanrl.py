@@ -8,7 +8,7 @@ from config.bases import Base, make_eval_config
 class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     @property
     def NUM_ENVS(self):
-        return 2 * self.NUM_CPUS * self.NENT
+        return self.NUM_CPUS * self.NENT
 
     @property
     def BATCH_SIZE(self):
@@ -26,9 +26,9 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     TORCH_DETERMINISTIC     = True
     SEED                    = 1
 
-    TOTAL_TIMESTEPS         = 500_000_000
+    TOTAL_TIMESTEPS         = 1_000_000_000
     CUDA                    = [0]
-    NUM_CPUS                = 16
+    NUM_CPUS                = 32
 
     NUM_STEPS               = 512
     NUM_MINIBATCHES         = 512

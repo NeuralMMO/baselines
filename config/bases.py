@@ -33,7 +33,7 @@ def make_eval_config(config_cls):
     class Eval(config_cls):
         AGENTS = [baselines.Meander, baselines.Forage, baselines.Combat, nmmo.Agent]
 
-        NUM_CPUS = 1
+        NUM_CPUS = 4
 
         TERRAIN_FLIP_SEED = True
         RESPAWN = False
