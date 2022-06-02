@@ -30,6 +30,8 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     CUDA                    = [0]
     NUM_CPUS                = 32
 
+    HORIZON                 = 512
+
     NUM_STEPS               = 512
     NUM_MINIBATCHES         = 512
     LEARNING_RATE           = 5e-5
