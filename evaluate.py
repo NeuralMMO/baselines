@@ -115,9 +115,9 @@ if __name__ == '__main__':
     from config.cleanrl import Eval as Config
     from main import Agent
 
-    model  = 'models/1xt4_32vcpu_160m.pt'
-    device = 'cuda:0'
-    Config.NUM_CPUS=2
+    model  = 'model_spawnprotect_197m.pt'
+    device = 'cuda:1'
+    Config.NUM_CPUS = 20
 
     state_dict = torch.load(model, map_location=device)
     evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)

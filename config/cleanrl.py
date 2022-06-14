@@ -16,6 +16,7 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     # Hardcoded for now: number of args to predict
     NUM_ARGUMENTS = 3
+    COMBAT = True
 
     EXP_NAME                = 'CleanRL'
     ENV_ID                  = 'nmmo'
@@ -28,7 +29,7 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     TOTAL_TIMESTEPS         = 1_000_000_000
     CUDA                    = [0]
-    NUM_CPUS                = 32
+    NUM_CPUS                = 16
 
     HORIZON                 = 512
 
@@ -49,6 +50,9 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     ENT_COEF                = 0.0
     VF_COEF                 = 1.0
     MAX_GRAD_NORM           = 0.5
+
+class TrainForage(Train):
+    COMBAT = False
 
 Eval = make_eval_config(Train)
 

@@ -107,7 +107,7 @@ class Output(nn.Module):
          lookup : A fixed size representation of each entity
       ''' 
       rets = defaultdict(dict)
-      for atn in nmmo.Action.edges:
+      for atn in nmmo.Action.edges(self.config):
          for arg in atn.edges:
             lens  = None
             if arg.argType == nmmo.action.Fixed:

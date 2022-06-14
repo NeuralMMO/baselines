@@ -26,11 +26,13 @@ from neural import policy, io, subnets
 
 # Switch for Debug mode (fast, low hardware usage)
 if len(sys.argv) == 2 and sys.argv[1] == 'debug':
-    from config.cleanrl import Debug as Train
     from config.cleanrl import DebugEval as Eval
+    from config.cleanrl import Debug as TrainCombat
+    TrainForage = TrainCombat
 else:
-    from config.cleanrl import Train
     from config.cleanrl import Eval
+    from config.cleanrl import Train as TrainCombat
+    from config.cleanrl import TrainForage
 
 
 class Agent(nn.Module):
@@ -100,7 +102,7 @@ class Agent(nn.Module):
         value                 = self.value(x)
 
         flat_logits = []
-        for atn in nmmo.Action.edges:
+        for atn in nmmo.Action.edges(self.config):
             for arg in atn.edges:
                 flat_logits.append(logits[atn][arg]) 
 
@@ -118,12 +120,9 @@ class Agent(nn.Module):
 
 
 if __name__ == "__main__":
-    config      = Train()
-
-    #DISABLE FOR NOW DUE TO SS BUG
-    eval_config = Eval()
-    #class eval_config:
-    #    NUM_ENVS = 0
+    config        = TrainCombat()
+    config_forage = TrainForage()
+    eval_config   = Eval()
 
     # WanDB integration                                                       
     with open('wandb_api_key') as key:                                        
@@ -156,7 +155,7 @@ if __name__ == "__main__":
     # look like a simple environment from the perspective of infra frameworks while
     # actually maintaining all the same internal complexity. For now, just pass it a config
     # Note that it relies on config.NUM_CPUS and config.NENT to define scale
-    envs = nmmo.integrations.cleanrl_vec_envs(Train, Eval)
+    envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
 
     agent = Agent(config)
     if config.CUDA:
@@ -167,27 +166,30 @@ if __name__ == "__main__":
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
     # ALGO Logic: Storage setup
-    obs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + envs.observation_space.shape)
-    actions = torch.zeros((config.NUM_STEPS, config.NUM_ENVS) + (config.NUM_ARGUMENTS,))
-    logprobs = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    rewards = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    dones = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
-    values = torch.zeros((config.NUM_STEPS, config.NUM_ENVS))
+    NUM_ENVS = config.NUM_ENVS + config_forage.NUM_ENVS
+    BATCH_SIZE = config.BATCH_SIZE + config_forage.BATCH_SIZE
+
+    obs = torch.zeros((config.NUM_STEPS, NUM_ENVS) + envs.observation_space.shape)
+    actions = torch.zeros((config.NUM_STEPS, NUM_ENVS) + (config.NUM_ARGUMENTS,))
+    logprobs = torch.zeros((config.NUM_STEPS, NUM_ENVS))
+    rewards = torch.zeros((config.NUM_STEPS, NUM_ENVS))
+    dones = torch.zeros((config.NUM_STEPS, NUM_ENVS))
+    values = torch.zeros((config.NUM_STEPS, NUM_ENVS))
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(config.NUM_ENVS + eval_config.NUM_ENVS)
+    next_done = torch.zeros(NUM_ENVS + eval_config.NUM_ENVS)
 
     if config.CUDA:
-        next_lstm_state = agent.module.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+        next_lstm_state = agent.module.get_initial_state(NUM_ENVS + eval_config.NUM_ENVS)
     else:
-        next_lstm_state = agent.get_initial_state(config.NUM_ENVS + eval_config.NUM_ENVS)
+        next_lstm_state = agent.get_initial_state(NUM_ENVS + eval_config.NUM_ENVS)
 
-    num_updates = config.TOTAL_TIMESTEPS // config.BATCH_SIZE
+    num_updates = config.TOTAL_TIMESTEPS // BATCH_SIZE
     for update in range(1, num_updates + 1):
-        initial_lstm_state = (next_lstm_state[0][:config.NUM_ENVS].clone(), next_lstm_state[1][:config.NUM_ENVS].clone())
+        initial_lstm_state = (next_lstm_state[0][:NUM_ENVS].clone(), next_lstm_state[1][:NUM_ENVS].clone())
         # Annealing the rate if instructed to do so.
         if config.ANNEAL_LR:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -195,22 +197,22 @@ if __name__ == "__main__":
             optimizer.param_groups[0]["lr"] = lrnow
 
         for step in range(0, config.NUM_STEPS):
-            global_step += 1 * config.NUM_ENVS
-            obs[step] = next_obs[:config.NUM_ENVS]
-            dones[step] = next_done[:config.NUM_ENVS]
+            global_step += NUM_ENVS
+            obs[step] = next_obs[:NUM_ENVS]
+            dones[step] = next_done[:NUM_ENVS]
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
                 action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state, next_done)
-                values[step] = value[:config.NUM_ENVS].flatten()
-            actions[step] = action[:config.NUM_ENVS]
-            logprobs[step] = logprob[:config.NUM_ENVS]
+                values[step] = value[:NUM_ENVS].flatten()
+            actions[step] = action[:NUM_ENVS]
+            logprobs[step] = logprob[:NUM_ENVS]
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, done, info = envs.step(action.cpu().numpy())
 
             # Training logs
-            for e in info[:config.NUM_ENVS]:
+            for e in info[:NUM_ENVS]:
                 if 'logs' not in e:
                     continue
 
@@ -221,7 +223,7 @@ if __name__ == "__main__":
                 wandb.log(stats)
 
             # Evaluation logs
-            for e in info[config.NUM_ENVS:]:
+            for e in info[NUM_ENVS:]:
                 if 'logs' not in e:
                     continue
 
@@ -237,7 +239,7 @@ if __name__ == "__main__":
                 wandb.log(stats)
 
 
-            rewards[step] = torch.tensor(reward)[:config.NUM_ENVS].view(-1)
+            rewards[step] = torch.tensor(reward)[:NUM_ENVS].view(-1)
             next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
 
             for item in info:
@@ -254,14 +256,14 @@ if __name__ == "__main__":
                 next_lstm_state,
                 next_done,
                 value_only=True,
-            )[:config.NUM_ENVS].reshape(1, -1).cpu()
+            )[:NUM_ENVS].reshape(1, -1).cpu()
 
             if config.GAE:
                 advantages = torch.zeros_like(rewards)
                 lastgaelam = 0
                 for t in reversed(range(config.NUM_STEPS)):
                     if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done[:config.NUM_ENVS]
+                        nextnonterminal = 1.0 - next_done[:NUM_ENVS]
                         nextvalues = next_value
                     else:
                         nextnonterminal = 1.0 - dones[t + 1]
@@ -284,21 +286,21 @@ if __name__ == "__main__":
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
+        b_actions = actions.reshape((-1,) + (TrainCombat.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
         # Optimizing the policy and value network
-        assert config.NUM_ENVS % config.NUM_MINIBATCHES == 0
-        envsperbatch = config.NUM_ENVS // config.NUM_MINIBATCHES
-        envinds = np.arange(config.NUM_ENVS)
-        flatinds = np.arange(config.BATCH_SIZE).reshape(config.NUM_STEPS, config.NUM_ENVS)
+        assert NUM_ENVS % config.NUM_MINIBATCHES == 0
+        envsperbatch = NUM_ENVS // config.NUM_MINIBATCHES
+        envinds = np.arange(NUM_ENVS)
+        flatinds = np.arange(BATCH_SIZE).reshape(config.NUM_STEPS, NUM_ENVS)
         clipfracs = []
         for epoch in range(config.UPDATE_EPOCHS):
             np.random.shuffle(envinds)
-            for start in range(0, config.NUM_ENVS, envsperbatch):
+            for start in range(0, NUM_ENVS, envsperbatch):
                 end = start + envsperbatch
                 mbenvinds = envinds[start:end]
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
