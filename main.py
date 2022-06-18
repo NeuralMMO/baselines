@@ -155,7 +155,8 @@ if __name__ == "__main__":
     # look like a simple environment from the perspective of infra frameworks while
     # actually maintaining all the same internal complexity. For now, just pass it a config
     # Note that it relies on config.NUM_CPUS and config.NENT to define scale
-    envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
+    #envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
+    envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, Eval])
 
     agent = Agent(config)
     if config.CUDA:
@@ -166,8 +167,8 @@ if __name__ == "__main__":
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
     # ALGO Logic: Storage setup
-    NUM_ENVS = config.NUM_ENVS + config_forage.NUM_ENVS
-    BATCH_SIZE = config.BATCH_SIZE + config_forage.BATCH_SIZE
+    NUM_ENVS = 32 * 132 #config.NUM_ENVS + config_forage.NUM_ENVS
+    BATCH_SIZE = NUM_ENVS * config.NUM_STEPS #config.BATCH_SIZE + config_forage.BATCH_SIZE
 
     obs = torch.zeros((config.NUM_STEPS, NUM_ENVS) + envs.observation_space.shape)
     actions = torch.zeros((config.NUM_STEPS, NUM_ENVS) + (config.NUM_ARGUMENTS,))
