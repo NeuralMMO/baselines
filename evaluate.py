@@ -1,6 +1,9 @@
 from pdb import set_trace as T
 import numpy as np
 
+import sys
+import os
+
 from tqdm import tqdm
 from collections import defaultdict
 
@@ -117,7 +120,9 @@ if __name__ == '__main__':
 
     model  = 'models/model_randnent_642m.pt'
     device = 'cuda:0'
-    Config.NUM_CPUS = 20
+
+    # Most GPUs should be able to handle 16 parallel envs
+    Config.NUM_CPUS = min(16, os.cpu_count())
 
     # Training currently sets a lower horizon for mem constraints
     Config.HORIZON = 1024
@@ -129,7 +134,8 @@ if __name__ == '__main__':
     # Config.RENDER = True # Uncomment to render -- don't delete the check
     # The param is required by the env to generate packets
     # Open the Unity client separately (this just starts the render server)
-    if Config.RENDER:
+    if sys.argv[1] == 'render':
+        Config.RENDER=True
         evaluator.render()
 
     # Runs evaluations forever
