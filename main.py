@@ -27,13 +27,10 @@ from neural import policy, io, subnets
 # Switch for Debug mode (fast, low hardware usage)
 if len(sys.argv) == 2 and sys.argv[1] == 'debug':
     from config.cleanrl import DebugEval as Eval
-    from config.cleanrl import Debug as TrainCombat
-    TrainForage = TrainCombat
+    from config.cleanrl import Debug as Train
 else:
     from config.cleanrl import Eval
-    from config.cleanrl import Train as TrainCombat
-    from config.cleanrl import TrainForage
-
+    from config.cleanrl import Train
 
 class Agent(nn.Module):
     def __init__(self, config):
@@ -120,8 +117,7 @@ class Agent(nn.Module):
 
 
 if __name__ == "__main__":
-    config        = TrainCombat()
-    config_forage = TrainForage()
+    config        = Train()
     eval_config   = Eval()
 
     # WanDB integration                                                       
@@ -156,7 +152,25 @@ if __name__ == "__main__":
     # actually maintaining all the same internal complexity. For now, just pass it a config
     # Note that it relies on config.NUM_CPUS and config.NENT to define scale
     #envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
-    envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, Eval])
+    def make_subenv_config(nent):
+        class TrainSubenv(Train):
+            NUM_CPUS = 1
+            NENT = nent
+        return TrainSubenv
+
+    env_configs = []
+
+    # Agent increment per env (i.e. 4, 8, ..., 128)
+    step = config.NENT / config.NUM_CPUS
+    assert step == int(step)
+    step = int(step)
+
+    NUM_ENVS = config.NUM_CPUS * (config.NENT + step) #Number of training envs
+    for core in range(config.NUM_CPUS):
+        env_configs.append(make_subenv_config(step*(core+1)))
+        env_configs.append(make_subenv_config(step*(config.NUM_CPUS - core)))
+    env_configs.append(Eval)
+    envs = nmmo.integrations.cleanrl_vec_envs(env_configs)
 
     agent = Agent(config)
     if config.CUDA:
@@ -167,8 +181,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
     # ALGO Logic: Storage setup
-    NUM_ENVS = 32 * 132 #config.NUM_ENVS + config_forage.NUM_ENVS
-    BATCH_SIZE = NUM_ENVS * config.NUM_STEPS #config.BATCH_SIZE + config_forage.BATCH_SIZE
+    BATCH_SIZE = NUM_ENVS * config.NUM_STEPS
 
     obs = torch.zeros((config.NUM_STEPS, NUM_ENVS) + envs.observation_space.shape)
     actions = torch.zeros((config.NUM_STEPS, NUM_ENVS) + (config.NUM_ARGUMENTS,))

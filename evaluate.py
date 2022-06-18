@@ -115,9 +115,12 @@ if __name__ == '__main__':
     from config.cleanrl import Eval as Config
     from main import Agent
 
-    model  = 'model_spawnprotect_197m.pt'
-    device = 'cuda:1'
+    model  = 'models/model_randnent_642m.pt'
+    device = 'cuda:0'
     Config.NUM_CPUS = 20
+
+    # Training currently sets a lower horizon for mem constraints
+    Config.HORIZON = 1024
 
     state_dict = torch.load(model, map_location=device)
     evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)
