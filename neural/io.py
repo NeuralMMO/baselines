@@ -40,6 +40,9 @@ class Input(nn.Module):
       self.embeddings = nn.ModuleDict()
       self.attributes = nn.ModuleDict()
 
+      # TODO: Remove setup hack
+      nmmo.Action.edges(config)
+
       for _, entity in nmmo.Serialized:
          continuous = len([e for e in entity if e[1].CONTINUOUS])
          discrete   = len([e for e in entity if e[1].DISCRETE])
@@ -51,7 +54,8 @@ class Input(nn.Module):
       
       #TODO: implement obs scaling in a less hackey place
       self.register_buffer('tileWeight', torch.Tensor([1.0, 0.0, 0.02, 0.02]))
-      self.register_buffer('entWeight', torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.00, 0.02, 0.02, 0.1, 0.01, 0.1, 0.1, 0.1, 0.3]))
+      self.register_buffer('entWeight', torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]))
+      self.register_buffer('itemWeight', torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0]))
 
    def forward(self, inp):
       '''Produces tensor representations from an IO object
@@ -115,8 +119,14 @@ class Output(nn.Module):
                idxs  = [e.idx for e in arg.edges]
                cands = self.arg.weight[idxs]
                cands = cands.repeat(batch, 1, 1)
-            else:
+            elif atn == nmmo.action.Attack:
                cands = lookup['Entity']
+               lens  = lookup['N']
+            elif atn in (nmmo.action.Sell, nmmo.action.Use):
+               cands = lookup['Item']
+               lens  = lookup['N']
+            elif atn == nmmo.action.Buy:
+               cands = lookup['Market']
                lens  = lookup['N']
 
             logits         = self.net(obs, cands, lens)

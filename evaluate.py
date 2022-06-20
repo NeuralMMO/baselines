@@ -21,7 +21,7 @@ class Policy:
         self.config = config
         self.device = device
 
-        batch = config.NENT
+        batch = config.PLAYER_N
 
         # Set initial state for recurrent models
         self.state = None
@@ -49,11 +49,11 @@ class Evaluator:
         self.config = config
 
         # Generate maps once at the start
-        if config.FORCE_MAP_GENERATION:
+        if config.MAP_FORCE_GENERATION:
             nmmo.MapGenerator(self.config).generate_all_maps()
-            config.FORCE_MAP_GENERATION = False
+            config.MAP_FORCE_GENERATION = False
 
-        self.ratings = nmmo.OpenSkillRating(config.AGENTS, baselines.Combat)
+        self.ratings = nmmo.OpenSkillRating(config.PLAYERS, baselines.Combat)
 
         # Load ratings
         if rating_stats:
@@ -78,9 +78,11 @@ class Evaluator:
     def stats(self):
         return {p.__name__: int(r.mu) for p, r in self.ratings.ratings.items()}
 
-    def evaluate(self):
+    def evaluate(self, print_ratings=True):
         config = self.config
         obs    = self.envs.reset()
+
+        from tqdm import tqdm
         for i in tqdm(range(config.HORIZON)):
             with torch.no_grad():
                 actions = self.policy.compute_action(obs)
@@ -94,6 +96,9 @@ class Evaluator:
                 ratings = self.ratings.update(
                         policy_ids=stats['PolicyID'],
                         scores=stats['Task_Reward']) 
+
+                if print_ratings:
+                    print(self)
 
         return self.stats
 

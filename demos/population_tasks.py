@@ -41,8 +41,8 @@ class PopulationTaskEnv(rllib_wrapper.RLlibEnv):
 
 
 class PopulationTaskConfig(baselines.Medium):
-    RESTORE   = False
-    NPOLICIES = 4
+    RESTORE = False
+    PLAYERS = 4 * [nmmo.Agent]
 
 
 if __name__ == '__main__':

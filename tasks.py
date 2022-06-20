@@ -13,13 +13,25 @@ def player_kills(realm, player):
     return player.history.playerKills
 
 def equipment(realm, player):
-    return player.loadout.defense
+    return player.equipment.total(lambda e: e.level)
 
 def exploration(realm, player):
     return player.history.exploration
 
 def foraging(realm, player):
-    return (player.skills.fishing.level + player.skills.hunting.level) / 2.0
+    return max(
+            player.skills.fishing.level.val,
+            player.skills.herbalism.level.val,
+            player.skills.prospecting.level.val,
+            player.skills.carving.level.val,
+            player.skills.alchemy.level.val)
+
+def combat(realm, player):
+    return max(
+            player.skills.mage.level.val,
+            player.skills.range.level.val,
+            player.skills.melee.level.val)
+
 
 PlayerKills = [
         Task(player_kills, 1, Tier.EASY),
@@ -37,8 +49,13 @@ Exploration = [
         Task(exploration, 127, Tier.HARD)]
 
 Foraging = [
-        Task(foraging, 20, Tier.EASY),
-        Task(foraging, 35, Tier.NORMAL),
-        Task(foraging, 50, Tier.HARD)]
+        Task(foraging, 3, Tier.EASY),
+        Task(foraging, 5, Tier.NORMAL),
+        Task(foraging, 10, Tier.HARD)]
+
+Combat  = [
+        Task(combat, 3, Tier.EASY),
+        Task(combat, 5, Tier.NORMAL),
+        Task(combat, 10, Tier.HARD)]
 
 All = PlayerKills + Equipment + Exploration + Foraging
