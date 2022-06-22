@@ -1,21 +1,23 @@
 from pdb import set_trace as T
+import os
 
 import nmmo
 
 from config.bases import Base, make_eval_config
+from scripted import baselines
 
 
 class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     @property
     def NUM_ENVS(self):
-        return self.NUM_CPUS * self.NENT
+        return self.NUM_CPUS * self.PLAYER_N
 
     @property
     def BATCH_SIZE(self):
         return int(self.NUM_ENVS * self.NUM_STEPS)
 
     # Hardcoded for now: number of args to predict
-    NUM_ARGUMENTS = 3
+    NUM_ARGUMENTS = 8
     COMBAT = True
 
     EXP_NAME                = 'CleanRL'
@@ -50,10 +52,24 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     VF_COEF                 = 1.0
     MAX_GRAD_NORM           = 0.5
 
-class TrainForage(Train):
-    COMBAT = False
+class Eval(Train):
+    SPECIALIZE = True
 
-Eval = make_eval_config(Train)
+    PLAYERS = [
+        baselines.Meander,
+        baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver, baselines.Alchemist,
+        baselines.Melee, baselines.Range, baselines.Mage] + [nmmo.Agent] * 7
+
+    NUM_CPUS = 4
+
+    TERRAIN_FLIP_SEED = True
+    RESPAWN = False
+
+    @property
+    def PATH_MAPS(self):
+        return os.path.join(super().PATH_MAPS, 'evaluation')
+
+    MAP_N = 32
 
 
 class Debug(Train):
@@ -65,4 +81,5 @@ class Debug(Train):
     NUM_STEPS               = 1
     CUDA                    = {}
 
-DebugEval = make_eval_config(Debug)
+class DebugEval(Debug, Eval):
+    pass

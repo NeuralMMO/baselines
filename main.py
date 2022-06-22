@@ -146,29 +146,28 @@ if __name__ == "__main__":
     torch.manual_seed(config.SEED)
     torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
 
-    # Create environment and agents -- DISABLE EVAL FOR NOW DUE TO SS BUG
     # This is part of the new (not yet documented) integrations API that makes NMMO
     # look like a simple environment from the perspective of infra frameworks while
     # actually maintaining all the same internal complexity. For now, just pass it a config
-    # Note that it relies on config.NUM_CPUS and config.NENT to define scale
-    #envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
-    def make_subenv_config(nent):
-        class TrainSubenv(Train):
-            NUM_CPUS = 1
-            NENT = nent
-        return TrainSubenv
-
-    env_configs = []
-
+    # Note that it relies on config.NUM_CPUS and config.PLAYER_N to define scale
     # Agent increment per env (i.e. 4, 8, ..., 128)
-    step = config.NENT / config.NUM_CPUS
+    step = config.PLAYER_N / config.NUM_CPUS
     assert step == int(step)
     step = int(step)
+    env_configs = []
+    NUM_ENVS = config.NUM_CPUS * (config.PLAYER_N + step) #Number of training envs
 
-    NUM_ENVS = config.NUM_CPUS * (config.NENT + step) #Number of training envs
+    # Gross hack to make all the env templates picklable
     for core in range(config.NUM_CPUS):
-        env_configs.append(make_subenv_config(step*(core+1)))
-        env_configs.append(make_subenv_config(step*(config.NUM_CPUS - core)))
+        n1 = f'TrainSubenv_{core}_1',
+        n2 = f'TrainSubenv_{core}_1',
+
+        env_configs.append(type(n1, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(core+1)}))
+        env_configs.append(type(n2, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(config.NUM_CPUS - core)}))
+
+        globals()[n1] = env_configs[-2]
+        globals()[n2] = env_configs[-1]
+
     env_configs.append(Eval)
     envs = nmmo.integrations.cleanrl_vec_envs(env_configs)
 
@@ -176,7 +175,7 @@ if __name__ == "__main__":
     if config.CUDA:
         agent = torch.nn.DataParallel(agent.cuda(), device_ids=config.CUDA)
 
-    ratings = nmmo.OpenSkillRating(eval_config.AGENTS, baselines.Combat)
+    ratings = nmmo.OpenSkillRating(eval_config.PLAYERS, baselines.Combat)
 
     optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
     
@@ -300,7 +299,7 @@ if __name__ == "__main__":
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (TrainCombat.NUM_ARGUMENTS,))
+        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
