@@ -151,7 +151,6 @@ if __name__ == "__main__":
     # look like a simple environment from the perspective of infra frameworks while
     # actually maintaining all the same internal complexity. For now, just pass it a config
     # Note that it relies on config.NUM_CPUS and config.NENT to define scale
-    #envs = nmmo.integrations.cleanrl_vec_envs([TrainCombat, TrainForage, Eval])
     def make_subenv_config(nent):
         class TrainSubenv(Train):
             NUM_CPUS = 1
@@ -300,7 +299,7 @@ if __name__ == "__main__":
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (TrainCombat.NUM_ARGUMENTS,))
+        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
         b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
