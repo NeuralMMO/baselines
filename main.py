@@ -159,8 +159,8 @@ if __name__ == "__main__":
 
     # Gross hack to make all the env templates picklable
     for core in range(config.NUM_CPUS):
-        n1 = f'TrainSubenv_{core}_1',
-        n2 = f'TrainSubenv_{core}_1',
+        n1 = f'TrainSubenv_{core}_1'
+        n2 = f'TrainSubenv_{core}_1'
 
         env_configs.append(type(n1, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(core+1)}))
         env_configs.append(type(n2, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(config.NUM_CPUS - core)}))

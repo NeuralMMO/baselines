@@ -271,9 +271,12 @@ class Scripted(nmmo.Agent):
             if cls in self.best_items and cls in keep_best and itm.instance == self.best_items[cls].instance:
                 continue
 
-            self.actions[Action.Sell] = {
-               Action.Item: itm.instance,
-               Action.Price: Action.Price.edges[int(price)]}
+            try:
+                self.actions[Action.Sell] = {
+                     Action.Item: itm.instance,
+                     Action.Price: Action.Price.edges[int(price)]}
+            except:
+                print('PRICE: ', price)
 
             return itm
 

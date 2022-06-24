@@ -45,10 +45,10 @@ class Simple(nn.Module):
       self.config = config
       h = config.HIDDEN
 
-      self.ent    = nn.Linear(2*h, h)
-      self.conv   = nn.Conv2d(h, h, 3)
+      self.ent    = nn.Linear(2*config.EMBED, config.EMBED)
+      self.conv   = nn.Conv2d(config.EMBED, config.EMBED, 3)
       self.pool   = nn.MaxPool2d(2)
-      self.fc     = nn.Linear(h*6*6, h)
+      self.fc     = nn.Linear(config.EMBED*6*6, h)
 
       self.proj   = nn.Linear(2*h, h)
       self.attend = subnets.SelfAttention(config.EMBED, h)

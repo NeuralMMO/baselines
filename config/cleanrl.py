@@ -3,7 +3,7 @@ import os
 
 import nmmo
 
-from config.bases import Base, make_eval_config
+from config.bases import Base
 from scripted import baselines
 
 
@@ -31,11 +31,11 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     TOTAL_TIMESTEPS         = 1_000_000_000
     CUDA                    = [0]
-    NUM_CPUS                = 32
+    NUM_CPUS                = 8
 
     HORIZON                 = 512
     NUM_STEPS               = 512
-    NUM_MINIBATCHES         = 528
+    NUM_MINIBATCHES         = 576 #544
     LEARNING_RATE           = 5e-5
     UPDATE_EPOCHS           = 1
 
