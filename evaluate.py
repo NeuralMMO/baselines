@@ -124,17 +124,18 @@ if __name__ == '__main__':
     from main import Agent
 
     model  = 'models/model_randnent_642m.pt'
-    device = 'cuda:0'
+    device = 'cpu'
 
     # Most GPUs should be able to handle 16 parallel envs
     Config.NUM_CPUS = min(16, os.cpu_count())
 
     # Training currently sets a lower horizon for mem constraints
     Config.HORIZON = 1024
+    Config.MAP_FORCE_GENERATION = True
 
-    state_dict = torch.load(model, map_location=device)
+    #state_dict = torch.load(model, map_location=device)
     evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)
-    evaluator.load_model(state_dict)
+    #evaluator.load_model(state_dict)
 
     # Config.RENDER = True # Uncomment to render -- don't delete the check
     # The param is required by the env to generate packets

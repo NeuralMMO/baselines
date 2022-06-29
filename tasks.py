@@ -35,27 +35,27 @@ def combat(realm, player):
 
 PlayerKills = [
         Task(player_kills, 1, Tier.EASY),
-        Task(player_kills, 3, Tier.NORMAL),
-        Task(player_kills, 6, Tier.HARD)]
+        Task(player_kills, 2, Tier.NORMAL),
+        Task(player_kills, 3, Tier.HARD)]
 
 Equipment = [
         Task(equipment, 1,  Tier.EASY),
-        Task(equipment, 10, Tier.NORMAL),
-        Task(equipment, 20, Tier.HARD)]
+        Task(equipment, 5, Tier.NORMAL),
+        Task(equipment, 10, Tier.HARD)]
 
 Exploration = [
-        Task(exploration, 32,  Tier.EASY),
-        Task(exploration, 64,  Tier.NORMAL),
-        Task(exploration, 127, Tier.HARD)]
+        Task(exploration, 16,  Tier.EASY),
+        Task(exploration, 32,  Tier.NORMAL),
+        Task(exploration, 64, Tier.HARD)]
 
 Foraging = [
-        Task(foraging, 3, Tier.EASY),
-        Task(foraging, 5, Tier.NORMAL),
-        Task(foraging, 10, Tier.HARD)]
+        Task(foraging, 2, Tier.EASY),
+        Task(foraging, 3, Tier.NORMAL),
+        Task(foraging, 4, Tier.HARD)]
 
 Combat  = [
-        Task(combat, 3, Tier.EASY),
-        Task(combat, 5, Tier.NORMAL),
-        Task(combat, 10, Tier.HARD)]
+        Task(combat, 2, Tier.EASY),
+        Task(combat, 3, Tier.NORMAL),
+        Task(combat, 4, Tier.HARD)]
 
 All = PlayerKills + Equipment + Exploration + Foraging

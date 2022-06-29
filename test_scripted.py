@@ -2,6 +2,7 @@ from pdb import set_trace as T
 import numpy as np
 
 import os
+import ray
 from tqdm import tqdm
 
 import nmmo
@@ -111,7 +112,7 @@ def plots(all_stats):
         key = key.split('_')[-1]
 
         if idx == 0:
-            vals = np.array(vals) / 65000
+            vals = np.array(vals) / 2560
             vals = vals.tolist()
 
         axs[idx].plot(x, vals, label=key)
@@ -183,39 +184,41 @@ def plot_combined():
     fig.align_ylabels()
     plt.savefig(f'{SAVE_TO}.pdf')
     
+@ray.remote
 def test_scripted():
-    all_stats = []
-    for trial in range(TRIALS):
-        conf = MediumAllSystems()
-        conf.SPECIALIZE = SAVE_TO == 'specialist'
-        conf.LOG_FILE   = f'{SAVE_TO}.txt'
+    conf = MediumAllSystems()
+    conf.SPECIALIZE = SAVE_TO == 'specialist'
+    conf.LOG_FILE   = f'{SAVE_TO}.txt'
 
-        env  = Env(conf)
-        env.reset()
+    env  = Env(conf)
+    env.reset()
 
-        for i in tqdm(range(HORIZON)):
-            #env.render()
-            env.step({})
+    for i in range(HORIZON):
+        #env.render()
+        env.step({})
 
-        logs  = env.terminal()
-        stats = logs['Player']
+    logs  = env.terminal()
+    stats = logs['Player']
 
-        for key, vals in stats.items():
-            print(f'{key}: {min(vals)}, {np.mean(vals)}, {max(vals)}')
+    for key, vals in stats.items():
+        print(f'{key}: {min(vals)}, {np.mean(vals)}, {max(vals)}')
 
-        all_stats.append(logs['Env'])
+    return logs['Env']
 
-    np.save(f'{SAVE_TO}.npy', all_stats)
-
-    plots(all_stats)
-    
+   
 
 if __name__ == '__main__':
-    TRIALS  = 10
+    TRIALS  = 8
     HORIZON = 1000
 
-    SAVE_TO = 'combined'
+    SAVE_TO = 'specialist'
 
     #plot_combined()
 
-    test_scripted()
+    all_stats = []
+    for i in range(TRIALS):
+        all_stats.append(test_scripted.remote())
+    all_stats = ray.get(all_stats)
+    np.save(f'{SAVE_TO}.npy', all_stats)
+
+    plots(all_stats)
