@@ -279,8 +279,11 @@ class Scripted(nmmo.Agent):
 
     def buy(self, buy_k: dict, buy_upgrade: set):
         purchase = None
-        for cls, itm in self.best_heuristic.items():
+        best = list(self.best_heuristic.items())
+        random.shuffle(best)
+        for cls, itm in best:
             #Buy top k
+
             if cls in buy_k:
                 owned = self.item_counts[cls]
                 k     = buy_k[cls]
@@ -296,23 +299,20 @@ class Scripted(nmmo.Agent):
                 continue
 
             #Buy best heuristic upgrade
-            purchase = itm
+            self.actions[Action.Buy] = {
+                    Action.Item: itm.instance}
 
-        if purchase is None:
-            return
- 
-        self.actions[Action.Buy] = {
-           Action.Item: purchase.instance}
-
-        return purchase
+            #if cls in (item.Hat, item.Top, item.Bottom):
+            #    T()
+            return itm
 
     def exchange(self):
         if not self.config.EXCHANGE_SYSTEM_ENABLED:
             return
 
         self.process_market()
-        if not self.sell(keep_k=self.supplies, keep_best=self.wishlist):
-            self.buy(buy_k=self.supplies, buy_upgrade=self.wishlist)
+        self.sell(keep_k=self.supplies, keep_best=self.wishlist)
+        self.buy(buy_k=self.supplies, buy_upgrade=self.wishlist)
 
     def use(self):
         self.process_inventory()
@@ -347,7 +347,10 @@ class Scripted(nmmo.Agent):
         self.alchemy     = scripting.Observation.attribute(agent, Serialized.Entity.Alchemy)
 
         #Combat level
-        self.level       = max(self.melee, self.range, self.mage)
+        # TODO: Get this from agent properties
+        self.level       = max(self.melee, self.range, self.mage,
+                               self.fishing, self.herbalism,
+                               self.prospecting, self.carving, self.alchemy)
  
         self.skills = {
               skill.Melee: self.melee,
@@ -413,7 +416,7 @@ class Combat(Scripted):
 
     @property
     def wishlist(self):
-        return {item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
+        return {self.ammo, item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
 
     def __call__(self, obs):
         super().__call__(obs)

@@ -65,6 +65,9 @@ class Env(nmmo.Env):
     def log_env(self):
         quill  = self.realm.quill
 
+        if len(self.realm.players) == 0:
+            return 
+
         quill.log_env('Skill_Mage', self.max(lambda e: e.skills.mage.exp))
         quill.log_env('Skill_Range', self.max(lambda e: e.skills.range.exp))
         quill.log_env('Skill_Melee', self.max(lambda e: e.skills.melee.exp))
