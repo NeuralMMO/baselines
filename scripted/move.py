@@ -53,9 +53,6 @@ def meander(config, ob, actions):
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
-   r = nmmo.scripting.Observation.attribute(agent, Entity.R)
-   c = nmmo.scripting.Observation.attribute(agent, Entity.C)
-
    cands = []
    if vacant(ob.tile(-1, 0)):
       cands.append((-1, 0))
@@ -77,10 +74,6 @@ def explore(config, ob, actions, spawnR, spawnC):
    sz     = config.MAP_SIZE
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
-
-   agent  = ob.agent
-   r      = nmmo.scripting.Observation.attribute(agent, Entity.R)
-   c      = nmmo.scripting.Observation.attribute(agent, Entity.C)
 
    centR, centC = sz//2, sz//2
    vR, vC = centR-spawnR, centC-spawnC
@@ -172,7 +165,6 @@ def forageDijkstra(config, ob, actions, food_max, water_max, cutoff=100):
 
    while goal in backtrace and backtrace[goal] != start:
       goal = backtrace[goal]
-
    direction = towards(goal)
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
@@ -240,7 +232,7 @@ def gatherBFS(config, ob, actions, resource, cutoff=100):
             matl     = nmmo.scripting.Observation.attribute(tile, Tile.Index)
             occupied = nmmo.scripting.Observation.attribute(tile, Tile.NEnts)
 
-            if resource.index == material.Fish.index == matl:
+            if material.Fish in resource and material.Fish.index == matl:
                 found = nxt
                 backtrace[nxt] = cur
                 break
@@ -248,7 +240,7 @@ def gatherBFS(config, ob, actions, resource, cutoff=100):
             if not vacant(tile):
                 continue
 
-            if matl == resource.index:
+            if matl in (e.index for e in resource):
                 found = nxt
                 backtrace[nxt] = cur
                 break

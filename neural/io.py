@@ -47,19 +47,15 @@ class Input(nn.Module):
          continuous = len([e for e in entity if e[1].CONTINUOUS])
          discrete   = len([e for e in entity if e[1].DISCRETE])
          self.attributes[entity.__name__] = nn.Linear(
-               (continuous+discrete)*config.HIDDEN, config.HIDDEN)
+               (continuous+discrete)*config.EMBED, config.EMBED)
          self.embeddings[entity.__name__] = embeddings(
                continuous=continuous, discrete=4096, config=config)
-
       
       #TODO: implement obs scaling in a less hackey place
-      self.tileWeight = torch.Tensor([1.0, 0.0, 0.02, 0.02])
-      self.entWeight  = torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+      self.register_buffer('tileWeight', torch.Tensor([1.0, 0.0, 0.02, 0.02]))
+      self.register_buffer('entWeight', torch.Tensor([1.0, 0.0, 0.0, 0.05, 0.05, 0.0, 0.0, 0.02, 0.02, 0.1, 0.01, 0.1, 0.01, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]))
+      self.register_buffer('itemWeight', torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0]))
       self.itemWeight = torch.Tensor([0.0, 0.0, 0.1, 0.025, 0.025, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.02, 1.0])
-
-      if torch.cuda.is_available():
-          self.tileWeight = self.tileWeight.cuda()
-          self.entWeight  = self.entWeight.cuda()
 
    def forward(self, inp):
       '''Produces tensor representations from an IO object
@@ -74,7 +70,6 @@ class Input(nn.Module):
       #Pack entities of each attribute set
       entityLookup = {}
 
-      device                       = inp['Tile']['Continuous'].device
       inp['Tile']['Continuous']   *= self.tileWeight
       inp['Entity']['Continuous'] *= self.entWeight
  
@@ -99,9 +94,12 @@ class Output(nn.Module):
       '''
       super().__init__()
       self.config = config
-      self.h = config.HIDDEN
+      self.h = config.EMBED
 
-      self.net = DiscreteAction(self.config, self.h, self.h)
+      self.proj = None
+      if config.HIDDEN != config.EMBED:
+          self.proj = nn.Linear(config.HIDDEN, config.EMBED)
+      self.net = DiscreteAction(self.config, self.h)
       self.arg = nn.Embedding(nmmo.Action.n, self.h)
 
    def names(self, nameMap, args):
@@ -115,6 +113,9 @@ class Output(nn.Module):
          obs    : An IO object specifying observations
          lookup : A fixed size representation of each entity
       ''' 
+      if self.proj:
+         obs = self.proj(obs)
+
       rets = defaultdict(dict)
       for atn in nmmo.Action.edges(self.config):
          for arg in atn.edges:
@@ -146,7 +147,7 @@ class Action(nn.Module):
 class DiscreteAction(Action):
    '''Head for making a discrete selection from
    a variable number of candidate actions'''
-   def __init__(self, config, xdim, h):
+   def __init__(self, config, h):
       super().__init__()
       self.net = subnets.DotReluBlock(h)
 

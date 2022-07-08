@@ -21,7 +21,7 @@ def simulate(env, config, render=False, horizon=float('inf')):
             env.render()
 
         # Scripted API computes actions
-        obs, rewards, dones, infos = env.step(actions={})
+        obs, rewards, dones, infos = env.step({})
 
         # Later examples will use a fixed horizon
         t += 1
@@ -45,6 +45,12 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
 
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
+
+    #Enable rendering
+    RENDER = True
+
+    #Force terrain generation -- avoids unexpected behavior from caching
+    FORCE_MAP_GENERATION = True
 
 
 if __name__ == '__main__':

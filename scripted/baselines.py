@@ -1,6 +1,7 @@
 from pdb import set_trace as T
 from collections import defaultdict
 import numpy as np
+import random
 
 import nmmo
 from nmmo import scripting, material, Serialized
@@ -82,19 +83,8 @@ class Scripted(nmmo.Agent):
         '''Attack the current target'''
         if self.target is not None:
            assert self.targetID is not None
-           attack.target(self.config, self.actions, self.style, self.targetID)
-
-    def select_combat_style(self):
-       '''Select a combat style based on distance from the current target'''
-       if self.target is None:
-          return
-
-       if self.targetDist <= self.config.COMBAT_MELEE_REACH:
-          self.style = Action.Melee
-       elif self.targetDist <= self.config.COMBAT_RANGE_REACH:
-          self.style = Action.Range
-       else:
-          self.style = Action.Mage
+           style = random.choice(self.style)
+           attack.target(self.config, self.actions, style, self.targetID)
 
     def target_weak(self):
         '''Target the nearest agent if it is weak'''
@@ -282,14 +272,16 @@ class Scripted(nmmo.Agent):
                 continue
 
             self.actions[Action.Sell] = {
-               Action.Item: itm.instance,
-               Action.Price: Action.Price.edges[int(price)]}
+                Action.Item: itm.instance,
+                Action.Price: int(price)}
 
             return itm
 
     def buy(self, buy_k: dict, buy_upgrade: set):
         purchase = None
-        for cls, itm in self.best_heuristic.items():
+        best = list(self.best_heuristic.items())
+        random.shuffle(best)
+        for cls, itm in best:
             #Buy top k
             if cls in buy_k:
                 owned = self.item_counts[cls]
@@ -306,23 +298,18 @@ class Scripted(nmmo.Agent):
                 continue
 
             #Buy best heuristic upgrade
-            purchase = itm
+            self.actions[Action.Buy] = {
+                    Action.Item: itm.instance}
 
-        if purchase is None:
-            return
- 
-        self.actions[Action.Buy] = {
-           Action.Item: purchase.instance}
-
-        return purchase
+            return itm
 
     def exchange(self):
         if not self.config.EXCHANGE_SYSTEM_ENABLED:
             return
 
         self.process_market()
-        if not self.sell(keep_k=self.supplies, keep_best=self.wishlist):
-            self.buy(buy_k=self.supplies, buy_upgrade=self.wishlist)
+        self.sell(keep_k=self.supplies, keep_best=self.wishlist)
+        self.buy(buy_k=self.supplies, buy_upgrade=self.wishlist)
 
     def use(self):
         self.process_inventory()
@@ -357,7 +344,10 @@ class Scripted(nmmo.Agent):
         self.alchemy     = scripting.Observation.attribute(agent, Serialized.Entity.Alchemy)
 
         #Combat level
-        self.level       = max(self.melee, self.range, self.mage)
+        # TODO: Get this from agent properties
+        self.level       = max(self.melee, self.range, self.mage,
+                               self.fishing, self.herbalism,
+                               self.prospecting, self.carving, self.alchemy)
  
         self.skills = {
               skill.Melee: self.melee,
@@ -413,13 +403,17 @@ class Forage(Scripted):
 
 class Combat(Scripted):
     '''Forages, fights, and explores'''
+    def __init__(self, config, idx):
+        super().__init__(config, idx)
+        self.style  = [Action.Melee, Action.Range, Action.Mage]
+
     @property
     def supplies(self):
         return {item.Ration: 2, item.Poultice: 2, self.ammo: 10}
 
     @property
     def wishlist(self):
-        return {item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
+        return {self.ammo, item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
 
     def __call__(self, obs):
         super().__call__(obs)
@@ -433,6 +427,10 @@ class Combat(Scripted):
 
 class Gather(Scripted):
     '''Forages, fights, and explores'''
+    def __init__(self, config, idx):
+        super().__init__(config, idx)
+        self.resource = [material.Fish, material.Herb, material.Ore, material.Tree, material.Crystal]
+
     @property
     def supplies(self):
         return {item.Ration: 2, item.Poultice: 2}
@@ -456,52 +454,58 @@ class Gather(Scripted):
 class Fisher(Gather):
     def __init__(self, config, idx):
         super().__init__(config, idx)
-        self.resource = material.Fish
+        if config.SPECIALIZE:
+            self.resource = [material.Fish]
         self.tool     = item.Rod
 
 class Herbalist(Gather):
     def __init__(self, config, idx):
         super().__init__(config, idx)
-        self.resource = material.Herb
+        if config.SPECIALIZE:
+            self.resource = [material.Herb]
         self.tool     = item.Gloves
 
 class Prospector(Gather):
     def __init__(self, config, idx):
         super().__init__(config, idx)
-        self.resource = material.Ore
+        if config.SPECIALIZE:
+            self.resource = [material.Ore]
         self.tool     = item.Pickaxe
 
 class Carver(Gather):
     def __init__(self, config, idx):
         super().__init__(config, idx)
-        self.resource = material.Tree
+        if config.SPECIALIZE:
+            self.resource = [material.Tree]
         self.tool     = item.Chisel
 
 class Alchemist(Gather):
     def __init__(self, config, idx):
         super().__init__(config, idx)
-        self.resource = material.Crystal
+        if config.SPECIALIZE:
+            self.resource = [material.Crystal]
         self.tool     = item.Arcane
 
 class Melee(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
+        if config.SPECIALIZE:
+            self.style  = [Action.Melee]
         self.weapon = item.Sword
-        self.style  = Action.Melee
         self.ammo   = item.Scrap
 
 class Range(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
+        if config.SPECIALIZE:
+            self.style  = [Action.Range]
         self.weapon = item.Bow
-        self.style  = Action.Range
         self.ammo   = item.Shaving
 
 class Mage(Combat):
     def __init__(self, config, idx):
         super().__init__(config, idx)
+        if config.SPECIALIZE:
+            self.style  = [Action.Mage]
         self.weapon = item.Wand
-        self.style  = Action.Mage
         self.ammo   = item.Shard
-
-

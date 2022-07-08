@@ -57,7 +57,7 @@ def get_config(name):
         raise
 
 def summary(logs):
-    stats = logs['Stats']
+    stats = logs['Player']
 
     for key, vals in stats.items():
         print(f'{key}: {min(vals)}, {np.mean(vals)}, {max(vals)}')

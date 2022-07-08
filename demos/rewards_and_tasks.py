@@ -28,6 +28,7 @@ class PlayerKillRewardEnv(nmmo.Env, nmmo.config.Combat):
         # Only reward for new kills
         if kills > player.kills:
             reward += 0.1 * (kills - player.kills)
+            player.kills = kills
 
         return reward, info
 
