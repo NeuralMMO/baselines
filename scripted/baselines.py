@@ -283,7 +283,6 @@ class Scripted(nmmo.Agent):
         random.shuffle(best)
         for cls, itm in best:
             #Buy top k
-
             if cls in buy_k:
                 owned = self.item_counts[cls]
                 k     = buy_k[cls]
@@ -302,8 +301,6 @@ class Scripted(nmmo.Agent):
             self.actions[Action.Buy] = {
                     Action.Item: itm.instance}
 
-            #if cls in (item.Hat, item.Top, item.Bottom):
-            #    T()
             return itm
 
     def exchange(self):
@@ -512,5 +509,3 @@ class Mage(Combat):
             self.style  = [Action.Mage]
         self.weapon = item.Wand
         self.ammo   = item.Shard
-
-

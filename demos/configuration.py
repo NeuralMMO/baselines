@@ -18,7 +18,7 @@ from scripted import baselines
 from demos import minimal
 
 
-class Base(nmmo.config.Medium):
+class Base(nmmo.config.Small):
     '''Base environment: empty map with agents'''
     PLAYERS = [baselines.Explore]
 
