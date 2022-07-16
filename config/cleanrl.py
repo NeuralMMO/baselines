@@ -9,6 +9,10 @@ from scripted import baselines
 
 class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
     @property
+    def PATH_MAPS(self):
+        return os.path.join(super().PATH_MAPS, 'training')
+
+    @property
     def NUM_ENVS(self):
         return self.NUM_CPUS * self.PLAYER_N
 
@@ -67,7 +71,7 @@ class Eval(Train):
 
     @property
     def PATH_MAPS(self):
-        return os.path.join(super().PATH_MAPS, 'evaluation')
+        return os.path.join(super().PATH_MAPS.strip('training'), 'evaluation')
 
     MAP_N = 32
 

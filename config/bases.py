@@ -8,10 +8,6 @@ from scripted import baselines
 import tasks
 
 class Base:
-   @property
-   def PATH_MAPS(self):
-      return os.path.join(super().PATH_MAPS, 'training')
-
    RESPAWN  = True
 
    PLAYERS = [nmmo.Agent]

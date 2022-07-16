@@ -61,6 +61,7 @@ class Evaluator:
                 r.sigma = sigma
                 r.mu    = mu
 
+        self.policy = None
         if torch_policy_cls:
             self.device  = device
             torch_policy = torch_policy_cls(config, *args).to(device)
@@ -82,10 +83,15 @@ class Evaluator:
         config = self.config
         obs    = self.envs.reset()
 
+        logs = []
+
         from tqdm import tqdm
         for i in tqdm(range(config.HORIZON)):
-            with torch.no_grad():
-                actions = self.policy.compute_action(obs)
+            actions = {}
+            if self.policy:
+                with torch.no_grad():
+                    actions = self.policy.compute_action(obs)
+
             obs, _, _, infos = self.envs.step(actions)
 
             for e in infos:
@@ -93,6 +99,8 @@ class Evaluator:
                     continue
 
                 stats = e['logs']
+                logs.append(stats)
+
                 ratings = self.ratings.update(
                         policy_ids=stats['PolicyID'],
                         scores=stats['Task_Reward']) 
@@ -100,7 +108,7 @@ class Evaluator:
                 if print_ratings:
                     print(self)
 
-        return self.stats
+        return logs 
 
     def render(self):
         env          = nmmo.integrations.CleanRLEnv(self.config)
@@ -123,8 +131,11 @@ if __name__ == '__main__':
     from config.cleanrl import Eval as Config
     from main import Agent
 
-    model  = 'models/model_randnent_642m.pt'
+    assert sys.argv[1], 'Provide path to trained model'
+    model  = sys.argv[1]
+
     device = 'cpu'
+    UPDATES = 8
 
     # Most GPUs should be able to handle 16 parallel envs
     Config.NUM_CPUS = min(16, os.cpu_count())
@@ -132,10 +143,12 @@ if __name__ == '__main__':
     # Training currently sets a lower horizon for mem constraints
     Config.HORIZON = 1024
     Config.MAP_FORCE_GENERATION = True
+    Config.MAP_N = 1
+    Config.SPECIALIZE = True
 
-    #state_dict = torch.load(model, map_location=device)
+    state_dict = torch.load(model, map_location=device)
     evaluator  = Evaluator(Config, Agent, num_cpus=Config.NUM_CPUS, device=device)
-    #evaluator.load_model(state_dict)
+    evaluator.load_model(state_dict)
 
     # Config.RENDER = True # Uncomment to render -- don't delete the check
     # The param is required by the env to generate packets
@@ -147,9 +160,11 @@ if __name__ == '__main__':
     # Runs evaluations forever
     # Less accurate at 100% win rate (slowly pushes SR apart forever)
     # Best used to determine if one policy is worse, better, or significantly better than another
-    while True:
-        evaluator.evaluate()
+    all_logs = []
+    for i in range(UPDATES):
+        all_logs += evaluator.evaluate()
         print(evaluator)
 
-        np.save('ratings.npy', evaluator.stats, allow_pickle=True)
+    np.save('ratings.npy', evaluator.stats, allow_pickle=True)
+    np.save('logs.npy', all_logs)
 
