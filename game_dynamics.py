@@ -84,15 +84,14 @@ if __name__ == '__main__':
     TRIALS  = 8
     HORIZON = 1000
 
-    SAVE_TO = 'logs.npy'
-
     conf = cleanrl.Eval()
     conf.PLAYERS = [
             baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver, baselines.Alchemist,
             baselines.Melee, baselines.Range, baselines.Mage]
     conf.MAP_N = TRIALS
-    conf.LOG_FILE = f'{SAVE_TO}.txt'
+    conf.LOG_FILE = 'env_logs.txt'
     conf.LOG_ENV = True
+    conf.LOG_EVENTS = True
 
     conf.MAP_FORCE_GENERATION = True
     nmmo.MapGenerator(conf).generate_all_maps()
@@ -104,6 +103,6 @@ if __name__ == '__main__':
         all_stats.append(remote)
 
     all_stats = ray.get(all_stats)
-    np.save(f'{SAVE_TO}.npy', all_stats)
+    np.save(f'logs.npy', all_stats)
 
     plot_wandb(all_stats)

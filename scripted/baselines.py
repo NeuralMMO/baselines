@@ -188,7 +188,7 @@ class Scripted(nmmo.Agent):
               assert isinstance(self.best_items[cls], Item), err
 
     def upgrade_heuristic(self, current_level, upgrade_level, price):
-        return (upgrade_level - current_level) / price
+        return (upgrade_level - current_level) / max(price, 1)
 
     def process_market(self):
         if not self.config.EXCHANGE_SYSTEM_ENABLED:
@@ -253,8 +253,8 @@ class Scripted(nmmo.Agent):
  
     def sell(self, keep_k: dict, keep_best: set):
         for itm in self.inventory:
-            price    = itm.level
-            cls      = itm.cls
+            price = itm.level
+            cls = itm.cls
 
             if cls == item.Gold:
                 continue
@@ -278,6 +278,9 @@ class Scripted(nmmo.Agent):
             return itm
 
     def buy(self, buy_k: dict, buy_upgrade: set):
+        if len(self.inventory) >= self.config.ITEM_INVENTORY_CAPACITY:
+            return
+
         purchase = None
         best = list(self.best_heuristic.items())
         random.shuffle(best)
@@ -413,7 +416,7 @@ class Combat(Scripted):
 
     @property
     def wishlist(self):
-        return {self.ammo, item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
+        return {item.Hat, item.Top, item.Bottom, self.weapon, self.ammo}
 
     def __call__(self, obs):
         super().__call__(obs)
