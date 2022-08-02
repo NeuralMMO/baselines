@@ -41,7 +41,11 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     # Meander: randomly wanders around
     # Forage: explicitly searches for food and water
     # Combat: forages and actively fights other agents
-    PLAYERS = [baselines.Meander, baselines.Forage, baselines.Range]
+    SPECIALIZE = True
+
+    PLAYERS = [
+            baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver, baselines.Alchemist,
+            baselines.Melee, baselines.Range, baselines.Mage]
 
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
@@ -50,7 +54,7 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     RENDER = True
 
     #Force terrain generation -- avoids unexpected behavior from caching
-    FORCE_MAP_GENERATION = True
+    MAP_FORCE_GENERATION = True
 
 
 if __name__ == '__main__':
