@@ -125,10 +125,10 @@ class Output(nn.Module):
                idxs  = [e.idx for e in arg.edges]
                cands = self.arg.weight[idxs]
                cands = cands.repeat(batch, 1, 1)
-            elif atn == nmmo.action.Attack:
+            elif arg == nmmo.action.Target:
                cands = lookup['Entity']
                lens  = lookup['N']
-            elif atn in (nmmo.action.Sell, nmmo.action.Use):
+            elif atn in (nmmo.action.Sell, nmmo.action.Use, nmmo.action.Give):
                cands = lookup['Item']
                lens  = lookup['N']
             elif atn == nmmo.action.Buy:

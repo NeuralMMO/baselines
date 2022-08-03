@@ -32,7 +32,7 @@ def simulate(env, config, render=False, horizon=float('inf')):
     return env.terminal()
 
 
-class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
+class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     '''Config objects subclass a nmmo.config.{Small, Medium, Large} template
 
     Can also specify config game systems to enable various features'''
@@ -46,6 +46,8 @@ class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
     PLAYERS = [
             baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver, baselines.Alchemist,
             baselines.Melee, baselines.Range, baselines.Mage]
+
+    PLAYER_N = 128
 
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
