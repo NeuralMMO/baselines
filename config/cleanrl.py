@@ -21,7 +21,7 @@ class Train(Base, nmmo.config.Medium, nmmo.config.AllGameSystems):
         return int(self.NUM_ENVS * self.NUM_STEPS)
 
     # Hardcoded for now: number of args to predict
-    NUM_ARGUMENTS = 10
+    NUM_ARGUMENTS = 8
     COMBAT = True
 
     EXP_NAME                = 'CleanRL'
