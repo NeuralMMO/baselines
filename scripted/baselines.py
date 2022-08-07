@@ -125,7 +125,9 @@ class Scripted(nmmo.Agent):
            self.evade()
            return
 
-        if self.forage_criterion or not explore:
+        if self.fog_criterion:
+           self.explore()
+        elif self.forage_criterion or not explore:
            self.forage()
         else:
            self.explore()
@@ -330,6 +332,9 @@ class Scripted(nmmo.Agent):
         self.ob = scripting.Observation(self.config, obs)
         agent   = self.ob.agent
 
+        # Time Alive
+        self.timeAlive = scripting.Observation.attribute(agent, Serialized.Entity.TimeAlive)
+
         #Resources
         self.health = scripting.Observation.attribute(agent, Serialized.Entity.Health)
         self.food   = scripting.Observation.attribute(agent, Serialized.Entity.Food)
@@ -366,6 +371,12 @@ class Scripted(nmmo.Agent):
             self.spawnR = scripting.Observation.attribute(agent, Serialized.Entity.R)
         if self.spawnC is None:
             self.spawnC = scripting.Observation.attribute(agent, Serialized.Entity.C)
+
+        # When to run from death fog in BR configs
+        self.fog_criterion = None
+        if self.config.PLAYER_DEATH_FOG is not None:
+            self.fog_criterion = self.timeAlive > self.config.PLAYER_DEATH_FOG - 64
+
 
 class Random(Scripted):
     '''Moves randomly'''
@@ -449,7 +460,7 @@ class Gather(Scripted):
 
         if self.forage_criterion:
            self.forage()
-        elif not self.gather(self.resource):
+        elif self.fog_criterion or not self.gather(self.resource):
            self.explore()
 
         return self.actions
