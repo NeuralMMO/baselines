@@ -9,23 +9,21 @@ from nmmo.websocket import Application
 
 from scripted import baselines
 from demos import minimal
+from nmmo import Replay
 
 
 class Config(minimal.Config):
-    SAVE_REPLAY           = 'replay'
+    SAVE_REPLAY = 'replay'
 
 class FakeRealm:
     def __init__(self):
-        with open('replay.json', 'r') as inp:
-            self.replay = json.load(inp)
+        self.replay = Replay.load('replay.lzma')
         self.idx = 0
         
     @property
     def packet(self):
-        data = self.replay['packets'][self.idx]
-
-        data['environment']    = self.replay['map']
-
+        data = self.replay.packets[self.idx]
+        data['environment'] = self.replay.map
         self.idx += 1
 
         return data
