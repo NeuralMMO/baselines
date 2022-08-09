@@ -380,7 +380,9 @@ class Scripted(nmmo.Agent):
         # When to run from death fog in BR configs
         self.fog_criterion = None
         if self.config.PLAYER_DEATH_FOG is not None:
-            self.fog_criterion = self.timeAlive > self.config.PLAYER_DEATH_FOG - 64
+            start_running = self.timeAlive > self.config.PLAYER_DEATH_FOG - 64
+            run_now = self.timeAlive % max(1, int(1 / self.config.PLAYER_DEATH_FOG_SPEED))
+            self.fog_criterion = start_running and run_now
 
 
 class Random(Scripted):
