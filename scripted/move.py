@@ -79,7 +79,7 @@ def explore(config, ob, actions, r, c):
 
    vR, vC = centR-r, centC-c
 
-   mmag = max(abs(vR), abs(vC))
+   mmag = max(1, abs(vR), abs(vC))
    rr   = int(np.round(vision*vR/mmag))
    cc   = int(np.round(vision*vC/mmag))
    pathfind(config, ob, actions, rr, cc)
