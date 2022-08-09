@@ -65,7 +65,8 @@ class Scripted(nmmo.Agent):
 
     def explore(self):
         '''Route away from spawn'''
-        move.explore(self.config, self.ob, self.actions, self.spawnR, self.spawnC)
+        move.explore(self.config, self.ob, self.actions, self.r, self.c)
+        #move.explore(self.config, self.ob, self.actions, self.spawnR, self.spawnC)
 
     @property
     def downtime(self):
@@ -334,6 +335,10 @@ class Scripted(nmmo.Agent):
 
         # Time Alive
         self.timeAlive = scripting.Observation.attribute(agent, Serialized.Entity.TimeAlive)
+
+        # Pos
+        self.r = scripting.Observation.attribute(agent, Serialized.Entity.R)
+        self.c = scripting.Observation.attribute(agent, Serialized.Entity.C)
 
         #Resources
         self.health = scripting.Observation.attribute(agent, Serialized.Entity.Health)

@@ -69,23 +69,20 @@ def meander(config, ob, actions):
    direction = towards(direction)
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
-def explore(config, ob, actions, spawnR, spawnC):
+def explore(config, ob, actions, r, c):
    vision = config.PLAYER_VISION_RADIUS
    sz     = config.MAP_SIZE
    Entity = nmmo.Serialized.Entity
    Tile   = nmmo.Serialized.Tile
 
    centR, centC = sz//2, sz//2
-   pathfind(config, ob, actions, centR, centC)
 
-   '''
-   vR, vC = centR-spawnR, centC-spawnC
+   vR, vC = centR-r, centC-c
 
    mmag = max(abs(vR), abs(vC))
    rr   = int(np.round(vision*vR/mmag))
    cc   = int(np.round(vision*vC/mmag))
    pathfind(config, ob, actions, rr, cc)
-   '''
 
 def evade(config, ob, actions, attacker):
    Entity = nmmo.Serialized.Entity
