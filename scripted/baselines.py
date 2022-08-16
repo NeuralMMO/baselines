@@ -276,7 +276,7 @@ class Scripted(nmmo.Agent):
 
             self.actions[Action.Sell] = {
                 Action.Item: itm.instance,
-                Action.Price: int(price)}
+                Action.Price: Action.Price.edges[int(price)]}
 
             return itm
 
