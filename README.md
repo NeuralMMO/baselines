@@ -1,4 +1,4 @@
-# baselines
+# Baselines
 Baselines for Neural MMO (neuralmmo.github.io) -- new users should treat this repo as a starter project
 
 [![Discord Chat](https://img.shields.io/discord/569049269051457537.svg)](https://discord.gg/BkMmFUC)
