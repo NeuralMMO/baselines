@@ -4,6 +4,7 @@ from pdb import set_trace as T
 import numpy as np
 
 import nmmo
+from nmmo.lib import spawn
 
 from demos import minimal
 
@@ -46,6 +47,10 @@ class CustomTerrainGeneration(minimal.Config):
 
     # Render preview to maps/custom
     GENERATE_MAP_PREVIEWS = True
+
+    MAP_CENTER = 32
+    PLAYER_N = 32
+    NPC_N = 32
 
 
 if __name__ == '__main__':

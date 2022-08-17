@@ -49,6 +49,8 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
 
     PLAYER_N = 128
 
+    PLAYER_DEATH_FOG = 512
+
     #Set a unique path for demo maps
     PATH_MAPS = 'maps/demos'
 

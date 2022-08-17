@@ -51,10 +51,10 @@ if __name__ == '__main__':
     stats = minimal.simulate(
             PlayerKillRewardEnv,
             PlayerKillTaskConfig,
-            horizon=128)['Stats']
+            horizon=128)['Player']
 
-    reward   = np.mean(stats['Range_Task_Reward'])
-    complete = np.mean(stats['Range_Tasks_Completed'])
+    reward   = np.mean(stats['Task/Reward_Range'])
+    complete = np.mean(stats['Task/Completed_Range'])
 
     print(f'Task Reward: {reward:.3f}, Tasks Complete: {complete:.3f}')
 
