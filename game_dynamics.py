@@ -79,10 +79,20 @@ def simulate_env(conf, idx):
 
     return logs
 
+def render(conf):
+    conf.RENDER = True
+    env = nmmo.Env(conf)
+    env.reset()
+    env.render()
+
+    while True:
+        env.step({})
+        env.render()
+
 
 if __name__ == '__main__':
-    TRIALS  = 8
-    HORIZON = 1000
+    TRIALS  = 1
+    HORIZON = 250
 
     conf = cleanrl.Eval()
     conf.PLAYERS = [
@@ -92,10 +102,13 @@ if __name__ == '__main__':
     conf.LOG_FILE = 'env_logs.txt'
     conf.LOG_ENV = True
     conf.LOG_EVENTS = True
+    conf.LOG_VERBOSE = True
 
     conf.MAP_FORCE_GENERATION = True
     nmmo.MapGenerator(conf).generate_all_maps()
     conf.MAP_FORCE_GENERATION = False
+
+    render(conf)
 
     all_stats = []
     for i in range(TRIALS):
@@ -105,4 +118,4 @@ if __name__ == '__main__':
     all_stats = ray.get(all_stats)
     np.save(f'logs.npy', all_stats)
 
-    plot_wandb(all_stats)
+    #plot_wandb(all_stats)
