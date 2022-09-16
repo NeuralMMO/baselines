@@ -73,7 +73,6 @@ class Input(nn.Module):
       inp['Tile']['Continuous']   *= self.tileWeight
       inp['Entity']['Continuous'] *= self.entWeight
  
-      entityLookup['N'] = inp['Entity'].pop('N')
       for name, entities in inp.items():
          #Construct: Batch, ents, nattrs, hidden
          embeddings = self.embeddings[name](entities)
@@ -82,6 +81,7 @@ class Input(nn.Module):
 
          #Construct: Batch, ents, hidden
          entityLookup[name] = self.attributes[name](embeddings)
+         entityLookup[name+'-Mask'] = inp[name]['Mask']
 
       return entityLookup
 
@@ -119,7 +119,7 @@ class Output(nn.Module):
       rets = defaultdict(dict)
       for atn in nmmo.Action.edges(self.config):
          for arg in atn.edges:
-            lens  = None
+            mask = None
             if arg.argType == nmmo.action.Fixed:
                batch = obs.shape[0]
                idxs  = [e.idx for e in arg.edges]
@@ -127,15 +127,15 @@ class Output(nn.Module):
                cands = cands.repeat(batch, 1, 1)
             elif arg == nmmo.action.Target:
                cands = lookup['Entity']
-               lens  = lookup['N']
+               mask  = lookup['Entity-Mask']
             elif atn in (nmmo.action.Sell, nmmo.action.Use, nmmo.action.Give):
                cands = lookup['Item']
-               lens  = lookup['N']
+               mask  = lookup['Item-Mask']
             elif atn == nmmo.action.Buy:
                cands = lookup['Market']
-               lens  = lookup['N']
+               mask  = lookup['Market-Mask']
 
-            logits         = self.net(obs, cands, lens)
+            logits         = self.net(obs, cands, mask)
             rets[atn][arg] = logits
 
       return rets
@@ -151,11 +151,11 @@ class DiscreteAction(Action):
       super().__init__()
       self.net = subnets.DotReluBlock(h)
 
-   def forward(self, stim, args, lens):
-      x = self.net(stim, args)
+   def forward(self, stim, args, mask):
+      logits  = self.net(stim, args)
 
-      if lens is not None:
-         mask = torch.arange(x.shape[-1]).to(x.device).expand_as(x)
-         x[mask >= lens] = 0
+      if mask is not None:
+         mask_value = torch.tensor(torch.finfo(logits.dtype).min, dtype=logits.dtype)
+         logits  = torch.where(mask.bool(), logits, mask_value)
 
-      return x
+      return logits

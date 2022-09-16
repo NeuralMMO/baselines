@@ -83,7 +83,7 @@ class Debug(Train):
     NUM_STEPS               = 128
     NUM_MINIBATCHES         = 128
     NUM_STEPS               = 1
-    CUDA                    = {}
+    CUDA                    = []
 
 class DebugEval(Debug, Eval):
     pass

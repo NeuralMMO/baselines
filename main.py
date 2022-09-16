@@ -125,6 +125,7 @@ if __name__ == "__main__":
         os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
 
     run_name = f"{config.ENV_ID}__{config.EXP_NAME}__{config.SEED}__{int(time.time())}"
+    '''
     wandb.init(
         project=config.WANDB_PROJECT_NAME,
         entity=config.WANDB_ENTITY,
@@ -133,6 +134,7 @@ if __name__ == "__main__":
         name=run_name,
         monitor_gym=True,
         save_code=True)
+    '''
 
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -233,7 +235,7 @@ if __name__ == "__main__":
                 for k, v in e['logs'].items():
                     stats[k] = np.mean(v).item()
 
-                wandb.log(stats)
+                #wandb.log(stats)
 
             # Evaluation logs
             for e in info[NUM_ENVS:]:
@@ -249,7 +251,7 @@ if __name__ == "__main__":
                     scores=e['logs']['Task_Reward'])
 
                 stats = {**stats, **ratings.stats}
-                wandb.log(stats)
+                #wandb.log(stats)
 
 
             rewards[step] = torch.tensor(reward)[:NUM_ENVS].view(-1)

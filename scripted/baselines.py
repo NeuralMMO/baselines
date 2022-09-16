@@ -1,4 +1,6 @@
 from pdb import set_trace as T
+
+from ordered_set import OrderedSet
 from collections import defaultdict
 import numpy as np
 import random
@@ -66,7 +68,6 @@ class Scripted(nmmo.Agent):
     def explore(self):
         '''Route away from spawn'''
         move.explore(self.config, self.ob, self.actions, self.r, self.c)
-        #move.explore(self.config, self.ob, self.actions, self.spawnR, self.spawnC)
 
     @property
     def downtime(self):
@@ -139,7 +140,7 @@ class Scripted(nmmo.Agent):
         if not self.config.ITEM_SYSTEM_ENABLED:
             return
 
-        self.inventory   = set()
+        self.inventory   = OrderedSet()
         self.best_items  = {}
         self.item_counts = defaultdict(int)
 
@@ -197,7 +198,7 @@ class Scripted(nmmo.Agent):
         if not self.config.EXCHANGE_SYSTEM_ENABLED:
             return
 
-        self.market         = set()
+        self.market         = OrderedSet()
         self.best_heuristic = {}
 
         for item_ary in self.ob.market:

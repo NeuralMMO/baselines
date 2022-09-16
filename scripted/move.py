@@ -1,6 +1,6 @@
 from pdb import set_trace as T
 import numpy as np
-import random as rand
+import random
 
 from queue import PriorityQueue, Queue
 
@@ -27,8 +27,8 @@ def vacant(tile):
 
    return matl in material.Habitable and not occupied
 
-def random(config, ob, actions):
-   direction                 = rand.choice(nmmo.action.Direction.edges)
+def rand(config, ob, actions):
+   direction                 = random.choice(nmmo.action.Direction.edges)
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
 def towards(direction):
@@ -41,7 +41,7 @@ def towards(direction):
    elif direction == (0, 1):
       return nmmo.action.East
    else:
-      return rand.choice(nmmo.action.Direction.edges)
+      return random.choice(nmmo.action.Direction.edges)
 
 def pathfind(config, ob, actions, rr, cc):
    direction = aStar(config, ob, actions, rr, cc)
@@ -65,7 +65,7 @@ def meander(config, ob, actions):
    if not cands:
       return (-1, 0)
 
-   direction = rand.choices(cands)[0]
+   direction = random.choices(cands)[0]
    direction = towards(direction)
    actions[nmmo.action.Move] = {nmmo.action.Direction: direction}
 
