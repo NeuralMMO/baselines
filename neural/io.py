@@ -22,7 +22,10 @@ class MixedEmbedding(nn.Module):
       continuous = x['Continuous'].split(1, dim=-1)
       continuous = [net(e) for net, e in zip(self.continuous, continuous)]
       continuous = torch.stack(continuous, dim=-2)
-      discrete   = self.discrete(x['Discrete'].long())
+      try:
+         discrete   = self.discrete(x['Discrete'].long())
+      except:
+         T()
 
       return torch.cat((continuous, discrete), dim=-2)
 
@@ -81,7 +84,7 @@ class Input(nn.Module):
 
          #Construct: Batch, ents, hidden
          entityLookup[name] = self.attributes[name](embeddings)
-         entityLookup[name+'-Mask'] = inp[name]['Mask']
+         #entityLookup[name+'-Mask'] = inp[name]['Mask']
 
       return entityLookup
 
@@ -127,13 +130,13 @@ class Output(nn.Module):
                cands = cands.repeat(batch, 1, 1)
             elif arg == nmmo.action.Target:
                cands = lookup['Entity']
-               mask  = lookup['Entity-Mask']
+               #mask  = lookup['Entity-Mask']
             elif atn in (nmmo.action.Sell, nmmo.action.Use, nmmo.action.Give):
                cands = lookup['Item']
-               mask  = lookup['Item-Mask']
+               #mask  = lookup['Item-Mask']
             elif atn == nmmo.action.Buy:
                cands = lookup['Market']
-               mask  = lookup['Market-Mask']
+               #mask  = lookup['Market-Mask']
 
             logits         = self.net(obs, cands, mask)
             rets[atn][arg] = logits

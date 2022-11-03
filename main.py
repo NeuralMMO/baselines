@@ -1,399 +1,590 @@
-from pdb import set_trace as T
+from pdb import set_trace as TT
 
-import os
-import sys
-import random
-import time
+from collections import defaultdict
 
-import wandb
-import gym
 import numpy as np
-import supersuit as ss
+from numpy import ndarray
+from gym import spaces
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.distributions.categorical import Categorical
-from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
+
+import ray
+from ray.air import CheckpointConfig
+from ray.air.config import RunConfig
+from ray.air.config import ScalingConfig  
+from ray.tune.tuner import Tuner
+from ray.tune.integration.wandb import WandbLoggerCallback
+from ray.train.rl.rl_trainer import RLTrainer
+from ray.rllib.models import ModelCatalog
+from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+
+from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
 import nmmo
-import evaluate
-import tasks
+import pufferlib
 
-from scripted import baselines
+from config.cleanrl import Train
 from neural import policy, io, subnets
 
+from typing import Dict
 
-# Switch for Debug mode (fast, low hardware usage)
-if len(sys.argv) == 2 and sys.argv[1] == 'debug':
-    from config.cleanrl import DebugEval as Eval
-    from config.cleanrl import Debug as Train
-else:
-    from config.cleanrl import Eval
-    from config.cleanrl import Train
 
-class Agent(nn.Module):
+from typing import Dict, Tuple
+
+
+class CompetitionConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
+    TASKS = None
+    MAP_N = 40
+    PATH_MAPS = "maps"
+
+    COMBAT_FRIENDLY_FIRE = False
+    PLAYER_N = 128
+    PLAYER_LOADER = nmmo.spawn.TeamLoader
+    PLAYERS = 16 * [nmmo.Agent]
+
+    PLAYER_DEATH_FOG = 240
+    PLAYER_DEATH_FOG_FINAL_SIZE = 15
+    PLAYER_DEATH_FOG_SPEED = 1 / 16
+
+    SPECIALIZE = True
+
+    # Progession
+    PROGRESSION_MELEE_BASE_DAMAGE = 7
+    PROGRESSION_RANGE_BASE_DAMAGE = 7
+    PROGRESSION_MAGE_BASE_DAMAGE = 7
+
+    # NPC
+    NPC_BASE_DEFENSE = 0
+    NPC_LEVEL_DEFENSE = 15
+    NPC_BASE_DAMAGE = 10
+    NPC_LEVEL_DAMAGE = 15
+
+    # Equipment
+    EQUIPMENT_WEAPON_BASE_DAMAGE = 0
+    EQUIPMENT_WEAPON_LEVEL_DAMAGE = 10
+    EQUIPMENT_AMMUNITION_BASE_DAMAGE = 0
+    EQUIPMENT_AMMUNITION_LEVEL_DAMAGE = 10
+    EQUIPMENT_TOOL_BASE_DEFENSE = 0
+    EQUIPMENT_TOOL_LEVEL_DEFENSE = 4
+    EQUIPMENT_ARMOR_BASE_DEFENSE = 0
+    EQUIPMENT_ARMOR_LEVEL_DEFENSE = 4
+
+    # Terrain
+    TERRAIN_WATER = 0.29
+
+    @property
+    def PLAYER_SPAWN_FUNCTION(self):
+        return nmmo.spawn.spawn_concurrent
+
+
+class FeatureParser:
+    NEIGHBOR = [(6, 7), (8, 7), (7, 8), (7, 6)]  # north, south, east, west
+    OBSTACLE = (0, 1, 5, 14, 15)  # lava, water, stone,
+    spec = spaces.Dict({
+        "terrain":
+        spaces.Box(low=0, high=15, shape=(15, 15), dtype=np.int64),
+        "reachable":
+        spaces.Box(low=0, high=1, shape=(15, 15), dtype=np.float32),
+        "death_fog_damage":
+        spaces.Box(low=0, high=1, shape=(15, 15), dtype=np.float32),
+        "entity_population":
+        spaces.Box(low=0, high=5, shape=(15, 15), dtype=np.int64),
+        "self_entity":
+        spaces.Box(low=0, high=1, shape=(1, 26), dtype=np.float32),
+        "other_entity":
+        spaces.Box(low=0, high=1, shape=(15, 26), dtype=np.float32),
+        "va_move":
+        spaces.Box(low=0, high=1, shape=(5, ), dtype=np.float32),
+        "va_attack_target":
+        spaces.Box(low=0, high=1, shape=(16, ), dtype=np.float32),
+    })
+
     def __init__(self, config):
-        super().__init__()
         self.config = config
-        self.input  = io.Input(config,
-                embeddings=io.MixedEmbedding,
-                attributes=subnets.SelfAttention)
-        self.output = io.Output(config)
-        self.value  = nn.Linear(config.HIDDEN, 1)
-        self.policy = policy.Simple(config)
 
-        self.lstm = nn.LSTM(config.HIDDEN, config.HIDDEN)
-        for name, param in self.lstm.named_parameters():
-            if "bias" in name:
-                nn.init.constant_(param, 0)
-            elif "weight" in name:
-                nn.init.orthogonal_(param, 1.0)
+    def __call__(
+        self,
+        observations: Dict[int, Dict[str, ndarray]],
+        step: int,
+    ) -> Dict[str, ndarray]:
+        ret = {}
+        for agent_id in observations:
+            terrain, death_fog_damage, population, reachable, va_move = self.parse_local_map(
+                observations[agent_id], step)
+            entity, va_target = self.parse_entity(observations[agent_id])
+            self_entity = entity[:1, :]
+            other_entity = entity[1:, :]
+            ret[agent_id] = {
+                "terrain": terrain,
+                "death_fog_damage": death_fog_damage,
+                "reachable": reachable,
+                "entity_population": population,
+                "self_entity": self_entity,
+                "other_entity": other_entity,
+                "va_move": va_move,
+                "va_attack_target": va_target,
+            }
+        return ret
 
-    def get_initial_state(self, batch, device='cpu'):
-        return (
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
-            torch.zeros(batch, self.lstm.num_layers, self.lstm.hidden_size).to(device),
-        )
- 
-    def _compute_hidden(self, x, lstm_state, done):
-        x         = nmmo.emulation.unpack_obs(self.config, x)
-        lookup    = self.input(x)
-        hidden, _ = self.policy(lookup)
+    def parse_local_map(
+        self,
+        observation: Dict[str, ndarray],
+        step: int,
+    ) -> Tuple[ndarray, ndarray]:
+        tiles = observation["Tile"]["Continuous"]
+        entities = observation["Entity"]["Continuous"]
+        terrain = np.zeros(shape=self.spec["terrain"].shape,
+                           dtype=self.spec["terrain"].dtype)
+        death_fog_damage = np.zeros(shape=self.spec["death_fog_damage"].shape,
+                                    dtype=self.spec["death_fog_damage"].dtype)
+        population = np.zeros(shape=self.spec["entity_population"].shape,
+                              dtype=self.spec["entity_population"].dtype)
+        va = np.ones(shape=self.spec["va_move"].shape,
+                     dtype=self.spec["va_move"].dtype)
 
-        batch_size = lstm_state[0].shape[1]
-        hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
-        done = done.reshape((-1, batch_size))
-        new_hidden = []
-        for h, d in zip(hidden, done):
-            h, lstm_state = self.lstm(
-                h.unsqueeze(0),
-                (
-                    (1.0 - d).view(1, -1, 1) * lstm_state[0],
-                    (1.0 - d).view(1, -1, 1) * lstm_state[1],
-                ),
-            )
-            new_hidden += [h]
-        new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
-        return new_hidden, lookup, lstm_state
+        # terrain, death_fog
+        R, C = tiles[0, 2:4]
+        for tile in tiles:
+            absolute_r, absolute_c = tile[2:4]
+            relative_r, relative_c = int(absolute_r - R), int(absolute_c - C)
+            terrain[relative_r, relative_c] = int(tile[1])
+            dmg = self.compute_death_fog_damage(absolute_r, absolute_c, step)
+            death_fog_damage[relative_r, relative_c] = dmg / 100.0
 
-    def forward(self, x, lstm_state, done=None, action=None, value_only=False):
-        if done is None:
-            done = torch.zeros(len(x)).to(lstm_state[0].device)
+        # entity population map
+        P = entities[0, 6]
+        for e in entities:
+            if e[0] == 0: break
+            absolute_r, absolute_c = e[7:9]
+            relative_r, relative_c = int(absolute_r - R), int(absolute_c - C)
+            if e[6] == P:
+                p = 1
+            elif e[6] >= 0:
+                p = 2
+            elif e[6] < 0:
+                p = abs(e[6]) + 2
+            population[relative_r, relative_c] = p
 
-        lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
+        # reachable area
+        reachable = self.gen_reachable_map(terrain)
 
-        if value_only:
-            return self.get_value(x, lstm_state, done)
-        action, logprob, entropy, value, lstm_state = self.get_action_and_value(x, lstm_state, done, action)
-        lstm_state = (lstm_state[0].transpose(0, 1), lstm_state[1].transpose(0, 1))
-        return action, logprob, entropy, value, lstm_state
+        # valid move
+        for i, (r, c) in enumerate(self.NEIGHBOR):
+            if terrain[r, c] in self.OBSTACLE:
+                va[i + 1] = 0
 
-    def get_value(self, x, lstm_state, done):
-        x, _, _ = self._compute_hidden(x, lstm_state, done)
-        return self.value(x)
+        return terrain, death_fog_damage, population, reachable, va
 
-    def get_action_and_value(self, x, lstm_state, done, action=None):
-        x, lookup, lstm_state = self._compute_hidden(x, lstm_state, done)
-        logits                = self.output(x, lookup)
-        value                 = self.value(x)
+    def parse_entity(
+        self,
+        observation: Dict[str, ndarray],
+        max_size: int = 16,
+    ) -> Tuple[ndarray, ndarray]:
+        cent = CompetitionConfig.MAP_CENTER // 2
+        entities = observation["Entity"]["Continuous"]
+        va = np.zeros(shape=self.spec["va_attack_target"].shape,
+                      dtype=self.spec["va_attack_target"].dtype)
+        va[0] = 1.0
 
-        flat_logits = []
-        for atn in nmmo.Action.edges(self.config):
-            for arg in atn.edges:
-                flat_logits.append(logits[atn][arg]) 
+        entities_list = []
+        P, R, C = entities[0, 6:9]
+        for i, e in enumerate(entities[:max_size]):
+            if e[0] == 0: break
+            # attack range
+            p, r, c = e[6:9]
+            if p != P and abs(R - r) <= 3 and abs(C - c) <= 3:
+                va[i] = 1
+            # population
+            population = [0 for _ in range(5)]
+            if p == P:
+                population[0] = 1
+            elif p >= 0:
+                population[1] = 1
+            elif p < 0:
+                population[int(abs(p)) + 1] = 1
+            entities_list.append(
+                np.array(
+                    [
+                        float(e[2] == 0),  # attacked
+                        e[3] / 10.0,  # level
+                        e[4] / 10.0,  # item_level
+                        (r - 16) / 128.0,  # r
+                        (c - 16) / 128.0,  # c
+                        (r - 16 - cent) / 128.0,  # delta_r
+                        (c - 16 - cent) / 128.0,  # delta_c
+                        e[9] / 100.0,  # damage
+                        e[10] / 1024.0,  # alive_time
+                        e[12] / 100.0,  # gold
+                        e[13] / 100.0,  # health
+                        e[14] / 100.0,  # food
+                        e[15] / 100.0,  # water
+                        e[16] / 10.0,  # melee
+                        e[17] / 10.0,  # range
+                        e[18] / 10.0,  # mage
+                        e[19] / 10.0,  # fishing
+                        e[20] / 10.0,  # herbalism
+                        e[21] / 10.0,  # prospecting
+                        e[22] / 10.0,  # carving
+                        e[23] / 10.0,  # alchmy
+                        *population,
+                    ],
+                    dtype=np.float32))
+        if len(entities_list) < max_size:
+            entities_list.extend([
+                np.zeros(26)
+                for _ in range(max_size - len(entities_list))
+            ])
+        return np.asarray(entities_list), va
 
-        mulit_categorical = [Categorical(logits=l) for l in flat_logits]
-
-        if action is None:
-            action = torch.stack([c.sample() for c in mulit_categorical])
+    @staticmethod
+    def compute_death_fog_damage(r: int, c: int, step: int) -> float:
+        C = CompetitionConfig
+        if step < C.PLAYER_DEATH_FOG:
+            return 0
+        r, c = r - 16, c - 16
+        cent = C.MAP_CENTER // 2
+        # Distance from center of the map
+        dist = max(abs(r - cent), abs(c - cent))
+        if dist > C.PLAYER_DEATH_FOG_FINAL_SIZE:
+            time_dmg = C.PLAYER_DEATH_FOG_SPEED * (step - C.PLAYER_DEATH_FOG +
+                                                   1)
+            dist_dmg = dist - cent
+            dmg = max(0, dist_dmg + time_dmg)
         else:
-            action = action.view(-1, action.shape[-1]).T
+            dmg = 0
+        return dmg
 
-        logprob = torch.stack([c.log_prob(a) for c, a in zip(mulit_categorical, action)]).T
-        entropy = torch.stack([c.entropy() for c in mulit_categorical]).T
-
-        return action.T, logprob.sum(1), entropy.sum(1), value, lstm_state
-
-
-if __name__ == "__main__":
-    config        = Train()
-    eval_config   = Eval()
-
-    # WanDB integration                                                       
-    with open('wandb_api_key') as key:                                        
-        os.environ['WANDB_API_KEY'] = key.read().rstrip('\n')
-
-    run_name = f"{config.ENV_ID}__{config.EXP_NAME}__{config.SEED}__{int(time.time())}"
-    '''
-    wandb.init(
-        project=config.WANDB_PROJECT_NAME,
-        entity=config.WANDB_ENTITY,
-        sync_tensorboard=True,
-        config=vars(config),
-        name=run_name,
-        monitor_gym=True,
-        save_code=True)
-    '''
-
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.items()])),
-    )
-
-    # TRY NOT TO MODIFY: seeding
-    random.seed(config.SEED)
-    np.random.seed(config.SEED)
-    torch.manual_seed(config.SEED)
-    torch.backends.cudnn.deterministic = config.TORCH_DETERMINISTIC
-
-    # This is part of the new (not yet documented) integrations API that makes NMMO
-    # look like a simple environment from the perspective of infra frameworks while
-    # actually maintaining all the same internal complexity. For now, just pass it a config
-    # Note that it relies on config.NUM_CPUS and config.PLAYER_N to define scale
-    # Agent increment per env (i.e. 4, 8, ..., 128)
-    step = config.PLAYER_N / config.NUM_CPUS
-    assert step == int(step)
-    step = int(step)
-    env_configs = []
-    NUM_ENVS = config.NUM_CPUS * (config.PLAYER_N + step) #Number of training envs
-
-    # Gross hack to make all the env templates picklable
-    for core in range(config.NUM_CPUS):
-        n1 = f'TrainSubenv_{core}_1'
-        n2 = f'TrainSubenv_{core}_1'
-
-        env_configs.append(type(n1, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(core+1)}))
-        env_configs.append(type(n2, (Train, ), {'NUM_CPUS': 1, 'PLAYER_N': step*(config.NUM_CPUS - core)}))
-
-        globals()[n1] = env_configs[-2]
-        globals()[n2] = env_configs[-1]
-
-    env_configs.append(Eval)
-    envs = nmmo.integrations.cleanrl_vec_envs(env_configs)
-
-    agent = Agent(config)
-    if config.CUDA:
-        agent = torch.nn.DataParallel(agent.cuda(), device_ids=config.CUDA)
-
-    ratings = nmmo.OpenSkillRating(eval_config.PLAYERS, baselines.Combat)
-
-    optimizer = optim.Adam(agent.parameters(), lr=config.LEARNING_RATE, eps=1e-5)
-    
-    # ALGO Logic: Storage setup
-    BATCH_SIZE = NUM_ENVS * config.NUM_STEPS
-
-    obs = torch.zeros((config.NUM_STEPS, NUM_ENVS) + envs.observation_space.shape)
-    actions = torch.zeros((config.NUM_STEPS, NUM_ENVS) + (config.NUM_ARGUMENTS,))
-    logprobs = torch.zeros((config.NUM_STEPS, NUM_ENVS))
-    rewards = torch.zeros((config.NUM_STEPS, NUM_ENVS))
-    dones = torch.zeros((config.NUM_STEPS, NUM_ENVS))
-    values = torch.zeros((config.NUM_STEPS, NUM_ENVS))
-
-    # TRY NOT TO MODIFY: start the game
-    global_step = 0
-    start_time = time.time()
-    next_obs = torch.Tensor(envs.reset())
-    next_done = torch.zeros(NUM_ENVS + eval_config.NUM_ENVS)
-
-    if config.CUDA:
-        next_lstm_state = agent.module.get_initial_state(NUM_ENVS + eval_config.NUM_ENVS)
-    else:
-        next_lstm_state = agent.get_initial_state(NUM_ENVS + eval_config.NUM_ENVS)
-
-    num_updates = config.TOTAL_TIMESTEPS // BATCH_SIZE
-    for update in range(1, num_updates + 1):
-        initial_lstm_state = (next_lstm_state[0][:NUM_ENVS].clone(), next_lstm_state[1][:NUM_ENVS].clone())
-        # Annealing the rate if instructed to do so.
-        if config.ANNEAL_LR:
-            frac = 1.0 - (update - 1.0) / num_updates
-            lrnow = frac * config.LEARNING_RATE
-            optimizer.param_groups[0]["lr"] = lrnow
-
-        for step in range(0, config.NUM_STEPS):
-            global_step += NUM_ENVS
-            obs[step] = next_obs[:NUM_ENVS]
-            dones[step] = next_done[:NUM_ENVS]
-
-            # ALGO LOGIC: action logic
-            with torch.no_grad():
-                action, logprob, _, value, next_lstm_state = agent(next_obs, next_lstm_state, next_done)
-                values[step] = value[:NUM_ENVS].flatten()
-            actions[step] = action[:NUM_ENVS]
-            logprobs[step] = logprob[:NUM_ENVS]
-
-            # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, done, info = envs.step(action.cpu().numpy())
-
-            # Training logs
-            for e in info[:NUM_ENVS]:
-                if 'logs' not in e:
+    def gen_reachable_map(self, terrain: ndarray) -> ndarray:
+        """
+        grid: M * N
+            1: passable
+            0: unpassable
+        """
+        from collections import deque
+        M, N = terrain.shape
+        passable = ~np.isin(terrain, self.OBSTACLE)
+        reachable = np.zeros_like(passable)
+        visited = np.zeros_like(passable)
+        q = deque()
+        start = M // 2, N // 2
+        q.append(start)
+        visited[start[0], start[1]] = 1
+        while q:
+            cur_r, cur_c = q.popleft()
+            reachable[cur_r, cur_c] = 1
+            for (dr, dc) in [(0, -1), (-1, 0), (0, 1), (1, 0)]:
+                r, c = cur_r + dr, cur_c + dc
+                if not (0 <= r < M and 0 <= c < N):
                     continue
-
-                stats = {}
-                for k, v in e['logs'].items():
-                    stats[k] = np.mean(v).item()
-
-                #wandb.log(stats)
-
-            # Evaluation logs
-            for e in info[NUM_ENVS:]:
-                if 'logs' not in e:
-                    continue
-
-                stats = {}
-                for k, v in e['logs'].items():
-                    stats['evaluation_' + k] = np.mean(v).item()
-
-                ratings.update(
-                    policy_ids=e['logs']['PolicyID'],
-                    scores=e['logs']['Task_Reward'])
-
-                stats = {**stats, **ratings.stats}
-                #wandb.log(stats)
+                if not visited[r, c] and passable[r, c]:
+                    q.append((r, c))
+                visited[r, c] = 1
+        return reachable
 
 
-            rewards[step] = torch.tensor(reward)[:NUM_ENVS].view(-1)
-            next_obs, next_done = torch.Tensor(next_obs), torch.Tensor(done)
+class ActionHead(nn.Module):
+    name2dim = {"move": 5, "attack_target": 16}
 
-            for item in info:
-                if "episode" in item.keys():
-                    print(f"global_step={global_step}, episodic_return={item['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
-                    break
+    def __init__(self, input_dim: int):
+        super().__init__()
+        self.heads = nn.ModuleDict({
+            name: nn.Linear(input_dim, output_dim)
+            for name, output_dim in self.name2dim.items()
+        })
 
-        # bootstrap value if not done
-        with torch.no_grad():
-            next_value = agent(
-                next_obs,
-                next_lstm_state,
-                next_done,
-                value_only=True,
-            )[:NUM_ENVS].reshape(1, -1).cpu()
+    def forward(self, x) -> Dict[str, torch.Tensor]:
+        out = {name: self.heads[name](x) for name in self.name2dim}
+        return out
 
-            if config.GAE:
-                advantages = torch.zeros_like(rewards)
-                lastgaelam = 0
-                for t in reversed(range(config.NUM_STEPS)):
-                    if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done[:NUM_ENVS]
-                        nextvalues = next_value
-                    else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = rewards[t] + config.GAMMA * nextvalues * nextnonterminal - values[t]
-                    advantages[t] = lastgaelam = delta + config.GAMMA * config.GAE_LAMBDA * nextnonterminal * lastgaelam
-                returns = advantages + values
-            else:
-                returns = torch.zeros_like(rewards)
-                for t in reversed(range(config.NUM_STEPS)):
-                    if t == config.NUM_STEPS - 1:
-                        nextnonterminal = 1.0 - next_done
-                        next_return = next_value
-                    else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        next_return = returns[t + 1]
-                    returns[t] = rewards[t] + config.GAMMA * nextnonterminal * next_return
-                advantages = returns - values
 
-        # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.observation_space.shape)
-        b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (Train.NUM_ARGUMENTS,))
-        b_dones = dones.reshape(-1)
-        b_advantages = advantages.reshape(-1)
-        b_returns = returns.reshape(-1)
-        b_values = values.reshape(-1)
+def make_policy(config, observation_space):
+    class NMMONet(TorchModelV2, nn.Module):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            nn.Module.__init__(self)
+            self.config = config
 
-        # Optimizing the policy and value network
-        assert NUM_ENVS % config.NUM_MINIBATCHES == 0
-        envsperbatch = NUM_ENVS // config.NUM_MINIBATCHES
-        envinds = np.arange(NUM_ENVS)
-        flatinds = np.arange(BATCH_SIZE).reshape(config.NUM_STEPS, NUM_ENVS)
-        clipfracs = []
-        for epoch in range(config.UPDATE_EPOCHS):
-            np.random.shuffle(envinds)
-            for start in range(0, NUM_ENVS, envsperbatch):
-                end = start + envsperbatch
-                mbenvinds = envinds[start:end]
-                mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
+            self.local_map_cnn = nn.Sequential(
+                nn.Conv2d(24, 32, 3, 2, 1),
+                nn.ReLU(),
+                nn.Conv2d(32, 32, 3, 2, 1),
+                nn.ReLU(),
+                nn.Conv2d(32, 32, 3, 1, 1),
+                nn.ReLU(),
+            )
+            self.local_map_fc = nn.Linear(32 * 4 * 4, 64)
 
-                _, newlogprob, entropy, newvalue, _ = agent(
-                    b_obs[mb_inds],
-                    (initial_lstm_state[0][mbenvinds, :], initial_lstm_state[1][mbenvinds, :]),
-                    b_dones[mb_inds],
-                    b_actions.long()[mb_inds],
-                )
+            self.self_entity_fc1 = nn.Linear(26, 32)
+            self.self_entity_fc2 = nn.Linear(32, 32)
 
-                # Must be done on CPU for multiGPU
-                newlogprob = newlogprob.cpu()
-                entropy    = entropy.cpu()
-                newvalue   = newvalue.cpu()
+            self.other_entity_fc1 = nn.Linear(26, 32)
+            self.other_entity_fc2 = nn.Linear(15 * 32, 32)
 
-                logratio = newlogprob - b_logprobs[mb_inds]
-                ratio = logratio.exp()
+            self.fc = nn.Linear(64 + 32 + 32, 64)
+            self.action_head = ActionHead(64)
+            self.value_head = nn.Linear(64, 1)
 
-                with torch.no_grad():
-                    # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                    old_approx_kl = (-logratio).mean()
-                    approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > config.CLIP_COEF).float().mean().item()]
+        def value_function(self):
+            return self.value.view(-1)
 
-                mb_advantages = b_advantages[mb_inds]
-                if config.NORM_ADV:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+        def local_map_embedding(self, input_dict):
+            terrain = input_dict["terrain"].long().unsqueeze(1)
+            death_fog_damage = input_dict["death_fog_damage"].unsqueeze(1)
+            reachable = input_dict["reachable"].unsqueeze(1)
+            population = input_dict["entity_population"].long().unsqueeze(1)
 
-                # Policy loss
-                pg_loss1 = -mb_advantages * ratio
-                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - config.CLIP_COEF, 1 + config.CLIP_COEF)
-                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+            T, B, *_ = terrain.shape
 
-                # Value loss
-                newvalue = newvalue.view(-1)
-                if config.CLIP_VLOSS:
-                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                    v_clipped = b_values[mb_inds] + torch.clamp(
-                        newvalue - b_values[mb_inds],
-                        -config.CLIP_COEF,
-                        config.CLIP_COEF,
-                    )
-                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                    v_loss = 0.5 * v_loss_max.mean()
-                else:
-                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+            terrain = F.one_hot(terrain, num_classes=16).permute(0, 1, 4, 2, 3)
+            population = F.one_hot(population,
+                                num_classes=6).permute(0, 1, 4, 2, 3)
+            death_fog_damage = death_fog_damage.unsqueeze(dim=2)
+            reachable = reachable.unsqueeze(dim=2)
+            local_map = torch.cat(
+                [terrain, reachable, population, death_fog_damage], dim=2)
 
-                entropy_loss = entropy.mean()
-                loss = pg_loss - config.ENT_COEF * entropy_loss + v_loss * config.VF_COEF
+            local_map = torch.flatten(local_map, 0, 1).to(torch.float32)
+            local_map_emb = self.local_map_cnn(local_map)
+            local_map_emb = local_map_emb.view(T * B, -1).view(T, B, -1)
+            local_map_emb = F.relu(self.local_map_fc(local_map_emb))
 
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(agent.parameters(), config.MAX_GRAD_NORM)
-                optimizer.step()
+            return local_map_emb
 
-            if config.TARGET_KL is not None:
-                if approx_kl > config.TARGET_KL:
-                    break
+        def entity_embedding(self, input_dict):
+            self_entity = input_dict["self_entity"].unsqueeze(1)
+            other_entity = input_dict["other_entity"].unsqueeze(1)
 
-        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+            T, B, *_ = self_entity.shape
 
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
-        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-        writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        print(f'Update: {update}, SPS: {int(global_step / (time.time() - start_time))}')
-        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+            self_entity_emb = F.relu(self.self_entity_fc1(self_entity))
+            self_entity_emb = self_entity_emb.view(T, B, -1)
+            self_entity_emb = F.relu(self.self_entity_fc2(self_entity_emb))
 
-        torch.save(agent.state_dict(), 'model.pt')
+            other_entity_emb = F.relu(self.other_entity_fc1(other_entity))
+            other_entity_emb = other_entity_emb.view(T, B, -1)
+            other_entity_emb = F.relu(self.other_entity_fc2(other_entity_emb))
 
-    envs.close()
-    writer.close()
+            return self_entity_emb, other_entity_emb
+
+        def forward(self, input_dict, state, seq_lens):
+            training = True
+
+            #Is this the orig obs space or the modified one?
+            input_dict = pufferlib.emulation.unpack_batched_obs(
+                    observation_space, input_dict['obs'])
+                    
+            T, B, *_ = input_dict["terrain"].shape
+            local_map_emb = self.local_map_embedding(input_dict)
+            self_entity_emb, other_entity_emb = self.entity_embedding(input_dict)
+
+            x = torch.cat([local_map_emb, self_entity_emb, other_entity_emb],
+                        dim=-1)
+            x = F.relu(self.fc(x))
+
+            logits = self.action_head(x)
+            self.value = self.value_head(x)#.view(T, B)
+
+            output = []
+            for key, val in logits.items():
+                output.append(val.squeeze(1))
+            output = torch.cat(output, 1)
+
+            return output, state
+
+    return NMMONet
+
+def make_old_policy(config):
+    class Policy(RecurrentNetwork, nn.Module):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            nn.Module.__init__(self)
+            self.config = config
+            nmmo.io.action.Action.hook(config)
+
+            self.input  = io.Input(config,
+                    embeddings=io.MixedEmbedding,
+                    attributes=subnets.SelfAttention)
+            self.output = io.Output(config)
+            self.value  = nn.Linear(config.HIDDEN, 1)
+            self.policy = policy.Simple(config)
+            self.lstm = pufferlib.torch.BatchFirstLSTM(config.HIDDEN, config.HIDDEN)
+
+        def get_initial_state(self):
+            return [self.value.weight.new(1, self.config.HIDDEN).zero_(),
+                    self.value.weight.new(1, self.config.HIDDEN).zero_()]
+
+        def forward_rnn(self, x, state, seq_lens):
+            B, TT, _  = x.shape
+            x         = x.reshape(B*TT, -1)
+
+            x         = nmmo.emulation.unpack_obs(self.config, x)
+            lookup    = self.input(x)
+            hidden, _ = self.policy(lookup)
+
+            hidden        = hidden.view(B, TT, self.config.HIDDEN)
+            hidden, state = self.lstm(hidden, state)
+            hidden        = hidden.reshape(B*TT, self.config.HIDDEN)
+
+            self.val = self.value(hidden).squeeze(-1)
+            logits   = self.output(hidden, lookup)
+
+            flat_logits = []
+            for atn in nmmo.Action.edges(self.config):
+                for arg in atn.edges:
+                    flat_logits.append(logits[atn][arg])
+
+            flat_logits = torch.cat(flat_logits, 1)
+            return flat_logits, state
+
+        def value_function(self):
+            return self.val.view(-1)
+
+    return Policy
+
+class NMMOLogger(DefaultCallbacks):
+    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
+        assert len(base_env.envs) == 1, 'One env per worker'
+        env = base_env.envs[0].par_env
+
+        inv_map = {agent.policyID: agent for agent in env.config.PLAYERS}
+
+        stats = env.terminal()
+        stats = {**stats['Player'], **stats['Env']}
+        policy_ids = stats.pop('PolicyID')
+
+        for key, vals in stats.items():
+            policy_stat = defaultdict(list)
+
+            # Per-population metrics
+            for policy_id, v in zip(policy_ids, vals):
+                policy_stat[policy_id].append(v)
+
+            for policy_id, vals in policy_stat.items():
+                policy = inv_map[policy_id].__name__
+
+                k = f'{policy}_{policy_id}_{key}'
+                episode.custom_metrics[k] = np.mean(vals)
+
+        return super().on_episode_end(
+            worker=worker,
+            base_env=base_env,
+            policies=policies,
+            episode=episode,
+            **kwargs
+        )
+
+
+class Config(Train):
+    RESPAWN = False
+    HIDDEN = 2
+
+class WrappedEnv(nmmo.Env):
+    def action_space(self, agent):
+        #Note: is alph sorted
+        return spaces.Dict({
+            'attack': spaces.Discrete(16),
+            'move': spaces.Discrete(5),
+        })
+
+    def step(self, actions):
+        for k, atns in actions.items():
+            target, move = atns
+
+            actions[k] = {}
+
+            if move != 4: #Don't move
+                actions[k][nmmo.action.Move] = {
+                        nmmo.action.Direction: move}
+            actions[k][nmmo.action.Attack] = {
+                nmmo.action.Style: 2, #Mage
+                nmmo.action.Target: target}
+
+        return super().step(actions)
+
+def env_creator():
+    wrapped = pufferlib.emulation.EnvWrapper(WrappedEnv)
+    #return wrapped(config=Config())
+    feature_parser = FeatureParser(config)
+    return wrapped(config=Config(),
+            feature_parser=feature_parser)
+
+# Dashboard fails on WSL
+ray.init(include_dashboard=False, num_gpus=1)
+
+Config.HORIZON = 16
+config = Config()
+pufferlib.rllib.register_env('nmmo', env_creator)
+test_env = env_creator()
+observation_space = test_env.structured_observation_space(1)
+obs = test_env.reset()
+
+ModelCatalog.register_custom_model('custom', make_policy(config, observation_space)) 
+
+trainer = RLTrainer(
+    scaling_config=ScalingConfig(num_workers=2, use_gpu=True),
+    algorithm="PPO",
+    config={
+        "num_gpus": 1,
+        "num_workers": 4,
+        "num_envs_per_worker": 1,
+        "rollout_fragment_length": 32,
+        "train_batch_size": 2**10,
+        #"train_batch_size": 2**19,
+        "sgd_minibatch_size": 128,
+        "num_sgd_iter": 1,
+        "framework": "torch",
+        "env": "nmmo",
+        "multiagent": {
+            "count_steps_by": "agent_steps"
+        },
+        "model": {
+            "custom_model": "custom",
+            'custom_model_config': {'config': config},
+            "max_seq_len": 16
+        },
+    }
+)
+
+tuner = Tuner(
+    trainer,
+    _tuner_kwargs={"checkpoint_at_end": True},
+    run_config=RunConfig(
+        local_dir='results',
+        verbose=1,
+        stop={"training_iteration": 5},
+        checkpoint_config=CheckpointConfig(
+            num_to_keep=5,
+            checkpoint_frequency=1,
+        ),
+        callbacks=[
+            WandbLoggerCallback(
+                project='NeuralMMO',
+                api_key_file='wandb_api_key',
+                log_config=False,
+            )
+        ]
+    ),
+    param_space={
+        'callbacks': NMMOLogger,
+    }
+)
+
+result = tuner.fit()[0]
+print('Saved ', result.checkpoint)
+
+#policy = RLCheckpoint.from_checkpoint(result.checkpoint).get_policy()
+
+'''
+def multiagent_self_play(trainer: Type[Trainer]):
+    new_weights = trainer.get_policy("player1").get_weights()
+    for opp in Config.OPPONENT_POLICIES:
+        prev_weights = trainer.get_policy(opp).get_weights()
+        trainer.get_policy(opp).set_weights(new_weights)
+        new_weights = prev_weights
+
+local_weights = trainer.workers.local_worker().get_weights()
+trainer.workers.foreach_worker(lambda worker: worker.set_weights(local_weights))
+'''
