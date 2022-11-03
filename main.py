@@ -477,11 +477,7 @@ class NMMOLogger(DefaultCallbacks):
         )
 
 
-class Config(Train):
-    RESPAWN = False
-    HIDDEN = 2
-
-class WrappedEnv(nmmo.Env):
+class CompetitionEnv(nmmo.Env):
     def action_space(self, agent):
         #Note: is alph sorted
         return spaces.Dict({
@@ -505,17 +501,15 @@ class WrappedEnv(nmmo.Env):
         return super().step(actions)
 
 def env_creator():
-    wrapped = pufferlib.emulation.EnvWrapper(WrappedEnv)
-    #return wrapped(config=Config())
+    wrapped = pufferlib.emulation.EnvWrapper(CompetitionEnv)
     feature_parser = FeatureParser(config)
-    return wrapped(config=Config(),
+    return wrapped(config=CompetitionConfig(),
             feature_parser=feature_parser)
 
 # Dashboard fails on WSL
 ray.init(include_dashboard=False, num_gpus=1)
 
-Config.HORIZON = 16
-config = Config()
+config = CompetitionConfig()
 pufferlib.rllib.register_env('nmmo', env_creator)
 test_env = env_creator()
 observation_space = test_env.structured_observation_space(1)
