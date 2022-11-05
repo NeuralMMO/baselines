@@ -510,7 +510,7 @@ def env_creator():
 ray.init(include_dashboard=False, num_gpus=1)
 
 config = CompetitionConfig()
-pufferlib.rllib.register_env('nmmo', env_creator)
+pufferlib.rllib.register_multiagent_env('nmmo', env_creator)
 test_env = env_creator()
 observation_space = test_env.structured_observation_space(1)
 obs = test_env.reset()
