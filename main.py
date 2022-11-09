@@ -487,7 +487,8 @@ class CompetitionEnv(nmmo.Env):
 
     def step(self, actions):
         for k, atns in actions.items():
-            target, move = atns
+            target = atns['attack']
+            move = atns['move']
 
             actions[k] = {}
 
@@ -501,7 +502,7 @@ class CompetitionEnv(nmmo.Env):
         return super().step(actions)
 
 def env_creator():
-    wrapped = pufferlib.emulation.EnvWrapper(CompetitionEnv)
+    wrapped = pufferlib.emulation.Simplify(CompetitionEnv)
     feature_parser = FeatureParser(config)
     return wrapped(config=CompetitionConfig(),
             feature_parser=feature_parser)
