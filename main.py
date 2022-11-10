@@ -487,8 +487,8 @@ class CompetitionEnv(nmmo.Env):
 
     def step(self, actions):
         for k, atns in actions.items():
-            target = atns['attack']
             move = atns['move']
+            target = atns['attack']
 
             actions[k] = {}
 
@@ -501,17 +501,17 @@ class CompetitionEnv(nmmo.Env):
 
         return super().step(actions)
 
-def env_creator():
-    wrapped = pufferlib.emulation.Simplify(CompetitionEnv)
-    feature_parser = FeatureParser(config)
-    return wrapped(config=CompetitionConfig(),
-            feature_parser=feature_parser)
 
 # Dashboard fails on WSL
 ray.init(include_dashboard=False, num_gpus=1)
 
 config = CompetitionConfig()
-pufferlib.rllib.register_multiagent_env('nmmo', env_creator)
+
+env_cls = pufferlib.emulation.wrap(CompetitionEnv,
+        feature_parser=FeatureParser(config))
+env_creator = lambda: env_cls(config)
+
+pufferlib.rllib.register_env('nmmo', env_cls)
 test_env = env_creator()
 observation_space = test_env.structured_observation_space(1)
 obs = test_env.reset()
