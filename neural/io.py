@@ -22,10 +22,7 @@ class MixedEmbedding(nn.Module):
       continuous = x['Continuous'].split(1, dim=-1)
       continuous = [net(e) for net, e in zip(self.continuous, continuous)]
       continuous = torch.stack(continuous, dim=-2)
-      try:
-         discrete   = self.discrete(x['Discrete'].long())
-      except:
-         T()
+      discrete   = self.discrete(x['Discrete'].long())
 
       return torch.cat((continuous, discrete), dim=-2)
 
