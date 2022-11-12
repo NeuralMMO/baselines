@@ -300,101 +300,98 @@ class ActionHead(nn.Module):
         return out
 
 
-def make_policy(config, observation_space):
-    class NMMONet(TorchModelV2, nn.Module):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            nn.Module.__init__(self)
-            self.config = config
+class Policy(pufferlib.rllib.FCNetwork):
+    def __init__(self, *args, observation_space, action_space, hidden_size, **kwargs):
+        super().__init__(hidden_size, *args, **kwargs)
 
-            self.local_map_cnn = nn.Sequential(
-                nn.Conv2d(24, 32, 3, 2, 1),
-                nn.ReLU(),
-                nn.Conv2d(32, 32, 3, 2, 1),
-                nn.ReLU(),
-                nn.Conv2d(32, 32, 3, 1, 1),
-                nn.ReLU(),
-            )
-            self.local_map_fc = nn.Linear(32 * 4 * 4, 64)
+        self.observation_space = observation_space
 
-            self.self_entity_fc1 = nn.Linear(26, 32)
-            self.self_entity_fc2 = nn.Linear(32, 32)
+        self.local_map_cnn = nn.Sequential(
+            nn.Conv2d(24, 32, 3, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.ReLU(),
+        )
+        self.local_map_fc = nn.Linear(32 * 4 * 4, 64)
 
-            self.other_entity_fc1 = nn.Linear(26, 32)
-            self.other_entity_fc2 = nn.Linear(15 * 32, 32)
+        self.self_entity_fc1 = nn.Linear(26, 32)
+        self.self_entity_fc2 = nn.Linear(32, 32)
 
-            self.fc = nn.Linear(64 + 32 + 32, 64)
-            self.action_head = ActionHead(64)
-            self.value_head = nn.Linear(64, 1)
+        self.other_entity_fc1 = nn.Linear(26, 32)
+        self.other_entity_fc2 = nn.Linear(15 * 32, 32)
 
-        def value_function(self):
-            return self.value.view(-1)
+        self.fc = nn.Linear(64 + 32 + 32, 64)
+        self.action_head = ActionHead(64)
+        self.value_head = nn.Linear(64, 1)
 
-        def local_map_embedding(self, input_dict):
-            terrain = input_dict["terrain"].long().unsqueeze(1)
-            death_fog_damage = input_dict["death_fog_damage"].unsqueeze(1)
-            reachable = input_dict["reachable"].unsqueeze(1)
-            population = input_dict["entity_population"].long().unsqueeze(1)
+    def value_function(self):
+        return self.value.view(-1)
 
-            T, B, *_ = terrain.shape
+    def _local_map_embedding(self, input_dict):
+        terrain = input_dict["terrain"].long().unsqueeze(1)
+        death_fog_damage = input_dict["death_fog_damage"].unsqueeze(1)
+        reachable = input_dict["reachable"].unsqueeze(1)
+        population = input_dict["entity_population"].long().unsqueeze(1)
 
-            terrain = F.one_hot(terrain, num_classes=16).permute(0, 1, 4, 2, 3)
-            population = F.one_hot(population,
-                                num_classes=6).permute(0, 1, 4, 2, 3)
-            death_fog_damage = death_fog_damage.unsqueeze(dim=2)
-            reachable = reachable.unsqueeze(dim=2)
-            local_map = torch.cat(
-                [terrain, reachable, population, death_fog_damage], dim=2)
+        T, B, *_ = terrain.shape
 
-            local_map = torch.flatten(local_map, 0, 1).to(torch.float32)
-            local_map_emb = self.local_map_cnn(local_map)
-            local_map_emb = local_map_emb.view(T * B, -1).view(T, B, -1)
-            local_map_emb = F.relu(self.local_map_fc(local_map_emb))
+        terrain = F.one_hot(terrain, num_classes=16).permute(0, 1, 4, 2, 3)
+        population = F.one_hot(population,
+                            num_classes=6).permute(0, 1, 4, 2, 3)
+        death_fog_damage = death_fog_damage.unsqueeze(dim=2)
+        reachable = reachable.unsqueeze(dim=2)
+        local_map = torch.cat(
+            [terrain, reachable, population, death_fog_damage], dim=2)
 
-            return local_map_emb
+        local_map = torch.flatten(local_map, 0, 1).to(torch.float32)
+        local_map_emb = self.local_map_cnn(local_map)
+        local_map_emb = local_map_emb.view(T * B, -1).view(T, B, -1)
+        local_map_emb = F.relu(self.local_map_fc(local_map_emb))
 
-        def entity_embedding(self, input_dict):
-            self_entity = input_dict["self_entity"].unsqueeze(1)
-            other_entity = input_dict["other_entity"].unsqueeze(1)
+        return local_map_emb
 
-            T, B, *_ = self_entity.shape
+    def _entity_embedding(self, input_dict):
+        self_entity = input_dict["self_entity"].unsqueeze(1)
+        other_entity = input_dict["other_entity"].unsqueeze(1)
 
-            self_entity_emb = F.relu(self.self_entity_fc1(self_entity))
-            self_entity_emb = self_entity_emb.view(T, B, -1)
-            self_entity_emb = F.relu(self.self_entity_fc2(self_entity_emb))
+        T, B, *_ = self_entity.shape
 
-            other_entity_emb = F.relu(self.other_entity_fc1(other_entity))
-            other_entity_emb = other_entity_emb.view(T, B, -1)
-            other_entity_emb = F.relu(self.other_entity_fc2(other_entity_emb))
+        self_entity_emb = F.relu(self.self_entity_fc1(self_entity))
+        self_entity_emb = self_entity_emb.view(T, B, -1)
+        self_entity_emb = F.relu(self.self_entity_fc2(self_entity_emb))
 
-            return self_entity_emb, other_entity_emb
+        other_entity_emb = F.relu(self.other_entity_fc1(other_entity))
+        other_entity_emb = other_entity_emb.view(T, B, -1)
+        other_entity_emb = F.relu(self.other_entity_fc2(other_entity_emb))
 
-        def forward(self, input_dict, state, seq_lens):
-            training = True
+        return self_entity_emb, other_entity_emb
 
-            #Is this the orig obs space or the modified one?
-            input_dict = pufferlib.emulation.unpack_batched_obs(
-                    observation_space, input_dict['obs'])
-                    
-            T, B, *_ = input_dict["terrain"].shape
-            local_map_emb = self.local_map_embedding(input_dict)
-            self_entity_emb, other_entity_emb = self.entity_embedding(input_dict)
+    def encode_observations(self, env_outputs):
+        input_dict = pufferlib.emulation.unpack_batched_obs(
+                self.observation_space, env_outputs)
+                
+        T, B, *_ = input_dict["terrain"].shape
+        local_map_emb = self._local_map_embedding(input_dict)
+        self_entity_emb, other_entity_emb = self._entity_embedding(input_dict)
 
-            x = torch.cat([local_map_emb, self_entity_emb, other_entity_emb],
-                        dim=-1)
-            x = F.relu(self.fc(x))
+        x = torch.cat([local_map_emb, self_entity_emb, other_entity_emb],
+                    dim=-1)
+        x = F.relu(self.fc(x))
 
-            logits = self.action_head(x)
-            self.value = self.value_head(x)#.view(T, B)
+        return x, None
 
-            output = []
-            for key, val in logits.items():
-                output.append(val.squeeze(1))
-            output = torch.cat(output, 1)
+    def decode_actions(self, hidden, lookup):
+        logits = self.action_head(hidden)
+        self.value = self.value_head(hidden)
 
-            return output, state
+        output = []
+        for key, val in logits.items():
+            output.append(val.squeeze(1))
+        output = torch.cat(output, 1)
 
-    return NMMONet
+        return output
 
 def make_old_policy(config):
     class Policy(RecurrentNetwork, nn.Module):
@@ -504,19 +501,20 @@ class CompetitionEnv(nmmo.Env):
 
 # Dashboard fails on WSL
 ray.init(include_dashboard=False, num_gpus=1)
+ModelCatalog.register_custom_model('custom', Policy)
 
 config = CompetitionConfig()
-
 env_cls = pufferlib.emulation.wrap(CompetitionEnv,
         feature_parser=FeatureParser(config))
 env_creator = lambda: env_cls(config)
 
 pufferlib.rllib.register_env('nmmo', env_cls)
+
 test_env = env_creator()
 observation_space = test_env.structured_observation_space(1)
+action_space = test_env.action_space(1)
 obs = test_env.reset()
 
-ModelCatalog.register_custom_model('custom', make_policy(config, observation_space)) 
 
 trainer = RLTrainer(
     scaling_config=ScalingConfig(num_workers=2, use_gpu=True),
@@ -537,7 +535,11 @@ trainer = RLTrainer(
         },
         "model": {
             "custom_model": "custom",
-            'custom_model_config': {'config': config},
+            'custom_model_config': {
+                'observation_space': observation_space, 
+                'action_space': action_space, 
+                'hidden_size': 64,
+            },
             "max_seq_len": 16
         },
     }
