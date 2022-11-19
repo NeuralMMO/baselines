@@ -300,9 +300,17 @@ class ActionHead(nn.Module):
         return out
 
 
-class Policy(pufferlib.rllib.FCNetwork):
-    def __init__(self, *args, observation_space, action_space, hidden_size, **kwargs):
-        super().__init__(hidden_size, *args, **kwargs)
+class Policy(pufferlib.frameworks.BasePolicy):
+    def __init__(self,
+            observation_space,
+            action_space,
+            input_size,
+            hidden_size,
+            lstm_layers,
+            *args,
+            **kwargs
+        ):
+        super().__init__(input_size, hidden_size, lstm_layers, *args, **kwargs)
 
         self.observation_space = observation_space
 
@@ -326,8 +334,8 @@ class Policy(pufferlib.rllib.FCNetwork):
         self.action_head = ActionHead(64)
         self.value_head = nn.Linear(64, 1)
 
-    def value_function(self):
-        return self.value.view(-1)
+    def critic(self, hidden):
+        return self.value_head(hidden)
 
     def _local_map_embedding(self, input_dict):
         terrain = input_dict["terrain"].long().unsqueeze(1)
@@ -384,7 +392,6 @@ class Policy(pufferlib.rllib.FCNetwork):
 
     def decode_actions(self, hidden, lookup):
         logits = self.action_head(hidden)
-        self.value = self.value_head(hidden)
 
         output = []
         for key, val in logits.items():
@@ -498,23 +505,47 @@ class CompetitionEnv(nmmo.Env):
 
         return super().step(actions)
 
+class NMMOBinding(pufferlib.bindings.Base):
+    def __init__(self):
+        self.env_name = 'nmmo'
+        self.env_cls = CompetitionEnv
+
+        config = CompetitionConfig()
+
+        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv,
+                feature_parser=FeatureParser(config))
+        self.env_args = [config]
+
+        self.policy = Policy
+
+        self.orig_env = CompetitionEnv(config)
+        self.test_env = self.env_creator()
+
+    @property
+    def observation_space(self):
+        return self.test_env.structured_observation_space(1)
+
+    @property
+    def action_space(self):
+        return self.orig_env.action_space(1)
+
 
 # Dashboard fails on WSL
 ray.init(include_dashboard=False, num_gpus=1)
-ModelCatalog.register_custom_model('custom', Policy)
 
-config = CompetitionConfig()
-env_cls = pufferlib.emulation.wrap(CompetitionEnv,
-        feature_parser=FeatureParser(config))
-env_creator = lambda: env_cls(config)
+binding = NMMOBinding()
+env_cls = binding.env_cls
+env_args = binding.env_args
+name = binding.env_name
 
-pufferlib.rllib.register_env('nmmo', env_cls)
-
+policy = pufferlib.rllib.make_rllib_policy(binding.policy,
+        lstm_layers=binding.custom_model_config['lstm_layers'])
+ModelCatalog.register_custom_model(name, policy)
+env_creator = binding.env_creator
 test_env = env_creator()
-observation_space = test_env.structured_observation_space(1)
-action_space = test_env.action_space(1)
-obs = test_env.reset()
 
+pufferlib.utils.check_env(test_env)
+pufferlib.rllib.register_env(name, env_creator)
 
 trainer = RLTrainer(
     scaling_config=ScalingConfig(num_workers=2, use_gpu=True),
@@ -525,20 +556,21 @@ trainer = RLTrainer(
         "num_envs_per_worker": 1,
         "rollout_fragment_length": 32,
         "train_batch_size": 2**10,
-        #"train_batch_size": 2**19,
         "sgd_minibatch_size": 128,
         "num_sgd_iter": 1,
         "framework": "torch",
-        "env": "nmmo",
+        "env": name,
         "multiagent": {
             "count_steps_by": "agent_steps"
         },
         "model": {
-            "custom_model": "custom",
+            "custom_model": name,
             'custom_model_config': {
-                'observation_space': observation_space, 
-                'action_space': action_space, 
+                'observation_space': binding.observation_space, 
+                'action_space': binding.action_space, 
+                'input_size': 64,
                 'hidden_size': 64,
+                'lstm_layers': 0,
             },
             "max_seq_len": 16
         },
