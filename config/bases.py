@@ -1,17 +1,14 @@
 from pdb import set_trace as T
 
-import os
-
 import nmmo
 
-from scripted import baselines
-import tasks
+#import tasks
 
 class Base:
    RESPAWN  = True
 
    PLAYERS = [nmmo.Agent]
-   TASKS    = tasks.All
+   #TASKS    = tasks.All
 
 
    MAP_N = 256

@@ -26,7 +26,6 @@ from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import nmmo
 import pufferlib
 
-from config.cleanrl import Train
 from neural import policy, io, subnets
 
 from typing import Dict
@@ -36,6 +35,9 @@ from typing import Dict, Tuple
 
 
 class CompetitionConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
+    # Cache maps
+    MAP_FORCE_GENERATION = False
+
     TASKS = None
     MAP_N = 40
     PATH_MAPS = "maps"
@@ -300,6 +302,8 @@ class ActionHead(nn.Module):
         return out
 
 
+# New policy developed for the IJCAI baseline
+# Be sure to uncomment the feature parser in the binding to use
 class Policy(pufferlib.frameworks.BasePolicy):
     def __init__(self,
             observation_space,
@@ -400,53 +404,56 @@ class Policy(pufferlib.frameworks.BasePolicy):
 
         return output
 
-def make_old_policy(config):
-    class Policy(RecurrentNetwork, nn.Module):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            nn.Module.__init__(self)
-            self.config = config
-            nmmo.io.action.Action.hook(config)
+# Original policy used in pre-competition baselines
+class Policy(pufferlib.frameworks.BasePolicy):
+    def __init__(self,
+            observation_space,
+            action_space,
+            input_size,
+            hidden_size,
+            lstm_layers,
+            *args,
+            **kwargs
+        ):
+        super().__init__(input_size, hidden_size, lstm_layers, *args, **kwargs)
+        self.observation_space = observation_space
 
-            self.input  = io.Input(config,
-                    embeddings=io.MixedEmbedding,
-                    attributes=subnets.SelfAttention)
-            self.output = io.Output(config)
-            self.value  = nn.Linear(config.HIDDEN, 1)
-            self.policy = policy.Simple(config)
-            self.lstm = pufferlib.torch.BatchFirstLSTM(config.HIDDEN, config.HIDDEN)
+        config = CompetitionConfig()
+        self.config = config
+        config.EMBED = config.HIDDEN = 32
 
-        def get_initial_state(self):
-            return [self.value.weight.new(1, self.config.HIDDEN).zero_(),
-                    self.value.weight.new(1, self.config.HIDDEN).zero_()]
+        nmmo.io.action.Action.hook(config)
 
-        def forward_rnn(self, x, state, seq_lens):
-            B, TT, _  = x.shape
-            x         = x.reshape(B*TT, -1)
+        self.input  = io.Input(config,
+                embeddings=io.MixedEmbedding,
+                attributes=subnets.SelfAttention)
+        self.output = io.Output(config)
+        self.value_head = nn.Linear(config.HIDDEN, 1)
+        self.policy = policy.Simple(config)
 
-            x         = nmmo.emulation.unpack_obs(self.config, x)
-            lookup    = self.input(x)
-            hidden, _ = self.policy(lookup)
+    def critic(self, hidden):
+        return self.value_head(hidden)
 
-            hidden        = hidden.view(B, TT, self.config.HIDDEN)
-            hidden, state = self.lstm(hidden, state)
-            hidden        = hidden.reshape(B*TT, self.config.HIDDEN)
+    def encode_observations(self, env_outputs):
+        x = pufferlib.emulation.unpack_batched_obs(
+                self.observation_space, env_outputs)
 
-            self.val = self.value(hidden).squeeze(-1)
-            logits   = self.output(hidden, lookup)
+        lookup    = self.input(x)
+        hidden, _ = self.policy(lookup)
 
-            flat_logits = []
-            for atn in nmmo.Action.edges(self.config):
-                for arg in atn.edges:
-                    flat_logits.append(logits[atn][arg])
+        return hidden, lookup
 
-            flat_logits = torch.cat(flat_logits, 1)
-            return flat_logits, state
+    def decode_actions(self, hidden, lookup):
+        logits   = self.output(hidden, lookup)
 
-        def value_function(self):
-            return self.val.view(-1)
+        flat_logits = []
+        for atn in nmmo.Action.edges(self.config):
+            for arg in atn.edges:
+                flat_logits.append(logits[atn][arg])
 
-    return Policy
+        flat_logits = torch.cat(flat_logits, 1)
+        return flat_logits
+
 
 class NMMOLogger(DefaultCallbacks):
     def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
@@ -482,12 +489,15 @@ class NMMOLogger(DefaultCallbacks):
 
 
 class CompetitionEnv(nmmo.Env):
+    # Action space for new policy
+    '''
     def action_space(self, agent):
         #Note: is alph sorted
         return spaces.Dict({
             'attack': spaces.Discrete(16),
             'move': spaces.Discrete(5),
         })
+    '''
 
     def step(self, actions):
         for k, atns in actions.items():
@@ -512,8 +522,8 @@ class NMMOBinding(pufferlib.bindings.Base):
 
         config = CompetitionConfig()
 
-        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv,
-                feature_parser=FeatureParser(config))
+        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv)#,
+        #        feature_parser=FeatureParser(config))
         self.env_args = [config]
 
         self.policy = Policy
@@ -523,6 +533,7 @@ class NMMOBinding(pufferlib.bindings.Base):
 
     @property
     def observation_space(self):
+        return self.orig_env.observation_space(1)
         return self.test_env.structured_observation_space(1)
 
     @property
@@ -534,13 +545,24 @@ class NMMOBinding(pufferlib.bindings.Base):
 ray.init(include_dashboard=False, num_gpus=1)
 
 binding = NMMOBinding()
+
+binding = pufferlib.bindings.auto(
+    env_cls=nmmo.Env
+)
+
+# Currently only works with minimal network
+tuner = pufferlib.rllib.make_rllib_tuner(binding)
+result = tuner.fit()[0]
+print('Saved ', result.checkpoint)
+exit(0)
+
 env_cls = binding.env_cls
 env_args = binding.env_args
 name = binding.env_name
 
-policy = pufferlib.rllib.make_rllib_policy(binding.policy,
+pol = pufferlib.rllib.make_rllib_policy(binding.policy,
         lstm_layers=binding.custom_model_config['lstm_layers'])
-ModelCatalog.register_custom_model(name, policy)
+ModelCatalog.register_custom_model(name, pol)
 env_creator = binding.env_creator
 test_env = env_creator()
 
@@ -604,7 +626,7 @@ tuner = Tuner(
 result = tuner.fit()[0]
 print('Saved ', result.checkpoint)
 
-#policy = RLCheckpoint.from_checkpoint(result.checkpoint).get_policy()
+#pol = RLCheckpoint.from_checkpoint(result.checkpoint).get_policy()
 
 '''
 def multiagent_self_play(trainer: Type[Trainer]):
