@@ -405,7 +405,7 @@ class Policy(pufferlib.frameworks.BasePolicy):
         return output
 
 # Original policy used in pre-competition baselines
-class Policy(pufferlib.frameworks.BasePolicy):
+class OldPolicy(pufferlib.frameworks.BasePolicy):
     def __init__(self,
             observation_space,
             action_space,
@@ -490,7 +490,6 @@ class NMMOLogger(DefaultCallbacks):
 
 class CompetitionEnv(nmmo.Env):
     # Action space for new policy
-    '''
     def action_space(self, agent):
         #Note: is alph sorted
         return spaces.Dict({
@@ -513,7 +512,6 @@ class CompetitionEnv(nmmo.Env):
                 nmmo.action.Target: target}
 
         return super().step(actions)
-    '''
 
 class NMMOBinding(pufferlib.bindings.Base):
     def __init__(self):
@@ -522,8 +520,8 @@ class NMMOBinding(pufferlib.bindings.Base):
 
         config = CompetitionConfig()
 
-        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv)#,
-        #        feature_parser=FeatureParser(config))
+        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv,
+                feature_parser=FeatureParser(config))
         self.env_args = [config]
 
         self.policy = Policy
@@ -533,7 +531,8 @@ class NMMOBinding(pufferlib.bindings.Base):
 
     @property
     def observation_space(self):
-        return self.orig_env.observation_space(1)
+        #TODO: Add checks on this to pufferlib
+        #return self.orig_env.observation_space(1)
         return self.test_env.structured_observation_space(1)
 
     @property
