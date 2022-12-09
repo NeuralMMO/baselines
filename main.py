@@ -497,7 +497,6 @@ class CompetitionEnv(nmmo.Env):
             'attack': spaces.Discrete(16),
             'move': spaces.Discrete(5),
         })
-    '''
 
     def step(self, actions):
         for k, atns in actions.items():
@@ -514,6 +513,7 @@ class CompetitionEnv(nmmo.Env):
                 nmmo.action.Target: target}
 
         return super().step(actions)
+    '''
 
 class NMMOBinding(pufferlib.bindings.Base):
     def __init__(self):
@@ -546,9 +546,9 @@ ray.init(include_dashboard=False, num_gpus=1)
 
 binding = NMMOBinding()
 
-binding = pufferlib.bindings.auto(
-    env_cls=nmmo.Env
-)
+#binding = pufferlib.bindings.auto(
+#    env_cls=nmmo.Env
+#)
 
 # Currently only works with minimal network
 tuner = pufferlib.rllib.make_rllib_tuner(binding)
