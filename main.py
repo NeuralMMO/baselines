@@ -384,7 +384,6 @@ class Policy(pufferlib.binding.Policy):
     def encode_observations(self, env_outputs):
         input_dict = pufferlib.emulation.unpack_batched_obs(
                 self.observation_space, env_outputs)
-                
         T, B, *_ = input_dict["terrain"].shape
         local_map_emb = self._local_map_embedding(input_dict)
         self_entity_emb, other_entity_emb = self._entity_embedding(input_dict)
@@ -525,21 +524,16 @@ class NMMOBinding(pufferlib.binding.Base):
 
         self.env_args = [config]
 
+        self.observation_shape = env_cls(config).structured_observation_space(1)
         self.policy = Policy
 
-        self.orig_env = CompetitionEnv(config)
-        self.test_env = self.env_creator()
+        super().__init__('nmmo', env_cls, env_args=[config])
 
     @property
-    def observation_space(self):
-        #TODO: Add checks on this to pufferlib
-        #return self.orig_env.observation_space(1)
-        return self.test_env.structured_observation_space(1)
-
-    @property
-    def action_space(self):
-        return self.orig_env.action_space(1)
-
+    def custom_model_config(self):
+        config = super().custom_model_config
+        config['observation_space'] = self.observation_shape
+        return config
 
 # Dashboard fails on WSL
 ray.init(include_dashboard=False, num_gpus=1)
