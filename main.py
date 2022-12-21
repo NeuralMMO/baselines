@@ -18,18 +18,19 @@ from ray.tune.tuner import Tuner
 from ray.tune.integration.wandb import WandbLoggerCallback
 from ray.train.rl.rl_trainer import RLTrainer
 from ray.rllib.models import ModelCatalog
-from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 
+import pufferlib.utils
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
 import nmmo
+
 import pufferlib
+import pufferlib.binding
+import pufferlib.emulation
+import pufferlib.frameworks.rllib
+import pufferlib.utils
 
 from neural import policy, io, subnets
-
-from typing import Dict
-
 
 from typing import Dict, Tuple
 
@@ -304,7 +305,7 @@ class ActionHead(nn.Module):
 
 # New policy developed for the IJCAI baseline
 # Be sure to uncomment the feature parser in the binding to use
-class Policy(pufferlib.frameworks.BasePolicy):
+class Policy(pufferlib.binding.Policy):
     def __init__(self,
             observation_space,
             action_space,
@@ -405,7 +406,7 @@ class Policy(pufferlib.frameworks.BasePolicy):
         return output
 
 # Original policy used in pre-competition baselines
-class OldPolicy(pufferlib.frameworks.BasePolicy):
+class OldPolicy(pufferlib.binding.Policy):
     def __init__(self,
             observation_space,
             action_space,
@@ -513,15 +514,15 @@ class CompetitionEnv(nmmo.Env):
 
         return super().step(actions)
 
-class NMMOBinding(pufferlib.bindings.Base):
+class NMMOBinding(pufferlib.binding.Base):
     def __init__(self):
-        self.env_name = 'nmmo'
-        self.env_cls = CompetitionEnv
-
         config = CompetitionConfig()
 
-        self.env_cls = pufferlib.emulation.wrap(CompetitionEnv,
+        env_cls = pufferlib.emulation.PufferWrapper(CompetitionEnv,
                 feature_parser=FeatureParser(config))
+            
+        super().__init__('Neural MMO', env_cls)
+
         self.env_args = [config]
 
         self.policy = Policy
@@ -545,28 +546,18 @@ ray.init(include_dashboard=False, num_gpus=1)
 
 binding = NMMOBinding()
 
-#binding = pufferlib.bindings.auto(
-#    env_cls=nmmo.Env
-#)
-
-# Currently only works with minimal network
-tuner = pufferlib.rllib.make_rllib_tuner(binding)
-result = tuner.fit()[0]
-print('Saved ', result.checkpoint)
-exit(0)
-
 env_cls = binding.env_cls
 env_args = binding.env_args
 name = binding.env_name
 
-pol = pufferlib.rllib.make_rllib_policy(binding.policy,
+pol = pufferlib.frameworks.rllib.make_rllib_policy(binding.policy,
         lstm_layers=binding.custom_model_config['lstm_layers'])
 ModelCatalog.register_custom_model(name, pol)
 env_creator = binding.env_creator
 test_env = env_creator()
 
 pufferlib.utils.check_env(test_env)
-pufferlib.rllib.register_env(name, env_creator)
+pufferlib.frameworks.rllib.register_env(name, env_creator)
 
 trainer = RLTrainer(
     scaling_config=ScalingConfig(num_workers=2, use_gpu=True),
