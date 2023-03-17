@@ -6,10 +6,8 @@ import os
 import psutil
 import random
 import time
-from collections import deque
 from datetime import timedelta
 
-import gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import pufferlib
 import pufferlib.frameworks.cleanrl
-from pufferlib.vecenvs import VecEnvs
+import pufferlib.vectorization
 
 
 def train(
@@ -90,7 +88,7 @@ def train(
 
     buffers = []
     for i in range(num_buffers):
-        vec = VecEnvs(
+        vec = pufferlib.vectorization.RayVecEnv(
             binding,
             num_workers=num_cores,
             envs_per_worker=int(envs_per_worker),
@@ -314,8 +312,8 @@ def train(
             epoch_return = np.mean(epoch_returns)
             epoch_length = int(np.mean(epoch_lengths))
         else:
-            epoch_return = 0
-            epoch_length = 0
+            epoch_return = 0.0
+            epoch_length = 0.0
 
         print(
             f'Epoch: {update} - Mean Return: {epoch_return:<5.4}, Episode Length: {epoch_length}\n'
@@ -342,99 +340,93 @@ def train(
     envs.close()
     writer.close()
 
-if __name__ == '__main__':
-    import pufferlib.registry
+    if track:
+        wandb.finish()
 
+if __name__ == '__main__':
     if __debug__:
         print('WARNING: Running in debug mode. This will be slower than normal due to extensive checks in PufferLib emulation. Run with -O to disable debug mode.')
+
+    import sys
+    assert sys.argv[1] in 'nmmo nethack breakout atari'.split()
+
+    cuda = torch.cuda.is_available()
+    track = False # WandB tracking
 
     # Note: the dependencies for these demos are not currently compatible
     # Run pip install -e .[atari] or .[nethack] to install the dependencies for a specific demo 
     # This will be resolved in a future update
+    if sys.argv[1] == 'nmmo':
+        # Neural MMO requires the CarperAI fork of the nmmo-environment repo
+        import pufferlib.registry.nmmo
+        binding = pufferlib.registry.nmmo.make_binding()
+        agent = pufferlib.frameworks.cleanrl.make_policy(
+            pufferlib.registry.nmmo.Policy,
+            lstm_layers=1
+        )(binding)
 
-    import pufferlib.registry.atari
-    binding = pufferlib.registry.atari.create_binding('BreakoutNoFrameskip-v4', framestack=1)
-    agent = pufferlib.frameworks.cleanrl.make_cleanrl_policy(
-        pufferlib.registry.atari.Policy,
-        lstm_layers=1
-    )(binding, framestack=1)
-
-    train(
-        binding,
-        agent,
-        cuda=True,
-        total_timesteps=10_000_000,
-        track=True,
-        num_envs=2,
-        num_cores=2,
-        num_buffers=4,
-        num_minibatches=4,
-        num_agents=1,
-        wandb_project_name='pufferlib',
-        wandb_entity='jsuarez',
-    )
-
-    '''
-    # Neural MMO requires the CarperAI fork of the nmmo-environment repo
-    import pufferlib.registry.nmmo
-    binding = pufferlib.registry.nmmo.create_binding()
-    agent = pufferlib.frameworks.cleanrl.make_cleanrl_policy(
-        pufferlib.registry.nmmo.Policy,
-        lstm_layers=1
-    )(binding)
-
-    train(
-        binding,
-        agent,
-        cuda=True,
-        total_timesteps=10_000_000,
-        track=True,
-        num_envs=2,
-        num_cores=2,
-        num_minibatches=1,
-        num_agents=128,
-        wandb_project_name='pufferlib',
-        wandb_entity='jsuarez',
-    )
-
-    import pufferlib.registry.nethack
-    binding = pufferlib.registry.nethack.create_binding()
-    agent = pufferlib.frameworks.cleanrl.make_cleanrl_policy(
-        pufferlib.registry.nethack.Policy,
-        lstm_layers=1
-    )(binding)
-    train(
-        binding,
-        agent, 
-        cuda=True,
-        total_timesteps=10_000_000,
-        track=True,
-        num_envs=12,
-        num_cores=4,
-        num_minibatches=1,
-        num_agents=1,
-        wandb_project_name='pufferlib',
-        wandb_entity='jsuarez',
-    )
-
-
-    bindings = pufferlib.registry.make_atari_bindings()
-    bindings = {e.env_name: e for e in bindings}
-
-    envs = 'BreakoutNoFrameskip-v4 PongNoFrameskip-v4 BeamRiderNoFrameskip-v4'.split()
-    bindings = {k: bindings[k] for k in envs}
-
-    for name, binding in bindings.items():
-        test_cleanrl.train(
+        train(
             binding,
-            num_cores=8, 
-            #num_envs=1,
-            #num_minibatches=1,
-            #num_buffers=2,
-            cuda=True,
+            agent,
+            cuda=cuda,
             total_timesteps=10_000_000,
-            track=True,
+            track=track,
+            num_envs=2,
+            num_cores=2,
+            num_minibatches=1,
+            num_agents=128,
             wandb_project_name='pufferlib',
             wandb_entity='jsuarez',
         )
-    '''
+    elif sys.argv[1] == 'nethack':
+        import pufferlib.registry.nethack
+        binding = pufferlib.registry.nethack.make_binding()
+        agent = pufferlib.frameworks.cleanrl.make_policy(
+            pufferlib.registry.nethack.Policy,
+            lstm_layers=1
+        )(binding)
+
+        train(
+            binding,
+            agent, 
+            cuda=cuda,
+            total_timesteps=10_000_000,
+            track=track,
+            num_envs=12,
+            num_cores=4,
+            num_minibatches=1,
+            num_agents=1,
+            wandb_project_name='pufferlib',
+            wandb_entity='jsuarez',
+        )
+    else:
+        import pufferlib.registry.atari
+        bindings = [pufferlib.registry.atari.make_binding('BreakoutNoFrameskip-v4', framestack=1)]
+        if sys.argv[1] == 'atari':
+            bindings += [
+                pufferlib.registry.atari.make_binding('BeamRiderNoFrameskip-v4', framestack=1),
+                pufferlib.registry.atari.make_binding('PongNoFrameskip-v4', framestack=1),
+                pufferlib.registry.atari.make_binding('EnduroNoFrameskip-v4', framestack=1),
+                pufferlib.registry.atari.make_binding('QbertNoFrameskip-v4', framestack=1),
+                pufferlib.registry.atari.make_binding('SeaquestNoFrameskip-v4', framestack=1),
+                pufferlib.registry.atari.make_binding('SpaceInvadersNoFrameskip-v4', framestack=1),
+            ]
+ 
+        for binding in bindings:
+            agent = pufferlib.frameworks.cleanrl.make_policy(
+                pufferlib.registry.atari.Policy,
+                lstm_layers=1
+            )(binding, framestack=1)
+
+            train(
+                binding,
+                agent,
+                num_cores=4, 
+                num_envs=4,
+                num_buffers=2,
+                cuda=cuda,
+                total_timesteps=30_000,
+                track=track,
+                wandb_project_name='pufferlib',
+                wandb_entity='jsuarez',
+            )

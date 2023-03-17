@@ -4,19 +4,25 @@ import pufferlib.emulation
 import pufferlib.registry.nmmo
 import pufferlib.frameworks.cleanrl
 import nmmo
+from model import feature_parser
 from model.policy import Policy
+from model.feature_parser import FeatureParser
 
 if __name__ == "__main__":
     num_cores = 1
 
+    feature_parser = FeatureParser(nmmo.Env.observation_space)
+
     binding = pufferlib.emulation.Binding(
         env_cls=nmmo.Env,
         env_name="Neural MMO",
+        feature_parser = feature_parser,
     )
 
     agent = pufferlib.frameworks.cleanrl.make_cleanrl_policy(Policy, lstm_layers=1)(
         binding
     )
+
 
     assert binding is not None
     cleanrl_ppo_lstm.train(
