@@ -55,7 +55,7 @@ class TestTeamEnv(unittest.TestCase):
 
     def test_reset(self):
         # get the expected merged observation space and the actual merged observation space
-        expected_merged_obs = self.team_env._merge_obs(self.team_env.env.reset())
+        expected_merged_obs = self.team_env._group_by_team(self.team_env.env.reset().get)
         merged_obs = self.team_env.reset()
         # validate that the two merged observation spaces are equal
         self._validate_merged_dicts(merged_obs, expected_merged_obs)
@@ -71,9 +71,10 @@ class TestTeamEnv(unittest.TestCase):
     def test_step(self):
         # take a step with an empty action and get the expected and actual merged observations, rewards, dones and infos
         obs, rewards, dones, infos  = self.team_env.env.step({})
-        expected_merged_obs = self.team_env._merge_obs(obs)
-        expected_merged_rewards, expected_merged_infos = self.team_env._merge_rewards_infos(rewards, infos)
-        expected_merged_dones = self.team_env._merge_dones(dones)
+        expected_merged_obs = self.team_env._group_by_team(obs.get)
+        expected_merged_infos = self.team_env._group_by_team(infos.get)
+        expected_merged_rewards  = self.team_env._merge_rewards(rewards)
+        expected_merged_dones = self.team_env._group_by_team(dones.get)
         merged_obs, merged_rewards, merged_dones, merged_infos = self.team_env.step({})
 
         # validate that the merged observation spaces and infos are equal
