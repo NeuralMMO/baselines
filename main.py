@@ -9,7 +9,8 @@ from model.policy import Policy
 
 def create_env():
     nmmo_env = nmmo.Env()
-    team_env = TeamEnv(nmmo_env, { pid + 1: pid % 8 for pid in range(128)})
+    teams = [[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]
+    team_env = TeamEnv(nmmo_env, teams)
     return team_env
 
 if __name__ == "__main__":
