@@ -36,7 +36,7 @@ if __name__ == "__main__":
         num_cores=num_cores,
         num_buffers=4,
         num_minibatches=4,
-        num_agents=128,
+        num_agents=16,
         wandb_project_name="pufferlib",
         wandb_entity="platypus",
     )
