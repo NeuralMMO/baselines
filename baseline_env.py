@@ -118,6 +118,7 @@ class BaselineEnv(TeamEnv):
 
   def step(self, actions: Dict[int, Dict[str, Any]]):
     obs, rew, done, info = super().step(actions)
+    obs = obs[0]
     self.curr_obs = obs
     self.rescue_cooldown = max(0, self.rescue_cooldown - 1)
 
@@ -166,10 +167,9 @@ class BaselineEnv(TeamEnv):
           x, y = tile_pos[0]
           self.tile_map[x:x+WINDOW, y:y+WINDOW] = tile_type.reshape(WINDOW, WINDOW)
           # mark team/enemy/npc
-          n_entity = obs[i]['Entity']['N'][0]
           entity_obs = obs[i]['Entity']
-          entity_pos = entity_obs[:n_entity, 7:9].astype(int)
-          entity_pop = entity_obs[:n_entity, 6]
+          entity_pos = entity_obs[, 7:9].astype(int)
+          entity_pop = entity_obs[, 6]
           my_pop = entity_obs[0, 6]
           mark_point(entity_map[0], entity_pos, entity_pop == my_pop)  # team
           mark_point(entity_map[1], entity_pos, np.logical_and(entity_pop != my_pop, entity_pop > 0))  # enemy
@@ -267,8 +267,7 @@ class BaselineEnv(TeamEnv):
       for i in range(N_PLAYER_PER_TEAM):
           if i not in obs:
               continue
-          n = obs[i]['Inventory']['N'][0]
-          item_obs = obs[i]['Inventory'][:n]
+          item_obs = obs[i]['Inventory']
           my_obs = obs[i]['Entity'][0]
 
           # force use weapons and armors
@@ -403,8 +402,7 @@ class BaselineEnv(TeamEnv):
       self.force_buy_idx = [None] * N_PLAYER_PER_TEAM
 
       alive_ids = np.array([i for i in range(N_PLAYER_PER_TEAM) if i in obs])
-      n = obs[alive_ids[0]]['Market']['N'][0]
-      raw_market_obs = obs[alive_ids[0]]['Market'][:n]
+      raw_market_obs = obs[alive_ids[0]]['Market']
       market_obs = copy.deepcopy(raw_market_obs)  # will be modified later
 
       # combat rating
@@ -429,8 +427,7 @@ class BaselineEnv(TeamEnv):
       alive_ids = alive_ids[agent_order]  # reorder, low rating buy first
       for i in alive_ids:
           my_obs = obs[i]['Entity'][0]
-          n_item = obs[i]['Inventory']['N'][0]
-          my_items = obs[i]['Inventory'][:n_item]
+          my_items = obs[i]['Inventory']
           try:
               my_gold = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_GOLD][0][IDX_ITEM_QUANTITY]
           except IndexError:
@@ -483,8 +480,7 @@ class BaselineEnv(TeamEnv):
       ratings = []
       for i in alive_ids:
           rating = 0
-          n_item = obs[i]['Inventory']['N'][0]
-          my_items = obs[i]['Inventory'][:n_item]
+          my_items = obs[i]['Inventory']
           n_poultice = len(my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE])
           n_ration = len(my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_RATION])
           if n_poultice == 1:
@@ -502,8 +498,7 @@ class BaselineEnv(TeamEnv):
       team_n_poultice = [None] * N_PLAYER_PER_TEAM
       for i in alive_ids:
           my_obs = obs[i]['Entity'][0]
-          n_item = obs[i]['Inventory']['N'][0]
-          my_items = obs[i]['Inventory'][:n_item]
+          my_items = obs[i]['Inventory']
           my_poultices = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
           team_n_poultice[i] = len(my_poultices)
           if len(my_poultices) > 0:  # not emergent
@@ -538,8 +533,7 @@ class BaselineEnv(TeamEnv):
       if will_die_id is not None and self.rescue_cooldown == 0 and will_die_gold > 0:
           for i in reversed(alive_ids):
               if team_n_poultice[i] > 0 and self.force_sell_idx[i] is not None:
-                  n_item = obs[i]['Inventory']['N'][0]
-                  my_items = obs[i]['Inventory'][:n_item]
+                  my_items = obs[i]['Inventory']
                   my_poultices = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
                   team_pop = next(iter(obs.values()))['Entity'][0][IDX_ENT_POPULATION]
                   to_sell = sorted(my_poultices, key=lambda x: x[IDX_ITEM_LEVEL])[-1]  # sell the best
@@ -556,8 +550,7 @@ class BaselineEnv(TeamEnv):
           for i in alive_ids:
               if self.force_buy_idx[i] is not None:
                   continue
-              n_item = obs[i]['Inventory']['N'][0]
-              my_items = obs[i]['Inventory'][:n_item]
+              my_items = obs[i]['Inventory']
               if cons_type == ITEM_RATION and len(my_items[my_items[:, IDX_ITEM_INDEX] == cons_type]) >= 1:
                   continue
               if cons_type == ITEM_POULTICE and len(my_items[my_items[:, IDX_ITEM_INDEX] == cons_type]) >= 2:
@@ -585,13 +578,12 @@ class BaselineEnv(TeamEnv):
               continue
 
           item_obs = obs[i]['Inventory']
-          n = obs[i]['Inventory']['N'][0]
           item_arrs = []
           item_types = []
           for j in range(N_ITEM_SLOT):
               o = item_obs[j]
               item_types.append(o[IDX_ITEM_INDEX])  # type is 0 if j < n
-              arr = self._extract_per_item_feature(o if j < n else None)
+              arr = self._extract_per_item_feature(o)
               item_arrs.append(arr)
           item_types = np.array(item_types)
           item_arrs = np.stack(item_arrs)
@@ -635,9 +627,8 @@ class BaselineEnv(TeamEnv):
           if i not in obs:
               continue
           entity_obs = obs[i]['Entity']
-          n = obs[i]['Entity']['N'][0]
           team_members[i] = entity_obs[0]
-          for j in range(1, n):
+          for j in range(1, N_PLAYER_PER_TEAM):
               if entity_obs[j][IDX_ENT_ENTITY_ID] < 0:
                   npcs[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
               elif entity_obs[j][IDX_ENT_ENTITY_ID] not in team_members_idx:
@@ -785,8 +776,7 @@ class BaselineEnv(TeamEnv):
               legal_move[i][-1] = 1
               continue
           tiles_type = obs[i]['Tile'][:, 1].reshape((WINDOW, WINDOW))
-          n_ent_observed = obs[i]['Entity']['N'][0]
-          entity_pos = obs[i]['Entity'][1:n_ent_observed, 7:9].astype(int).tolist()
+          entity_pos = obs[i]['Entity'][1:, 7:9].astype(int).tolist()
           center = np.array([WINDOW_CENTER, WINDOW_CENTER])
           for j, e in enumerate(nmmo_act.Direction.edges):
               next_pos = center + e.delta
@@ -854,8 +844,7 @@ class BaselineEnv(TeamEnv):
       for i in range(N_PLAYER_PER_TEAM):
           if i not in obs:
               continue
-          n = obs[i]['Inventory']['N'][0]
-          item_obs = obs[i]['Inventory'][:n]
+          item_obs = obs[i]['Inventory']
           my_obs = obs[i]['Entity'][0]
 
           if self.force_use_idx[i] is None:
@@ -934,8 +923,7 @@ class BaselineEnv(TeamEnv):
       if self.force_use_idx[i] is not None:
           raw_actions[i][nmmo_act.Use] = {nmmo_act.Item: self.force_use_idx[i]}
       elif use != N_USE:
-          n = self.curr_obs[i]['Inventory']['N'][0]
-          item_obs = self.curr_obs[i]['Inventory'][:n]
+          item_obs = self.curr_obs[i]['Inventory']
           if use == USE_POULTICE:
               poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
               min_lvl = min(poultices[:, IDX_ITEM_LEVEL])
@@ -961,8 +949,7 @@ class BaselineEnv(TeamEnv):
               nmmo_act.Price: int(self.force_sell_price[i]),
           }
       elif sell != N_SELL:
-          n = self.curr_obs[i]['Inventory']['N'][0]
-          item_obs = self.curr_obs[i]['Inventory'][:n]
+          item_obs = self.curr_obs[i]['Inventory']
           if sell == SELL_POULTICE:
               poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
               min_lvl = min(poultices[:, IDX_ITEM_LEVEL])
