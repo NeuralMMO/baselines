@@ -1,89 +1,76 @@
 import unittest
-from unittest.mock import Mock
-import nmmo
-from typing import Any, Dict, List
-from model.TeamEnv import TeamEnv
-from scripted import baselines
-import random
+from typing import Any, Dict
 
-RANDOM_SEED = random.randint(0, 10000)
+import gym
+import numpy as np
+from pettingzoo.utils.env import ParallelEnv
 
-# Define configuration for the test
-class Config(nmmo.config.Small, nmmo.config.AllGameSystems):
-    RENDER = False
-    SPECIALIZE = True
-    PLAYERS = [
-    baselines.Fisher, baselines.Herbalist, baselines.Prospector,
-    baselines.Carver, baselines.Alchemist,
-    baselines.Melee, baselines.Range, baselines.Mage]
+from env.team_env import TeamEnv
 
-# Define a test case for TeamEnv
+
+class TestEnv(ParallelEnv):
+    def __init__(self):
+        self.action_space_map = {
+            0: gym.spaces.Discrete(2),
+            1: gym.spaces.Discrete(3),
+            2: gym.spaces.Discrete(2),
+            3: gym.spaces.Discrete(3)
+        }
+        self.observation_space_map = {
+            0: gym.spaces.Box(low=0, high=1, shape=(2,)),
+            1: gym.spaces.Box(low=0, high=1, shape=(3,)),
+            2: gym.spaces.Box(low=0, high=1, shape=(2,)),
+            3: gym.spaces.Box(low=0, high=1, shape=(3,))
+        }
+
+    def reset(self, **kwargs) -> Dict[int, Any]:
+        return {
+            0: np.array([0.1, 0.2]),
+            1: np.array([0.3, 0.4, 0.5]),
+            2: np.array([0.6, 0.7]),
+            3: np.array([0.8, 0.9, 1.0])
+        }
+
+    def step(self, actions: Dict[int, Any]):
+        obs = self.reset()
+        rewards = {i: action * 0.5 for i, action in actions.items()}
+        dones = {i: action == self.action_space_map[i].n - 1 for i, action in actions.items()}
+        infos = {i: {} for i in actions.keys()}
+        return obs, rewards, dones, infos
+
+    def action_space(self, agent: int) -> gym.Space:
+        return self.action_space_map[agent]
+
+    def observation_space(self, agent: int) -> gym.Space:
+        return self.observation_space_map[agent]
+
+
 class TestTeamEnv(unittest.TestCase):
+    def test_team_env(self):
+        simple_env = TestEnv()
+        teams = [[0, 1], [2, 3]]
+        team_env = TeamEnv(simple_env, teams)
 
-    @classmethod
-    def setUpClass(cls):
-        # Set up the environment and map players to teams
-        cls.config = Config()
-        env = nmmo.Env(cls.config, RANDOM_SEED)
-        team = 0 
-        cls.player_to_team_map = {}
-        for agent in range(1, 65):
-            cls.player_to_team_map[agent] = team
-            if team%8 == 0:
-                team +=1
-        cls.team_env = TeamEnv(env, cls.player_to_team_map)
+        # Test reset
+        obs = team_env.reset()
+        np.testing.assert_equal(obs, {0: {0: np.array([0.1, 0.2]), 1: np.array([0.3, 0.4, 0.5])},
+                               1: {0: np.array([0.6, 0.7]), 1: np.array([0.8, 0.9, 1.0])}})
 
-    def test_grouped_observation_space(self):
-        # Test that the grouped observation space is as expected
-        expected_obs_space = {}
-        for agent_id, team_id in self.player_to_team_map.items():
-            if team_id not in expected_obs_space:
-                expected_obs_space[team_id] = {}
-            expected_obs_space[team_id][agent_id] = self.team_env.env.observation_space(agent_id)
+        # Test step
+        team_actions = {0: {0: 1, 1: 2}, 1: {0: 1, 1: 1}}
+        obs, rewards, dones, infos = team_env.step(team_actions)
 
-        self.assertEqual(self.team_env.grouped_observation_space(), expected_obs_space)
+        expected_obs = {0: {0: np.array([0.1, 0.2]), 1: np.array([0.3, 0.4, 0.5])},
+                        1: {0: np.array([0.6, 0.7]), 1: np.array([0.8, 0.9, 1.0])}}
+        expected_rewards = {0: 1.5, 1: 1.0}
+        expected_dones = {0: True, 1: False}
+        expected_infos = {0: {0: {}, 1: {}}, 1: {0: {}, 1: {}}}
 
-    def test_grouped_action_space(self):
-        # Test that the grouped action space is as expected
-        expected_atn_space = {}
-        for agent_id, team_id in self.player_to_team_map.items():
-            if team_id not in expected_atn_space:
-                expected_atn_space[team_id] = {}
-            expected_atn_space[team_id][agent_id] = self.team_env.env.action_space(agent_id)
+        np.testing.assert_equal(obs, expected_obs)
+        np.testing.assert_equal(rewards, expected_rewards)
+        np.testing.assert_equal(dones, expected_dones)
+        np.testing.assert_equal(infos, expected_infos)
 
-        self.assertEqual(self.team_env.grouped_action_space(), expected_atn_space)
-
-    def test_reset(self):
-        # get the expected merged observation space and the actual merged observation space
-        expected_merged_obs = self.team_env._group_by_team(self.team_env.env.reset().get)
-        merged_obs = self.team_env.reset()
-        # validate that the two merged observation spaces are equal
-        self._validate_merged_dicts(merged_obs, expected_merged_obs)
-
-    # a helper method to validate two merged dictionaries
-    def _validate_merged_dicts(self, expected_merged_obs, merged_obs):
-        # check if same number of teams
-        assert expected_merged_obs.keys() == merged_obs.keys()
-        # check if same number of agents in each team
-        for team in merged_obs.keys():
-            assert expected_merged_obs[team].keys() == merged_obs[team].keys()
-
-    def test_step(self):
-        # take a step with an empty action and get the expected and actual merged observations, rewards, dones and infos
-        obs, rewards, dones, infos  = self.team_env.env.step({})
-        expected_merged_obs = self.team_env._group_by_team(obs.get)
-        expected_merged_infos = self.team_env._group_by_team(infos.get)
-        expected_merged_rewards  = self.team_env._merge_rewards(rewards)
-        expected_merged_dones = self.team_env._group_by_team(dones.get)
-        merged_obs, merged_rewards, merged_dones, merged_infos = self.team_env.step({})
-
-        # validate that the merged observation spaces and infos are equal
-        self._validate_merged_dicts(merged_obs, expected_merged_obs)
-        self._validate_merged_dicts(merged_infos, expected_merged_infos)
-        
-        # validate that the merged rewards and dones are equal
-        self.assertEqual(merged_dones, expected_merged_dones)
-        self.assertDictEqual(merged_rewards, expected_merged_rewards)
 
 if __name__ == '__main__':
     unittest.main()

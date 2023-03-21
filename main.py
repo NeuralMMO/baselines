@@ -4,22 +4,25 @@ import pufferlib.emulation
 import pufferlib.registry.nmmo
 import pufferlib.frameworks.cleanrl
 import nmmo
-from model import feature_parser
+from env.team_env import TeamEnv
 from model.policy import Policy
-from model.feature_parser import FeatureParser
+
+def create_env():
+    nmmo_env = nmmo.Env()
+    team_env = TeamEnv(nmmo_env, { pid + 1: pid % 8 for pid in range(128)})
+    return team_env
 
 if __name__ == "__main__":
     num_cores = 1
 
     binding = pufferlib.emulation.Binding(
-        env_cls=nmmo.Env,
+        env_creator=create_env,
         env_name="Neural MMO",
     )
 
-    agent = pufferlib.frameworks.cleanrl.make_cleanrl_policy(Policy, lstm_layers=1)(
+    agent = pufferlib.frameworks.cleanrl.make_policy(Policy, lstm_layers=1)(
         binding
     )
-
 
     assert binding is not None
     cleanrl_ppo_lstm.train(
