@@ -4,40 +4,31 @@ from typing import Any, Dict, List
 import gym
 from pettingzoo.utils.env import AgentID, ParallelEnv
 
+from team_helper import TeamHelper
+
 class TeamEnv(ParallelEnv):
-  def __init__(self, env: ParallelEnv, teams: List[List[int]]):
+  def __init__(self, env: ParallelEnv, team_helper: TeamHelper):
     self._env = env
-    self._teams = teams
+    self._team_helper = team_helper
 
-    self.possible_agents = list(range(len(teams)))
-
-    self._team_size = {}
-    self._team_and_pos_for_agent = {}
-    self._position_for_agent = {}
-    self._agent_for_team_and_position = {}
-
-    for team_id, team in enumerate(teams):
-      self._team_size[team_id] = len(team)
-      for position, agent_id in enumerate(team):
-        self._team_and_pos_for_agent[agent_id] = (team_id, position)
-        self._agent_for_team_and_position[team_id, position] = agent_id
+    self.possible_agents = list(range(team_helper.num_teams))
 
   def action_space(self, team: int) -> gym.Space:
     return gym.spaces.Dict({
-      pos: self._env.action_space(self._agent_for_team_and_position[team, pos]) \
-        for pos in range(self._team_size[team])
+      pos: self._env.action_space(self._team_helper.agent_for_team_and_position[team, pos]) \
+        for pos in range(self._team_helper.team_size[team])
     })
 
   def observation_space(self, team: int) -> gym.Space:
     return gym.spaces.Dict({
-      pos: self._env.observation_space(self._agent_for_team_and_position[team, pos]) \
-        for pos in range(self._team_size[team])
+      pos: self._env.observation_space(self._team_helper.agent_for_team_and_position[team, pos]) \
+        for pos in range(self._team_helper.team_size[team])
     })
 
   def _group_by_team(self, data: Dict[int, Any]) -> Dict[int, Dict[int, Any]]:
     grouped_data = defaultdict(dict)
     for agent_id, value in data.items():
-      team_id, pos = self._team_and_pos_for_agent[agent_id]
+      team_id, pos = self._team_helper.team_and_position_for_agent[agent_id]
       grouped_data[team_id][pos] = value
     return dict(grouped_data)
 
@@ -45,7 +36,7 @@ class TeamEnv(ParallelEnv):
     agent_actions = {}
     for team_id, team_action in team_actions.items():
       for pos, action in team_action.items():
-        agent_id = self._agent_for_team_and_position[team_id, pos]
+        agent_id = self._team_helper.agent_for_team_and_position[team_id, pos]
         agent_actions[agent_id] = action
     return agent_actions
 

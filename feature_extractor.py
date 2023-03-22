@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import nmmo
 from team_env import TeamEnv
@@ -50,9 +50,10 @@ SELL_POULTICE = 0
 SELL_RATION = 1
 
 class FeatureExtractor():
-  def __init__(self, config: nmmo.config.Config, team_id: int):
+  def __init__(self, config: nmmo.config.Config, team_id: int, teams: List[List[int]]):
     self.config = config
     self.team_id = team_id
+    self.teams = teams
 
     self.curr_step = None
     self.curr_obs = None

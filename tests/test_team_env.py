@@ -6,6 +6,7 @@ import numpy as np
 from pettingzoo.utils.env import ParallelEnv
 
 from team_env import TeamEnv
+from team_helper import TeamHelper
 
 class TestEnv(ParallelEnv):
   def __init__(self):
@@ -48,7 +49,7 @@ class TestTeamEnv(unittest.TestCase):
   def test_team_env(self):
     simple_env = TestEnv()
     teams = [[0, 1], [2, 3]]
-    team_env = TeamEnv(simple_env, teams)
+    team_env = TeamEnv(simple_env, TeamHelper(teams))
 
     # Test reset
     obs = team_env.reset()
