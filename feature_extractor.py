@@ -11,7 +11,9 @@ import numpy as np
 from model.const import *
 from model.util import one_hot_generator, multi_hot_generator
 from pettingzoo.utils.env import AgentID, ParallelEnv
-
+from nmmo.core.tile import TileState
+from nmmo.entity.entity import EntityState
+from nmmo.lib import material
 
 DEFOGGING_VALUE = 16
 VISITATION_MEMORY = 100
@@ -143,107 +145,113 @@ class FeatureExtractor():
     return state
 
   def _update_global_maps(self, obs):
-      if self.curr_step % 16 == 15:
-          self.poison_map += 1  # poison shrinking
-      self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
-      self.visit_map = np.clip(self.visit_map - 1, 0, VISITATION_MEMORY)  # decay
-      entity_map = np.zeros((5, TERRAIN_SIZE+1, TERRAIN_SIZE+1))
-      for i in range(N_PLAYER_PER_TEAM):
-          if i not in obs:  # dead
-              continue
-          # mark tile
-          tile_obs = obs[i]['Tile']
-          tile_pos = tile_obs[:, -2:].astype(int)
-          tile_type = tile_obs[:, 1]
-          mark_point(self.fog_map, tile_pos, DEFOGGING_VALUE)
-          x, y = tile_pos[0]
-          self.tile_map[x:x+WINDOW, y:y+WINDOW] = tile_type.reshape(WINDOW, WINDOW)
-          # mark team/enemy/npc
-          entity_obs = obs[i]['Entity']
-          entity_pos = entity_obs[:, 7:9].astype(int)
-          entity_pop = entity_obs[:, 6]
-          my_pop = entity_obs[0, 6]
-          mark_point(entity_map[0], entity_pos, entity_pop == my_pop)  # team
-          mark_point(entity_map[1], entity_pos, np.logical_and(entity_pop != my_pop, entity_pop > 0))  # enemy
-          mark_point(entity_map[2], entity_pos, entity_pop == -1)  # negative
-          mark_point(entity_map[3], entity_pos, entity_pop == -2)  # neutral
-          mark_point(entity_map[4], entity_pos, entity_pop == -3)  # hostile
-          # update visit map
-          mark_point(self.visit_map[i], entity_pos[:1], VISITATION_MEMORY)
-          # update herb gathering count
-          my_curr_pos = entity_obs[0, 7:9].astype(int)
-          my_prev_pos = self.prev_obs[i]['Entity'][0, 7:9].astype(int)
-          if self.tile_map[my_curr_pos[0], my_curr_pos[1]] == TILE_HERB and \
-                  (my_curr_pos[0] != my_prev_pos[0] or my_curr_pos[1] != my_prev_pos[1]):
-              self.step_onto_herb_cnt[i] += 1
-          # change tile in advance
-          for pos, pop in zip(entity_pos, entity_pop):
-              if pop >= 0:  # is player
-                  if self.tile_map[pos[0], pos[1]] == TILE_FOREST:
-                      self.tile_map[pos[0], pos[1]] = TILE_SCRUB
-                  if self.tile_map[pos[0], pos[1]] == TILE_ORE:
-                      self.tile_map[pos[0], pos[1]] = TILE_SLAG
-                  if self.tile_map[pos[0], pos[1]] == TILE_TREE:
-                      self.tile_map[pos[0], pos[1]] = TILE_STUMP
-                  if self.tile_map[pos[0], pos[1]] == TILE_CRYSTAL:
-                      self.tile_map[pos[0], pos[1]] = TILE_FRAGMENT
-                  if self.tile_map[pos[0], pos[1]] == TILE_HERB:
-                      self.tile_map[pos[0], pos[1]] = TILE_WEEDS
-                  if self.tile_map[pos[0], pos[1]+1] == TILE_FISH:
-                      self.tile_map[pos[0], pos[1]+1] = TILE_OCEAN
-                  if self.tile_map[pos[0], pos[1]-1] == TILE_FISH:
-                      self.tile_map[pos[0], pos[1]-1] = TILE_OCEAN
-                  if self.tile_map[pos[0]+1, pos[1]] == TILE_FISH:
-                      self.tile_map[pos[0]+1, pos[1]] = TILE_OCEAN
-                  if self.tile_map[pos[0]-1, pos[1]] == TILE_FISH:
-                      self.tile_map[pos[0]-1, pos[1]] = TILE_OCEAN
-      self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
-          entity_map[2] * NEGATIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
+    if self.curr_step % 16 == 15:
+      self.poison_map += 1  # poison shrinking
+
+    self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
+    self.visit_map = np.clip(self.visit_map - 1, 0, VISITATION_MEMORY)  # decay
+
+    entity_map = np.zeros((5, TERRAIN_SIZE+1, TERRAIN_SIZE+1))
+
+    for player_id, player_obs in obs.items():
+      # mark tile
+      tile_obs = player_obs['Tile']
+      tile_pos = tile_obs[:, TileState.State.attr_name_to_col["row"]:TileState.State.attr_name_to_col["col"]].astype(int)
+      tile_type = tile_obs[:, TileState.State.attr_name_to_col["material_id"]].astype(int)
+      mark_point(self.fog_map, tile_pos, DEFOGGING_VALUE)
+      x, y = tile_pos[0]
+      self.tile_map[x:x+WINDOW, y:y+WINDOW] = tile_type.reshape(WINDOW, WINDOW)
+
+      # mark team/enemy/npc
+      entity_obs = player_obs['Entity']
+      entity_pos = entity_obs[:, EntityState.State.attr_name_to_col["row"]:EntityState.State.attr_name_to_col["col"]].astype(int)
+      entity_pop = entity_obs[:, EntityState.State.attr_name_to_col["population_id"]].astype(int)
+
+      mark_point(entity_map[0], entity_pos, entity_pop == self.team_id)  # team
+      mark_point(entity_map[1], entity_pos, np.logical_and(entity_pop != self.team_id, entity_pop > 0))  # enemy
+      mark_point(entity_map[2], entity_pos, entity_pop == -1)  # negative
+      mark_point(entity_map[3], entity_pos, entity_pop == -2)  # neutral
+      mark_point(entity_map[4], entity_pos, entity_pop == -3)  # hostile
+
+      # update visit map
+      # xcxc my position
+      mark_point(self.visit_map[player_id], entity_pos[:1], VISITATION_MEMORY)
+
+      # update herb gathering count
+      my_curr_pos = entity_obs[0, 7:9].astype(int)
+      my_prev_pos = self.prev_obs[player_id]['Entity'][0, 7:9].astype(int)
+
+      if self.tile_map[my_curr_pos[0], my_curr_pos[1]] == material.Herb.index and \
+          (my_curr_pos[0] != my_prev_pos[0] or my_curr_pos[1] != my_prev_pos[1]):
+        self.step_onto_herb_cnt[player_id] += 1
+
+      # change tile in advance
+      for pos, pop in zip(entity_pos, entity_pop):
+        if pop >= 0:  # is player
+          if self.tile_map[pos[0], pos[1]] == TILE_FOREST:
+              self.tile_map[pos[0], pos[1]] = TILE_SCRUB
+          if self.tile_map[pos[0], pos[1]] == TILE_ORE:
+              self.tile_map[pos[0], pos[1]] = TILE_SLAG
+          if self.tile_map[pos[0], pos[1]] == TILE_TREE:
+              self.tile_map[pos[0], pos[1]] = TILE_STUMP
+          if self.tile_map[pos[0], pos[1]] == TILE_CRYSTAL:
+              self.tile_map[pos[0], pos[1]] = TILE_FRAGMENT
+          if self.tile_map[pos[0], pos[1]] == TILE_HERB:
+              self.tile_map[pos[0], pos[1]] = TILE_WEEDS
+          if self.tile_map[pos[0], pos[1]+1] == TILE_FISH:
+              self.tile_map[pos[0], pos[1]+1] = TILE_OCEAN
+          if self.tile_map[pos[0], pos[1]-1] == TILE_FISH:
+              self.tile_map[pos[0], pos[1]-1] = TILE_OCEAN
+          if self.tile_map[pos[0]+1, pos[1]] == TILE_FISH:
+              self.tile_map[pos[0]+1, pos[1]] = TILE_OCEAN
+          if self.tile_map[pos[0]-1, pos[1]] == TILE_FISH:
+              self.tile_map[pos[0]-1, pos[1]] = TILE_OCEAN
+
+    self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
+      entity_map[2] * NEGATIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
 
   def _update_kill_num(self, obs):
-      for i in range(N_PLAYER_PER_TEAM):
-          if i not in obs:  # dead
-              continue
-          if self.target_entity_id[i] is None:  # no target
-              continue
-          entity_obs = obs[i]['Entity']
-          entity_in_sight = entity_obs[:, 1]
-          if self.target_entity_id[i] not in entity_in_sight:
-              if self.target_entity_id[i] > 0:
-                  self.player_kill_num[i] += 1
-              elif self.target_entity_id[i] < 0:
-                  if self.target_entity_pop[i] == -1:
-                      self.npc_kill_num['p'][i] += 1
-                  elif self.target_entity_pop[i] == -2:
-                      self.npc_kill_num['n'][i] += 1
-                  elif self.target_entity_pop[i] == -3:
-                      self.npc_kill_num['h'][i] += 1
-                  else:
-                      raise ValueError('Unknown npc pop:', self.target_entity_pop[i])
+    for player_id, player_obs in obs.items():
+      if self.target_entity_id[player_id] is None:  # no target
+          continue
+      entity_obs = player_obs['Entity']
+      entity_in_sight = entity_obs[:, EntityState.State.attr_name_to_col["id"]]
+      if self.target_entity_id[player_id] not in entity_in_sight:
+        if self.target_entity_id[player_id] > 0:
+          self.player_kill_num[player_id] += 1
+        elif self.target_entity_id[player_id] < 0:
+          if self.target_entity_pop[player_id] == -1:
+            self.npc_kill_num['p'][player_id] += 1
+          elif self.target_entity_pop[player_id] == -2:
+            self.npc_kill_num['n'][player_id] += 1
+          elif self.target_entity_pop[player_id] == -3:
+            self.npc_kill_num['h'][player_id] += 1
+          else:
+            raise ValueError('Unknown npc pop:', self.target_entity_pop[player_id])
 
   def _extract_tile_feature(self, obs):
-      imgs = []
-      for i in range(N_PLAYER_PER_TEAM):
-          # replace with dummy feature if dead
-          if i not in obs:
-              imgs.append(DUMMY_IMG_FEAT)
-              continue
+    imgs = []
+    for i in range(N_PLAYER_PER_TEAM):
+      # replace with dummy feature if dead
+      if i not in obs:
+          imgs.append(DUMMY_IMG_FEAT)
+          continue
 
-          curr_pos = obs[i]['Entity'][0, 7:9].astype(int)
-          l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
-          u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
-          tile_img = self.tile_map[l:r, u:d] / N_TILE_TYPE
-          # obstacle_img = np.sum([self.tile_map[l:r, u:d] == t for t in OBSTACLE_TILES], axis=0)
-          entity_img = self.entity_map[l:r, u:d]
-          poison_img = np.clip(self.poison_map[l:r, u:d], 0, np.inf) / 20.
-          fog_img = self.fog_map[l:r, u:d] / DEFOGGING_VALUE
-          # view_img = (fog_img == 1.).astype(np.float32)
-          visit_img = self.visit_map[i][l:r, u:d] / VISITATION_MEMORY
-          coord_imgs = [X_IMG[l:r, u:d] / TERRAIN_SIZE, Y_IMG[l:r, u:d] / TERRAIN_SIZE]
-          img = np.stack([tile_img, entity_img, poison_img, fog_img, visit_img, *coord_imgs])
-          imgs.append(img)
-      imgs = np.stack(imgs)
-      return imgs
+      curr_pos = obs[i]['Entity'][0, 7:9].astype(int)
+      l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
+      u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
+      tile_img = self.tile_map[l:r, u:d] / N_TILE_TYPE
+      # obstacle_img = np.sum([self.tile_map[l:r, u:d] == t for t in OBSTACLE_TILES], axis=0)
+      entity_img = self.entity_map[l:r, u:d]
+      poison_img = np.clip(self.poison_map[l:r, u:d], 0, np.inf) / 20.
+      fog_img = self.fog_map[l:r, u:d] / DEFOGGING_VALUE
+      # view_img = (fog_img == 1.).astype(np.float32)
+      visit_img = self.visit_map[i][l:r, u:d] / VISITATION_MEMORY
+      coord_imgs = [X_IMG[l:r, u:d] / TERRAIN_SIZE, Y_IMG[l:r, u:d] / TERRAIN_SIZE]
+      img = np.stack([tile_img, entity_img, poison_img, fog_img, visit_img, *coord_imgs])
+      imgs.append(img)
+    imgs = np.stack(imgs)
+    return imgs
 
   def _process_items(self, obs):
       # reset
@@ -987,13 +995,13 @@ def get_init_tile_map():
     return arr
 
 def get_init_poison_map():
-    arr = np.ones((TERRAIN_SIZE + 1, TERRAIN_SIZE + 1))
-    for i in range(TERRAIN_SIZE // 2):
-        l, r = i + 1, TERRAIN_SIZE - i
-        arr[l:r, l:r] = -i
-    # positive value represents the poison strength
-    # negative value represents the shortest distance to poison area
-    return arr
+  arr = np.ones((TERRAIN_SIZE + 1, TERRAIN_SIZE + 1))
+  for i in range(TERRAIN_SIZE // 2):
+    l, r = i + 1, TERRAIN_SIZE - i
+    arr[l:r, l:r] = -i
+  # positive value represents the poison strength
+  # negative value represents the shortest distance to poison area
+  return arr
 
 def mark_point(arr_2d, index_arr, value, clip=False):
     arr_2d[index_arr[:, 0], index_arr[:, 1]] = \

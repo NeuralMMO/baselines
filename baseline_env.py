@@ -1,17 +1,9 @@
 from typing import Any, Dict
 
 import nmmo
+
 from feature_extractor import FeatureExtractor
 from team_env import TeamEnv
-import collections
-import copy
-
-import nmmo.io.action as nmmo_act
-import numpy as np
-
-from model.const import *
-from model.util import one_hot_generator, multi_hot_generator
-from pettingzoo.utils.env import AgentID, ParallelEnv
 
 
 class BaselineEnv(TeamEnv):
