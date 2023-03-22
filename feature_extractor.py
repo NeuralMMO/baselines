@@ -15,6 +15,8 @@ from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 from nmmo.lib import material
 
+from team_helper import TeamHelper
+
 DEFOGGING_VALUE = 16
 VISITATION_MEMORY = 100
 
@@ -50,10 +52,10 @@ SELL_POULTICE = 0
 SELL_RATION = 1
 
 class FeatureExtractor():
-  def __init__(self, config: nmmo.config.Config, team_id: int, teams: List[List[int]]):
+  def __init__(self, config: nmmo.config.Config, team_helper: TeamHelper, team_id: int):
     self.config = config
     self.team_id = team_id
-    self.teams = teams
+    self.team_helper = team_helper
 
     self.curr_step = None
     self.curr_obs = None

@@ -7,11 +7,11 @@ from team_env import TeamEnv
 
 
 class BaselineEnv(TeamEnv):
-  def __init__(self, env, teams):
+  def __init__(self, env, team_helper):
     assert isinstance(env, nmmo.Env)
-    super().__init__(env, teams)
+    super().__init__(env, team_helper)
     self._feature_extractors = {
-        team_id: FeatureExtractor(env.config, team_id) for team_id in range(len(teams))
+        team_id: FeatureExtractor(env.config, team_helper, team_id) for team_id in range(team_helper.num_teams)
     }
 
   def action_space(self, team):

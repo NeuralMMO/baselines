@@ -12,6 +12,7 @@ from nmmo.entity.entity import Entity, EntityState
 from nmmo.systems.item import ItemState
 from scripted import baselines
 from baseline_env import BaselineEnv
+from team_helper import TeamHelper
 
 # Allow private access for testing
 # pylint: disable=protected-access
@@ -34,7 +35,7 @@ class TestEnv(unittest.TestCase):
     cls.config = Config()
     cls.env = BaselineEnv(
       nmmo.Env(cls.config, RANDOM_SEED),
-      [[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)])
+      TeamHelper([[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]))
 
   def test_action_space(self):
     action_space = self.env.action_space(0)
