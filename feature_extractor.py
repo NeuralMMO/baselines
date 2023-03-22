@@ -119,8 +119,9 @@ class FeatureExtractor():
     self._update_global_maps(obs)
     self._update_kill_num(obs)
     tile = self._extract_tile_feature(obs)
-    self._process_items(obs)  # use & sell
-    self._process_market(obs)  # buy
+    # xcxc
+    # self._process_items(obs)  # use & sell
+    # self._process_market(obs)  # buy
     item_type, item = self._extract_item_feature(obs)
     team, npc, enemy, *masks, self.npc_tgt, self.enemy_tgt = self._extract_entity_feature(obs)
     game = self._extract_game_feature(obs)
@@ -156,7 +157,7 @@ class FeatureExtractor():
     for player_id, player_obs in obs.items():
       # mark tile
       tile_obs = player_obs['Tile']
-      tile_pos = tile_obs[:, TileState.State.attr_name_to_col["row"]:TileState.State.attr_name_to_col["col"]].astype(int)
+      tile_pos = tile_obs[:, TileState.State.attr_name_to_col["row"]:TileState.State.attr_name_to_col["col"]+1].astype(int)
       tile_type = tile_obs[:, TileState.State.attr_name_to_col["material_id"]].astype(int)
       mark_point(self.fog_map, tile_pos, DEFOGGING_VALUE)
       x, y = tile_pos[0]
@@ -164,7 +165,7 @@ class FeatureExtractor():
 
       # mark team/enemy/npc
       entity_obs = player_obs['Entity']
-      entity_pos = entity_obs[:, EntityState.State.attr_name_to_col["row"]:EntityState.State.attr_name_to_col["col"]].astype(int)
+      entity_pos = entity_obs[:, EntityState.State.attr_name_to_col["row"]:EntityState.State.attr_name_to_col["col"]+1].astype(int)
       entity_pop = entity_obs[:, EntityState.State.attr_name_to_col["population_id"]].astype(int)
 
       mark_point(entity_map[0], entity_pos, entity_pop == self.team_id)  # team
@@ -616,69 +617,69 @@ class FeatureExtractor():
       return arr
 
   def _extract_entity_feature(self, obs):
-      team_pop = next(iter(obs.values()))['Entity'][0][IDX_ENT_POPULATION]
-      team_members_idx = np.arange(8) + team_pop * N_PLAYER_PER_TEAM + 1
+    team_pop = next(iter(obs.values()))['Entity'][0][IDX_ENT_POPULATION]
+    team_members_idx = np.arange(8) + team_pop * N_PLAYER_PER_TEAM + 1
 
-      # merge obs from all the 8 agents
-      team_members = {}  # 0~7 -> raw_arr
-      enemies = {}  # entity_id -> raw_arr
-      npcs = {}  # entity_id -> raw_arr
-      for i in range(N_PLAYER_PER_TEAM):
-          if i not in obs:
-              continue
-          entity_obs = obs[i]['Entity']
-          team_members[i] = entity_obs[0]
-          for j in range(1, N_PLAYER_PER_TEAM):
-              if entity_obs[j][IDX_ENT_ENTITY_ID] < 0:
-                  npcs[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
-              elif entity_obs[j][IDX_ENT_ENTITY_ID] not in team_members_idx:
-                  enemies[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
+    # merge obs from all the 8 agents
+    team_members = {}  # 0~7 -> raw_arr
+    enemies = {}  # entity_id -> raw_arr
+    npcs = {}  # entity_id -> raw_arr
+    for i in range(N_PLAYER_PER_TEAM):
+        if i not in obs:
+            continue
+        entity_obs = obs[i]['Entity']
+        team_members[i] = entity_obs[0]
+        for j in range(1, N_PLAYER_PER_TEAM):
+            if entity_obs[j][IDX_ENT_ENTITY_ID] < 0:
+                npcs[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
+            elif entity_obs[j][IDX_ENT_ENTITY_ID] not in team_members_idx:
+                enemies[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
 
-      # extract feature of each team member itself
-      team_members_arr = np.zeros((N_PLAYER_PER_TEAM, N_SELF_FEATURE))
-      team_mask = np.array([i not in obs for i in range(N_PLAYER_PER_TEAM)])
-      for i in range(N_PLAYER_PER_TEAM):
-          team_members_arr[i] = self._extract_per_entity_feature(team_members.get(i, None), team_pop, i)
+    # extract feature of each team member itself
+    team_members_arr = np.zeros((N_PLAYER_PER_TEAM, N_SELF_FEATURE))
+    team_mask = np.array([i not in obs for i in range(N_PLAYER_PER_TEAM)])
+    for i in range(N_PLAYER_PER_TEAM):
+        team_members_arr[i] = self._extract_per_entity_feature(team_members.get(i, None), team_pop, i)
 
-      # assign the features of npcs and enemies to each member
-      others_arrs = [np.zeros((N_PLAYER_PER_TEAM, n, PER_ENTITY_FEATURE))
+    # assign the features of npcs and enemies to each member
+    others_arrs = [np.zeros((N_PLAYER_PER_TEAM, n, PER_ENTITY_FEATURE))
+                    for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
+    entity_mask = [np.ones((N_PLAYER_PER_TEAM, n))
+                    for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
+    ids_as_target = [np.zeros((N_PLAYER_PER_TEAM, n))
                       for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
-      entity_mask = [np.ones((N_PLAYER_PER_TEAM, n))
-                      for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
-      ids_as_target = [np.zeros((N_PLAYER_PER_TEAM, n))
-                        for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
-      for k in range(2):
-          n_considered = (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)[k]
-          entities = (npcs, enemies)[k]
-          # first extract all the features along with entity's idx & position
-          features = [{
-              'idx': idx,
-              'row': raw_arr[IDX_ENT_ROW_INDEX],
-              'col': raw_arr[IDX_ENT_COL_INDEX],
-              'pop': raw_arr[IDX_ENT_POPULATION],
-              'arr': self._extract_per_entity_feature(raw_arr, team_pop),
-          } for idx, raw_arr in entities.items()]
+    for k in range(2):
+        n_considered = (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)[k]
+        entities = (npcs, enemies)[k]
+        # first extract all the features along with entity's idx & position
+        features = [{
+            'idx': idx,
+            'row': raw_arr[IDX_ENT_ROW_INDEX],
+            'col': raw_arr[IDX_ENT_COL_INDEX],
+            'pop': raw_arr[IDX_ENT_POPULATION],
+            'arr': self._extract_per_entity_feature(raw_arr, team_pop),
+        } for idx, raw_arr in entities.items()]
 
-          for i in range(N_PLAYER_PER_TEAM):
-              if i not in team_members:  # dead
-                  continue
-              my_row = team_members[i][IDX_ENT_ROW_INDEX]
-              my_col = team_members[i][IDX_ENT_COL_INDEX]
+        for i in range(N_PLAYER_PER_TEAM):
+            if i not in team_members:  # dead
+                continue
+            my_row = team_members[i][IDX_ENT_ROW_INDEX]
+            my_col = team_members[i][IDX_ENT_COL_INDEX]
 
-              def l1_to_me(f):
-                  return max(abs(f['row'] - my_row), abs(f['col'] - my_col))
+            def l1_to_me(f):
+                return max(abs(f['row'] - my_row), abs(f['col'] - my_col))
 
-              nearests = sorted(features, key=l1_to_me)[:n_considered]
-              for j, feat in enumerate(nearests):
-                  if l1_to_me(feat) <= ATK_RANGE and feat['pop'] != NEUTRAL_POP:  # as target
-                      ids_as_target[k][i][j] = feat['idx']
-                  if l1_to_me(feat) <= AWARE_RANGE:  # as visible entity
-                      others_arrs[k][i][j] = feat['arr']
-                      entity_mask[k][i][j] = 0
+            nearests = sorted(features, key=l1_to_me)[:n_considered]
+            for j, feat in enumerate(nearests):
+                if l1_to_me(feat) <= ATK_RANGE and feat['pop'] != NEUTRAL_POP:  # as target
+                    ids_as_target[k][i][j] = feat['idx']
+                if l1_to_me(feat) <= AWARE_RANGE:  # as visible entity
+                    others_arrs[k][i][j] = feat['arr']
+                    entity_mask[k][i][j] = 0
 
-      npcs_arrs, enemies_arrs = others_arrs
-      target_npcs_ids, target_enemies_ids = ids_as_target
-      return team_members_arr, npcs_arrs, enemies_arrs, team_mask, entity_mask[0], entity_mask[1], target_npcs_ids, target_enemies_ids
+    npcs_arrs, enemies_arrs = others_arrs
+    target_npcs_ids, target_enemies_ids = ids_as_target
+    return team_members_arr, npcs_arrs, enemies_arrs, team_mask, entity_mask[0], entity_mask[1], target_npcs_ids, target_enemies_ids
 
   def _extract_per_entity_feature(self, o, team_pop=None, my_index=None):
       if o is not None:
