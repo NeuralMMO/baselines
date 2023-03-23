@@ -14,7 +14,7 @@ from pettingzoo.utils.env import AgentID, ParallelEnv
 from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 from nmmo.lib import material
-
+from nmmo.systems.item import ItemState
 from team_helper import TeamHelper
 
 DEFOGGING_VALUE = 16
@@ -50,6 +50,10 @@ USE_POULTICE = 0
 USE_RATION = 1
 SELL_POULTICE = 0
 SELL_RATION = 1
+
+EntityAttr = EntityState.State.attr_name_to_col
+ItemAttr = ItemState.State.attr_name_to_col
+TileAttr = TileState.State.attr_name_to_col
 
 class FeatureExtractor():
   def __init__(self, config: nmmo.config.Config, team_helper: TeamHelper, team_id: int):
@@ -125,7 +129,7 @@ class FeatureExtractor():
     # xcxc
     # self._process_items(obs)  # use & sell
     # self._process_market(obs)  # buy
-    item_type, item = self._extract_item_feature(obs)
+    # item_type, item = self._extract_item_feature(obs)
     team, npc, enemy, *masks, self.npc_tgt, self.enemy_tgt = self._extract_entity_feature(obs)
     game = self._extract_game_feature(obs)
     legal = self._extract_legal_action(obs, self.npc_tgt, self.enemy_tgt)
@@ -160,16 +164,16 @@ class FeatureExtractor():
     for player_id, player_obs in obs.items():
       # mark tile
       tile_obs = player_obs['Tile']
-      tile_pos = tile_obs[:, TileState.State.attr_name_to_col["row"]:TileState.State.attr_name_to_col["col"]+1].astype(int)
-      tile_type = tile_obs[:, TileState.State.attr_name_to_col["material_id"]].astype(int)
+      tile_pos = tile_obs[:, TileAttr["row"]:TileAttr["col"]+1].astype(int)
+      tile_type = tile_obs[:, TileAttr["material_id"]].astype(int)
       mark_point(self.fog_map, tile_pos, DEFOGGING_VALUE)
       x, y = tile_pos[0]
       self.tile_map[x:x+WINDOW, y:y+WINDOW] = tile_type.reshape(WINDOW, WINDOW)
 
       # mark team/enemy/npc
       entity_obs = player_obs['Entity']
-      entity_pos = entity_obs[:, EntityState.State.attr_name_to_col["row"]:EntityState.State.attr_name_to_col["col"]+1].astype(int)
-      entity_pop = entity_obs[:, EntityState.State.attr_name_to_col["population_id"]].astype(int)
+      entity_pos = entity_obs[:, EntityAttr["row"]:EntityAttr["col"]+1].astype(int)
+      entity_pop = entity_obs[:, EntityAttr["population_id"]].astype(int)
 
       mark_point(entity_map[0], entity_pos, entity_pop == self.team_id)  # team
       mark_point(entity_map[1], entity_pos, np.logical_and(entity_pop != self.team_id, entity_pop > 0))  # enemy
@@ -219,7 +223,7 @@ class FeatureExtractor():
       if self.target_entity_id[player_id] is None:  # no target
           continue
       entity_obs = player_obs['Entity']
-      entity_in_sight = entity_obs[:, EntityState.State.attr_name_to_col["id"]]
+      entity_in_sight = entity_obs[:, EntityAttr["id"]]
       if self.target_entity_id[player_id] not in entity_in_sight:
         if self.target_entity_id[player_id] > 0:
           self.player_kill_num[player_id] += 1
@@ -292,44 +296,44 @@ class FeatureExtractor():
                   max_equipable_lvl = max(my_obs[-N_PROF:])  # maximum of all levels
               else:
                   max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[item_type]]
-              items = item_obs[item_obs[:, IDX_ITEM_INDEX] == item_type]  # those with the target type
-              items = items[items[:, IDX_ITEM_LEVEL] <= max_equipable_lvl]  # those within the equipable level
+              items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
+              items = items[items[:, ItemAttr["level"]] <= max_equipable_lvl]  # those within the equipable level
               if len(items) > 0:
-                  max_item_lvl = max(items[:, IDX_ITEM_LEVEL])
-                  items = items[items[:, IDX_ITEM_LEVEL] == max_item_lvl]  # those with highest level
-                  min_id = min(items[:, IDX_ITEM_ID])  # always choose the one with the minimal item id as the best
-                  idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+                  max_item_lvl = max(items[:, ItemAttr["level"]])
+                  items = items[items[:, ItemAttr["level"]] == max_item_lvl]  # those with highest level
+                  min_id = min(items[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
+                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
                   saver[i] = item_obs[idx]
-                  if not item_obs[idx][IDX_ITEM_EQUIPPED] and self.force_use_idx[i] is None:
+                  if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
                       self.force_use_idx[i] = idx  # save for later translation
 
           # force use tools
           if self.best_weapons[i] is None:
               tools = []
               for tool_type in TOOLS:
-                  tools_ = item_obs[item_obs[:, IDX_ITEM_INDEX] == tool_type]
+                  tools_ = item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
                   max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[tool_type]]
-                  tools_ = tools_[tools_[:, IDX_ITEM_LEVEL] <= max_equipable_lvl]
+                  tools_ = tools_[tools_[:, ItemAttr["level"]] <= max_equipable_lvl]
                   tools.append(tools_)
               tools = np.concatenate(tools)
               if len(tools) > 0:
-                  max_tool_lvl = max(tools[:, IDX_ITEM_LEVEL])
-                  tools = tools[tools[:, IDX_ITEM_LEVEL] == max_tool_lvl]  # those with highest level
-                  min_id = min(tools[:, IDX_ITEM_ID])  # always choose the one with the minimal item id as the best
-                  idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+                  max_tool_lvl = max(tools[:, ItemAttr["level"]])
+                  tools = tools[tools[:, ItemAttr["level"]] == max_tool_lvl]  # those with highest level
+                  min_id = min(tools[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
+                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
                   self.best_tools[i] = item_obs[idx]
-                  if not item_obs[idx][IDX_ITEM_EQUIPPED] and self.force_use_idx[i] is None:
+                  if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
                       self.force_use_idx[i] = idx  # save for later translation
 
           # directly sell ammo
           items = np.concatenate([
-              item_obs[item_obs[:, IDX_ITEM_INDEX] == ammo_type]
+              item_obs[item_obs[:, ItemAttr["type_id"]] == ammo_type]
               for ammo_type in AMMOS
           ], axis=0)
           if len(items) > 0:
-              item_id = items[0][IDX_ITEM_ID]
-              item_lvl = items[0][IDX_ITEM_LEVEL]
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == item_id).item()
+              item_id = items[0][ItemAttr["id"]]
+              item_lvl = items[0][ItemAttr["level"]]
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
               self.force_sell_idx[i] = idx
               self.force_sell_price[i] = max(1, int(item_lvl) - 1)
               continue
@@ -338,29 +342,29 @@ class FeatureExtractor():
           other_weapon_types = [w for w in WEAPONS
                                 if w != ATK_TO_WEAPON[self.prof[i]]]
           items = np.concatenate([
-              item_obs[item_obs[:, IDX_ITEM_INDEX] == weapon_type]
+              item_obs[item_obs[:, ItemAttr["type_id"]] == weapon_type]
               for weapon_type in other_weapon_types
           ], axis=0)
           if len(items) > 0:
-              item_id = items[0][IDX_ITEM_ID]
-              item_lvl = items[0][IDX_ITEM_LEVEL]
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == item_id).item()
+              item_id = items[0][ItemAttr["id"]]
+              item_lvl = items[0][ItemAttr["level"]]
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
               self.force_sell_idx[i] = idx
               self.force_sell_price[i] = min(99, np.random.randint(10) + int(item_lvl) * 25 - 10)
               continue
 
           # sell tools
           items = np.concatenate([
-              item_obs[item_obs[:, IDX_ITEM_INDEX] == tool_type]
+              item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
               for tool_type in TOOLS
           ], axis=0)
           if self.best_weapons[i] is None and self.best_tools[i] is not None:
-              best_idx = self.best_tools[i][IDX_ITEM_ID]
-              items = items[items[:, IDX_ITEM_ID] != best_idx]  # filter out the best
+              best_idx = self.best_tools[i][ItemAttr["id"]]
+              items = items[items[:, ItemAttr["id"]] != best_idx]  # filter out the best
           if len(items) > 0:
-              to_sell = sorted(items, key=lambda x: x[IDX_ITEM_LEVEL])[0]  # sell the worst first
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == to_sell[IDX_ITEM_ID]).item()
-              lvl = to_sell[IDX_ITEM_LEVEL]
+              to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
+              lvl = to_sell[ItemAttr["level"]]
               self.force_sell_idx[i] = idx
               self.force_sell_price[i] = int(lvl) * 6 + np.random.randint(3)
               continue
@@ -379,21 +383,21 @@ class FeatureExtractor():
               self.best_weapons,
           ]
           for item_type, saver in zip(sell_not_best_types, best_savers):
-              items = item_obs[item_obs[:, IDX_ITEM_INDEX] == item_type]  # those with the target type
+              items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
               if saver[i] is not None:
-                  items = items[items[:, IDX_ITEM_ID] != saver[i][IDX_ITEM_ID]]  # filter out the best
-                  best_lvl = saver[i][IDX_ITEM_LEVEL]
+                  items = items[items[:, ItemAttr["id"]] != saver[i][ItemAttr["id"]]]  # filter out the best
+                  best_lvl = saver[i][ItemAttr["level"]]
                   if best_lvl < 6:
                       # reserve items no more than level 6 for future use
-                      reserves = items[items[:, IDX_ITEM_LEVEL] > best_lvl]
-                      reserves = reserves[reserves[:, IDX_ITEM_LEVEL] <= 6]
+                      reserves = items[items[:, ItemAttr["level"]] > best_lvl]
+                      reserves = reserves[reserves[:, ItemAttr["level"]] <= 6]
                       if len(reserves) > 0:
-                          reserve = sorted(reserves, key=lambda x: x[IDX_ITEM_LEVEL])[-1]  # the best one to reserve
-                          items = items[items[:, IDX_ITEM_ID] != reserve[IDX_ITEM_ID]]  # filter out the reserved
+                          reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]  # the best one to reserve
+                          items = items[items[:, ItemAttr["id"]] != reserve[ItemAttr["id"]]]  # filter out the reserved
               if len(items) > 0:
-                  to_sell = sorted(items, key=lambda x: x[IDX_ITEM_LEVEL])[0]  # sell the worst first
-                  idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == to_sell[IDX_ITEM_ID]).item()
-                  lvl = to_sell[IDX_ITEM_LEVEL]
+                  to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
+                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
+                  lvl = to_sell[ItemAttr["level"]]
                   self.force_sell_idx[i] = idx
                   if item_type in WEAPONS:
                       self.force_sell_price[i] = min(99, np.random.randint(10) + int(lvl) * 25 - 10)
@@ -414,15 +418,15 @@ class FeatureExtractor():
       for i in alive_ids:
           rating = 0
           if self.best_weapons[i] is not None:
-              rating += self.best_weapons[i][IDX_ITEM_LEVEL] * 10
+              rating += self.best_weapons[i][ItemAttr["level"]] * 10
           elif self.best_tools[i] is not None:
-              rating += self.best_tools[i][IDX_ITEM_LEVEL] * 4
+              rating += self.best_tools[i][ItemAttr["level"]] * 4
           if self.best_hats[i] is not None:
-              rating += self.best_hats[i][IDX_ITEM_LEVEL] * 4
+              rating += self.best_hats[i][ItemAttr["level"]] * 4
           if self.best_tops[i] is not None:
-              rating += self.best_tops[i][IDX_ITEM_LEVEL] * 4
+              rating += self.best_tops[i][ItemAttr["level"]] * 4
           if self.best_bottoms[i] is not None:
-              rating += self.best_bottoms[i][IDX_ITEM_LEVEL] * 4
+              rating += self.best_bottoms[i][ItemAttr["level"]] * 4
           ratings.append(rating)
       ratings = np.array(ratings)
 
@@ -433,7 +437,7 @@ class FeatureExtractor():
           my_obs = obs[i]['Entity'][0]
           my_items = obs[i]['Inventory']
           try:
-              my_gold = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_GOLD][0][IDX_ITEM_QUANTITY]
+              my_gold = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_GOLD][0][ItemAttr["quantity"]]
           except IndexError:
               my_gold = 0
 
@@ -454,15 +458,15 @@ class FeatureExtractor():
                   max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[typ]]
               curr_best_lvl = 0
               if saver[i] is not None:
-                  curr_best_lvl = saver[i][IDX_ITEM_LEVEL]
-              mkt_comds = market_obs[market_obs[:, IDX_ITEM_INDEX] == typ]
-              mkt_comds = mkt_comds[mkt_comds[:, IDX_ITEM_PRICE] <= my_gold]
-              mkt_comds = mkt_comds[mkt_comds[:, IDX_ITEM_LEVEL] <= max_equipable_lvl]
-              mkt_comds = mkt_comds[mkt_comds[:, IDX_ITEM_LEVEL] > curr_best_lvl]
+                  curr_best_lvl = saver[i][ItemAttr["level"]]
+              mkt_comds = market_obs[market_obs[:, ItemAttr["type_id"]] == typ]
+              mkt_comds = mkt_comds[mkt_comds[:, ItemAttr["listed_price"]] <= my_gold]
+              mkt_comds = mkt_comds[mkt_comds[:, ItemAttr["level"]] <= max_equipable_lvl]
+              mkt_comds = mkt_comds[mkt_comds[:, ItemAttr["level"]] > curr_best_lvl]
               if len(mkt_comds) > 0:
-                  best_comd = sorted(mkt_comds, key=lambda x: x[IDX_ITEM_LEVEL])[-1]
+                  best_comd = sorted(mkt_comds, key=lambda x: x[ItemAttr["level"]])[-1]
                   wishlist.append(best_comd)
-                  best_lvl = best_comd[IDX_ITEM_LEVEL]
+                  best_lvl = best_comd[ItemAttr["level"]]
                   delta_per_lvl = 4 if typ not in WEAPONS else 10
                   delta = delta_per_lvl * (best_lvl - curr_best_lvl)
                   enhancements.append(delta)
@@ -472,10 +476,10 @@ class FeatureExtractor():
 
           if max(enhancements) > 0:
               to_buy = wishlist[enhancements.index(max(enhancements))]
-              self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-              idx = np.argwhere(market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-              market_obs[idx][IDX_ITEM_QUANTITY] -= 1
-              if market_obs[idx][IDX_ITEM_QUANTITY] == 0:
+              self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+              idx = np.argwhere(market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+              market_obs[idx][ItemAttr["quantity"]] -= 1
+              if market_obs[idx][ItemAttr["quantity"]] == 0:
                   # remove from market obs to prevent competition among teammates
                   market_obs = np.concatenate([market_obs[:idx], market_obs[idx+1:]])
 
@@ -485,8 +489,8 @@ class FeatureExtractor():
       for i in alive_ids:
           rating = 0
           my_items = obs[i]['Inventory']
-          n_poultice = len(my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE])
-          n_ration = len(my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_RATION])
+          n_poultice = len(my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE])
+          n_ration = len(my_items[my_items[:, ItemAttr["type_id"]] == ITEM_RATION])
           if n_poultice == 1:
               rating += 4
           elif n_poultice >= 2:
@@ -503,30 +507,30 @@ class FeatureExtractor():
       for i in alive_ids:
           my_obs = obs[i]['Entity'][0]
           my_items = obs[i]['Inventory']
-          my_poultices = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
+          my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE]
           team_n_poultice[i] = len(my_poultices)
           if len(my_poultices) > 0:  # not emergent
               continue
-          if my_obs[IDX_ENT_HEALTH] > 35:  # not emergent
+          if my_obs[EntityAttr["health"]] > 35:  # not emergent
               continue
-          # if my_obs[IDX_ENT_FOOD] >= 50 and my_obs[IDX_ENT_WATER] >= 50:
-          #     my_pop = my_obs[IDX_ENT_POPULATION]
+          # if my_obs[EntityAttr["food"]] >= 50 and my_obs[EntityAttr["water"]] >= 50:
+          #     my_pop = my_obs[EntityAttr["population_id"]]
           #     entity_obs = obs[i]['Entity']
           #     n_ent_observed = obs[i]['Entity']['N'][0]
           #     other_entities = entity_obs[1:n_ent_observed]
           #     other_enemies =
           try:
-              my_gold = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_GOLD][0][IDX_ITEM_QUANTITY]
+              my_gold = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_GOLD][0][ItemAttr["quantity"]]
           except IndexError:
               my_gold = 0
-          mkt_ps = market_obs[market_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-          mkt_ps = mkt_ps[mkt_ps[:, IDX_ITEM_PRICE] <= my_gold]
+          mkt_ps = market_obs[market_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+          mkt_ps = mkt_ps[mkt_ps[:, ItemAttr["listed_price"]] <= my_gold]
           if len(mkt_ps) > 0:
-              to_buy = sorted(mkt_ps, key=lambda x: x[IDX_ITEM_PRICE])[0]  # cheapest
-              self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-              idx = np.argwhere(market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-              market_obs[idx][IDX_ITEM_QUANTITY] -= 1
-              if market_obs[idx][IDX_ITEM_QUANTITY] == 0:
+              to_buy = sorted(mkt_ps, key=lambda x: x[ItemAttr["listed_price"]])[0]  # cheapest
+              self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+              idx = np.argwhere(market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+              market_obs[idx][ItemAttr["quantity"]] -= 1
+              if market_obs[idx][ItemAttr["quantity"]] == 0:
                   # remove from market obs to prevent repeatedly buying among teammates
                   market_obs = np.concatenate([market_obs[:idx], market_obs[idx+1:]])
           else:
@@ -538,10 +542,10 @@ class FeatureExtractor():
           for i in reversed(alive_ids):
               if team_n_poultice[i] > 0 and self.force_sell_idx[i] is not None:
                   my_items = obs[i]['Inventory']
-                  my_poultices = my_items[my_items[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-                  team_pop = next(iter(obs.values()))['Entity'][0][IDX_ENT_POPULATION]
-                  to_sell = sorted(my_poultices, key=lambda x: x[IDX_ITEM_LEVEL])[-1]  # sell the best
-                  idx = np.argwhere(my_items[:, IDX_ITEM_ID] == to_sell[IDX_ITEM_ID]).item()
+                  my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+                  team_pop = next(iter(obs.values()))['Entity'][0][EntityAttr["population_id"]]
+                  to_sell = sorted(my_poultices, key=lambda x: x[ItemAttr["level"]])[-1]  # sell the best
+                  idx = np.argwhere(my_items[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
                   self.force_sell_idx[i] = idx
                   self.force_sell_price[i] = max(int(will_die_gold // 2), 1) if team_pop > 0 else 1
                   self.rescue_cooldown = 3
@@ -555,19 +559,19 @@ class FeatureExtractor():
               if self.force_buy_idx[i] is not None:
                   continue
               my_items = obs[i]['Inventory']
-              if cons_type == ITEM_RATION and len(my_items[my_items[:, IDX_ITEM_INDEX] == cons_type]) >= 1:
+              if cons_type == ITEM_RATION and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 1:
                   continue
-              if cons_type == ITEM_POULTICE and len(my_items[my_items[:, IDX_ITEM_INDEX] == cons_type]) >= 2:
+              if cons_type == ITEM_POULTICE and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 2:
                   continue
-              mkt_cons = market_obs[market_obs[:, IDX_ITEM_INDEX] == cons_type]
+              mkt_cons = market_obs[market_obs[:, ItemAttr["type_id"]] == cons_type]
               acceptable_price = 2 + self.curr_step // 300
-              mkt_cons = mkt_cons[mkt_cons[:, IDX_ITEM_PRICE] <= acceptable_price]
+              mkt_cons = mkt_cons[mkt_cons[:, ItemAttr["listed_price"]] <= acceptable_price]
               if len(mkt_cons) > 0:
-                  to_buy = sorted(mkt_cons, key=lambda x: x[IDX_ITEM_PRICE])[0]  # cheapest
-                  self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-                  idx = np.argwhere(market_obs[:, IDX_ITEM_ID] == to_buy[IDX_ITEM_ID]).item()
-                  market_obs[idx][IDX_ITEM_QUANTITY] -= 1
-                  if market_obs[idx][IDX_ITEM_QUANTITY] == 0:
+                  to_buy = sorted(mkt_cons, key=lambda x: x[ItemAttr["listed_price"]])[0]  # cheapest
+                  self.force_buy_idx[i] = np.argwhere(raw_market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+                  idx = np.argwhere(market_obs[:, ItemAttr["id"]] == to_buy[ItemAttr["id"]]).item()
+                  market_obs[idx][ItemAttr["quantity"]] -= 1
+                  if market_obs[idx][ItemAttr["quantity"]] == 0:
                       # remove from market obs to prevent repeatedly buying among teammates
                       market_obs = np.concatenate([market_obs[:idx], market_obs[idx + 1:]])
 
@@ -586,7 +590,7 @@ class FeatureExtractor():
           item_types = []
           for j in range(N_ITEM_SLOT):
               o = item_obs[j]
-              item_types.append(o[IDX_ITEM_INDEX])  # type is 0 if j < n
+              item_types.append(o[ItemAttr["type_id"]])  # type is 0 if j < n
               arr = self._extract_per_item_feature(o)
               item_arrs.append(arr)
           item_types = np.array(item_types)
@@ -603,24 +607,24 @@ class FeatureExtractor():
   def _extract_per_item_feature(o):
       if o is not None:
           arr = np.array([
-              o[IDX_ITEM_LEVEL] / 10.,
-              o[IDX_ITEM_QUANTITY] / 200. if o[IDX_ITEM_INDEX] == ITEM_GOLD else o[IDX_ITEM_QUANTITY] / 10.,
-              o[IDX_ITEM_MELEE_ATK] / 100.,
-              o[IDX_ITEM_RANGE_ATK] / 100.,
-              o[IDX_ITEM_MAGE_ATK] / 100.,
-              o[IDX_ITEM_MELEE_DEF] / 40.,
-              o[IDX_ITEM_RANGE_DEF] / 40.,
-              o[IDX_ITEM_MAGE_DEF] / 40.,
-              o[IDX_ITEM_HP_RST] / 100.,
-              o[IDX_ITEM_PRICE] / 100.,
-              o[IDX_ITEM_EQUIPPED],
+              o[ItemAttr["level"]] / 10.,
+              o[ItemAttr["quantity"]] / 10.,
+              o[ItemAttr["melee_attack"]] / 100.,
+              o[ItemAttr["range_attack"]] / 100.,
+              o[ItemAttr["mage_attack"]] / 100.,
+              o[ItemAttr["melee_defense"]] / 40.,
+              o[ItemAttr["range_defense"]] / 40.,
+              o[ItemAttr["mage_defense"]] / 40.,
+              o[ItemAttr["health_restore"]] / 100.,
+              o[ItemAttr["listed_price"]] / 100.,
+              o[ItemAttr["equipped"]],
           ])
       else:
           arr = np.zeros(PER_ITEM_FEATURE)
       return arr
 
   def _extract_entity_feature(self, obs):
-    team_pop = next(iter(obs.values()))['Entity'][0][IDX_ENT_POPULATION]
+    team_pop = next(iter(obs.values()))['Entity'][0][EntityAttr["population_id"]]
     team_members_idx = np.arange(8) + team_pop * N_PLAYER_PER_TEAM + 1
 
     # merge obs from all the 8 agents
@@ -633,10 +637,10 @@ class FeatureExtractor():
         entity_obs = obs[i]['Entity']
         team_members[i] = entity_obs[0]
         for j in range(1, N_PLAYER_PER_TEAM):
-            if entity_obs[j][IDX_ENT_ENTITY_ID] < 0:
-                npcs[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
-            elif entity_obs[j][IDX_ENT_ENTITY_ID] not in team_members_idx:
-                enemies[entity_obs[j][IDX_ENT_ENTITY_ID]] = entity_obs[j]
+            if entity_obs[j][EntityAttr["id"]] < 0:
+                npcs[entity_obs[j][EntityAttr["id"]]] = entity_obs[j]
+            elif entity_obs[j][EntityAttr["id"]] not in team_members_idx:
+                enemies[entity_obs[j][EntityAttr["id"]]] = entity_obs[j]
 
     # extract feature of each team member itself
     team_members_arr = np.zeros((N_PLAYER_PER_TEAM, N_SELF_FEATURE))
@@ -657,17 +661,17 @@ class FeatureExtractor():
         # first extract all the features along with entity's idx & position
         features = [{
             'idx': idx,
-            'row': raw_arr[IDX_ENT_ROW_INDEX],
-            'col': raw_arr[IDX_ENT_COL_INDEX],
-            'pop': raw_arr[IDX_ENT_POPULATION],
+            'row': raw_arr[EntityAttr["row"]],
+            'col': raw_arr[EntityAttr["col"]],
+            'pop': raw_arr[EntityAttr["population_id"]],
             'arr': self._extract_per_entity_feature(raw_arr, team_pop),
         } for idx, raw_arr in entities.items()]
 
         for i in range(N_PLAYER_PER_TEAM):
             if i not in team_members:  # dead
                 continue
-            my_row = team_members[i][IDX_ENT_ROW_INDEX]
-            my_col = team_members[i][IDX_ENT_COL_INDEX]
+            my_row = team_members[i][EntityAttr["row"]]
+            my_col = team_members[i][EntityAttr["col"]]
 
             def l1_to_me(f):
                 return max(abs(f['row'] - my_row), abs(f['col'] - my_col))
@@ -688,35 +692,35 @@ class FeatureExtractor():
       if o is not None:
           arr = np.array([
               1.,  # alive mark
-              o[IDX_ENT_ENTITY_ID] in self.target_entity_id,  # attacked by my team
-              o[IDX_ENT_ATTACKER_ID] < 0,  # attacked by npc
-              o[IDX_ENT_ATTACKER_ID] > 0,  # attacked by player
-              o[IDX_ENT_LVL] / 10.,
-              o[IDX_ENT_ITEM_LVL] / 20.,
-              (o[IDX_ENT_ROW_INDEX] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
-              (o[IDX_ENT_COL_INDEX] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
-              o[IDX_ENT_TIME_ALIVE] / MAX_STEP,
-              (o[IDX_ENT_ROW_INDEX] - MAP_LEFT) / MAP_SIZE,
-              (o[IDX_ENT_COL_INDEX] - MAP_LEFT) / MAP_SIZE,
-              o[IDX_ENT_POPULATION] >= 0,  # player
-              o[IDX_ENT_POPULATION] == team_pop,  # is teammate
-              o[IDX_ENT_POPULATION] == -1,  # passive npc
-              o[IDX_ENT_POPULATION] == -2,  # neutral npc
-              o[IDX_ENT_POPULATION] == -3,  # hostile npc
-              o[IDX_ENT_DAMAGE] / 10.,
-              o[IDX_ENT_TIME_ALIVE] / MAX_STEP,
-              o[IDX_ENT_GOLD] / 100.,
-              o[IDX_ENT_HEALTH] / 100.,
-              o[IDX_ENT_FOOD] / 100.,
-              o[IDX_ENT_WATER] / 100.,
-              o[IDX_ENT_MELEE_LVL] / 10.,
-              o[IDX_ENT_RANGE_LVL] / 10.,
-              o[IDX_ENT_MAGE_LVL] / 10.,
-              o[IDX_ENT_FISHING_LVL] / 10.,
-              o[IDX_ENT_HERBALISM_LVL] / 10.,
-              o[IDX_ENT_PROSPECTING_LVL] / 10.,
-              o[IDX_ENT_CARVING_LVL] / 10.,
-              o[IDX_ENT_ALCHEMY_LVL] / 10.,
+              o[EntityAttr["id"]] in self.target_entity_id,  # attacked by my team
+              o[EntityAttr["attacker_id"]] < 0,  # attacked by npc
+              o[EntityAttr["attacker_id"]] > 0,  # attacked by player
+              o[EntityAttr["item_level"]] / 10., # xcxc ent_level is no more
+              o[EntityAttr["item_level"]] / 20.,
+              (o[EntityAttr["row"]] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
+              (o[EntityAttr["col"]] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
+              o[EntityAttr["time_alive"]] / MAX_STEP,
+              (o[EntityAttr["row"]] - MAP_LEFT) / MAP_SIZE,
+              (o[EntityAttr["col"]] - MAP_LEFT) / MAP_SIZE,
+              o[EntityAttr["id"]] >= 0,  # player
+              o[EntityAttr["population_id"]] == team_pop,  # is teammate
+              o[EntityAttr["population_id"]] == -1,  # passive npc
+              o[EntityAttr["population_id"]] == -2,  # neutral npc
+              o[EntityAttr["population_id"]] == -3,  # hostile npc
+              o[EntityAttr["damage"]] / 10.,
+              o[EntityAttr["time_alive"]] / MAX_STEP,
+              o[EntityAttr["gold"]] / 100.,
+              o[EntityAttr["health"]] / 100.,
+              o[EntityAttr["food"]] / 100.,
+              o[EntityAttr["water"]] / 100.,
+              o[EntityAttr["melee_level"]] / 10.,
+              o[EntityAttr["range_level"]] / 10.,
+              o[EntityAttr["mage_level"]] / 10.,
+              o[EntityAttr["fishing_level"]] / 10.,
+              o[EntityAttr["herbalism_level"]] / 10.,
+              o[EntityAttr["prospecting_level"]] / 10.,
+              o[EntityAttr["carving_level"]] / 10.,
+              o[EntityAttr["alchemy_level"]] / 10.,
           ])
       else:
           arr = np.zeros(PER_ENTITY_FEATURE)
@@ -727,8 +731,8 @@ class FeatureExtractor():
           prof_idx = ATK_TYPE.index(self.prof[my_index])
           prof_arr = one_hot_generator(N_ATK_TYPE, prof_idx)
           if o is not None:
-              row = o[IDX_ENT_ROW_INDEX].astype(int)
-              col = o[IDX_ENT_COL_INDEX].astype(int)
+              row = o[EntityAttr["row"]].astype(int)
+              col = o[EntityAttr["col"]].astype(int)
               near_tile_map = self.tile_map[row-4:row+5, col-4:col+5]
               food_arr = []
               water_arr = []
@@ -801,7 +805,7 @@ class FeatureExtractor():
           my_obs = obs[i]['Entity'][0]
           my_pos = my_obs[7:9].astype(int)
           team_pos[i] = my_pos
-          team_food[i] = my_obs[IDX_ENT_FOOD]
+          team_food[i] = my_obs[EntityAttr["food"]]
           stuck = []
           for e in nmmo_act.Direction.edges:
               d = np.array(e.delta).astype(int)
@@ -852,16 +856,16 @@ class FeatureExtractor():
           my_obs = obs[i]['Entity'][0]
 
           if self.force_use_idx[i] is None:
-              poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-              if my_obs[IDX_ENT_HEALTH] <= 60 and len(poultices) > 0:
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              if my_obs[EntityAttr["health"]] <= 60 and len(poultices) > 0:
                   legal_use[i][USE_POULTICE] = 1
-              rations = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_RATION]
-              if (my_obs[IDX_ENT_FOOD] < 50 or my_obs[IDX_ENT_WATER] < 50) and len(rations) > 0:
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              if (my_obs[EntityAttr["food"]] < 50 or my_obs[EntityAttr["water"]] < 50) and len(rations) > 0:
                   legal_use[i][USE_RATION] = 1
 
           if n > N_ITEM_LIMIT and self.force_sell_idx[i] is None:
-              poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-              rations = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_RATION]
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
               if len(poultices) > 1:
                   legal_sell[i][SELL_POULTICE] = 1
                   legal_sell[i][-1] = 0
@@ -909,8 +913,8 @@ class FeatureExtractor():
           # change the id from entity_id to index in obs
           entity_obs = self.curr_obs[i]['Entity']
           target_row_id = np.argwhere(
-              entity_obs[:, IDX_ENT_ENTITY_ID] == self.target_entity_id[i]).item()
-          self.target_entity_pop[i] = entity_obs[target_row_id, IDX_ENT_POPULATION]
+              entity_obs[:, EntityAttr["id"]] == self.target_entity_id[i]).item()
+          self.target_entity_pop[i] = entity_obs[target_row_id, EntityAttr["population_id"]]
           atk_type = PROF_TO_ATK_TYPE[self.prof[i]]
           raw_actions[i][nmmo_act.Attack] = {
               nmmo_act.Style: atk_type,
@@ -929,17 +933,17 @@ class FeatureExtractor():
       elif use != N_USE:
           item_obs = self.curr_obs[i]['Inventory']
           if use == USE_POULTICE:
-              poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-              min_lvl = min(poultices[:, IDX_ITEM_LEVEL])
-              poultices = poultices[poultices[:, IDX_ITEM_LEVEL] == min_lvl]  # those with lowest level
-              min_id = min(poultices[:, IDX_ITEM_ID])
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              min_lvl = min(poultices[:, ItemAttr["level"]])
+              poultices = poultices[poultices[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
+              min_id = min(poultices[:, ItemAttr["id"]])
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
           else:  # USE_RATION
-              rations = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_RATION]
-              min_lvl = min(rations[:, IDX_ITEM_LEVEL])
-              rations = rations[rations[:, IDX_ITEM_LEVEL] == min_lvl]  # those with lowest level
-              min_id = min(rations[:, IDX_ITEM_ID])
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              min_lvl = min(rations[:, ItemAttr["level"]])
+              rations = rations[rations[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
+              min_id = min(rations[:, ItemAttr["id"]])
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
 
           raw_actions[i][nmmo_act.Use] = {nmmo_act.Item: idx}
 
@@ -955,17 +959,17 @@ class FeatureExtractor():
       elif sell != N_SELL:
           item_obs = self.curr_obs[i]['Inventory']
           if sell == SELL_POULTICE:
-              poultices = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_POULTICE]
-              min_lvl = min(poultices[:, IDX_ITEM_LEVEL])
-              poultices = poultices[poultices[:, IDX_ITEM_LEVEL] == min_lvl]  # those with lowest level
-              min_id = min(poultices[:, IDX_ITEM_ID])
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              min_lvl = min(poultices[:, ItemAttr["level"]])
+              poultices = poultices[poultices[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
+              min_id = min(poultices[:, ItemAttr["id"]])
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
           else:  # SELL_RATION
-              rations = item_obs[item_obs[:, IDX_ITEM_INDEX] == ITEM_RATION]
-              min_lvl = min(rations[:, IDX_ITEM_LEVEL])
-              rations = rations[rations[:, IDX_ITEM_LEVEL] == min_lvl]  # those with lowest level
-              min_id = min(rations[:, IDX_ITEM_ID])
-              idx = np.argwhere(item_obs[:, IDX_ITEM_ID] == min_id).item()
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              min_lvl = min(rations[:, ItemAttr["level"]])
+              rations = rations[rations[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
+              min_id = min(rations[:, ItemAttr["id"]])
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
 
           raw_actions[i][nmmo_act.Sell] = {
               nmmo_act.Item: idx,
