@@ -25,6 +25,7 @@ class BaselineEnv(TeamEnv):
     for k, v in obs.items():
       self._feature_extractors[k].reset(v)
       obs[k] = self._feature_extractors[k].trans_obs(v)
+    return obs
 
   def step(self, actions: Dict[int, Dict[str, Any]]):
     for k, v in actions.items():

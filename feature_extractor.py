@@ -14,6 +14,7 @@ from pettingzoo.utils.env import AgentID, ParallelEnv
 from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 from nmmo.lib import material
+from nmmo.systems import item
 from nmmo.systems.item import ItemState
 from team_helper import TeamHelper
 
@@ -55,11 +56,91 @@ EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
 TileAttr = TileState.State.attr_name_to_col
 
+ITEM_TO_PROF_IDX = {
+    item.Sword.ITEM_TYPE_ID: EntityAttr["melee_level"],
+    item.Bow.ITEM_TYPE_ID: EntityAttr["range_level"],
+    item.Wand.ITEM_TYPE_ID: EntityAttr["mage_level"],
+    item.Scrap.ITEM_TYPE_ID: EntityAttr["melee_level"],
+    item.Shaving.ITEM_TYPE_ID:EntityAttr["range_level"],
+    item.Shard.ITEM_TYPE_ID: EntityAttr["mage_level"],
+    item.Rod.ITEM_TYPE_ID: EntityAttr["fishing_level"],
+    item.Gloves.ITEM_TYPE_ID: EntityAttr["herbalism_level"],
+    item.Pickaxe.ITEM_TYPE_ID: EntityAttr["prospecting_level"],
+    item.Chisel.ITEM_TYPE_ID: EntityAttr["carving_level"],
+    item.Arcane.ITEM_TYPE_ID: EntityAttr["alchemy_level"],
+}
+
+DEPLETION_MAP = {
+    material.Forest.index: material.Scrub.index,
+    material.Tree.index: material.Stump.index,
+    material.Ore.index: material.Slag.index,
+    material.Crystal.index: material.Fragment.index,
+    material.Herb.index: material.Weeds.index,
+    material.Fish.index: material.Ocean.index,
+}
+
+
+ARMORS = {
+  item.Hat.ITEM_TYPE_ID,
+  item.Top.ITEM_TYPE_ID,
+  item.Bottom.ITEM_TYPE_ID,
+}
+
+WEAPONS = {
+  item.Sword.ITEM_TYPE_ID,
+  item.Wand.ITEM_TYPE_ID,
+  item.Bow.ITEM_TYPE_ID,
+}
+
+TOOLS = {
+  item.Rod.ITEM_TYPE_ID,
+  item.Gloves.ITEM_TYPE_ID,
+  item.Pickaxe.ITEM_TYPE_ID,
+  item.Chisel.ITEM_TYPE_ID,
+  item.Arcane.ITEM_TYPE_ID,
+}
+
+AMMOS = {
+  item.Scrap.ITEM_TYPE_ID,
+  item.Shaving.ITEM_TYPE_ID,
+  item.Shard.ITEM_TYPE_ID,
+}
+
+CONSUMABLES = {
+  item.Ration.ITEM_TYPE_ID,
+  item.Poultice.ITEM_TYPE_ID,
+}
+
+ATK_TO_WEAPON = {
+  'Melee': item.Sword.ITEM_TYPE_ID,
+  'Range': item.Bow.ITEM_TYPE_ID,
+  'Mage': item.Wand.ITEM_TYPE_ID
+}
+
+ATK_TO_TOOL = {
+  'Melee': item.Pickaxe.ITEM_TYPE_ID,
+  'Range': item.Chisel.ITEM_TYPE_ID,
+  'Mage': item.Arcane.ITEM_TYPE_ID
+}
+
+ATK_TO_TILE = {
+  'Melee': material.Ore.index,
+  'Range': material.Tree.index,
+  'Mage': material.Crystal.index
+}
+
+PROF_TO_ATK_TYPE = {
+  'Melee': 0,
+  'Range': 1,
+  'Mage': 2,
+}
+
 class FeatureExtractor():
   def __init__(self, config: nmmo.config.Config, team_helper: TeamHelper, team_id: int):
     self.config = config
     self.team_id = team_id
-    self.team_helper = team_helper
+    self.team_size = team_helper.team_size[team_id]
+    self.num_teams = team_helper.num_teams
 
     self.curr_step = None
     self.curr_obs = None
@@ -101,23 +182,23 @@ class FeatureExtractor():
 
     self.tile_map = get_init_tile_map()
     self.fog_map = np.zeros((TERRAIN_SIZE+1, TERRAIN_SIZE+1))
-    self.visit_map = np.zeros((N_PLAYER_PER_TEAM, TERRAIN_SIZE+1, TERRAIN_SIZE+1))
+    self.visit_map = np.zeros((self.team_size, TERRAIN_SIZE+1, TERRAIN_SIZE+1))
     self.poison_map = get_init_poison_map()
     self.entity_map = None
 
-    self.target_entity_id = [None] * N_PLAYER_PER_TEAM
-    self.target_entity_pop = [None] * N_PLAYER_PER_TEAM
-    self.player_kill_num = [0] * N_PLAYER_PER_TEAM
+    self.target_entity_id = [None] * self.team_size
+    self.target_entity_pop = [None] * self.team_size
+    self.player_kill_num = [0] * self.team_size
 
     # p: passive, n: neutral, h: hostile
-    self.npc_kill_num = {kind: [0] * N_PLAYER_PER_TEAM for kind in 'pnh'}
+    self.npc_kill_num = {kind: [0] * self.team_size for kind in 'pnh'}
 
-    self.step_onto_herb_cnt = [0] * N_PLAYER_PER_TEAM
+    self.step_onto_herb_cnt = [0] * self.team_size
 
     self.prof = self._choose_prof()
 
     self.prev_actions = np.array([N_MOVE, N_ATK_TARGET, N_USE, N_SELL])[None, :] \
-                          .repeat(N_PLAYER_PER_TEAM, axis=0)  # init as idle
+                          .repeat(self.team_size, axis=0)  # init as idle
 
   def trans_obs(self, obs):
     self.curr_obs = obs
@@ -126,13 +207,12 @@ class FeatureExtractor():
     self._update_global_maps(obs)
     self._update_kill_num(obs)
     tile = self._extract_tile_feature(obs)
-    # xcxc
-    # self._process_items(obs)  # use & sell
-    # self._process_market(obs)  # buy
-    # item_type, item = self._extract_item_feature(obs)
+    self._process_items(obs)  # use & sell
+    self._process_market(obs)  # buy
+    item_type, item = self._extract_item_feature(obs)
     team, npc, enemy, *masks, self.npc_tgt, self.enemy_tgt = self._extract_entity_feature(obs)
     game = self._extract_game_feature(obs)
-    legal = self._extract_legal_action(obs, self.npc_tgt, self.enemy_tgt)
+    # legal = self._extract_legal_action(obs, self.npc_tgt, self.enemy_tgt)
     reset_flag = np.array([self.curr_step == 0])  # for resetting RNN hidden
 
     state = {
@@ -146,7 +226,7 @@ class FeatureExtractor():
       'npc_mask': masks[1],
       'enemy_mask': masks[2],
       'game': game,
-      'legal': legal,
+      # 'legal': legal,
       'prev_act': self.prev_actions,
       'reset': reset_flag,
     }
@@ -196,24 +276,14 @@ class FeatureExtractor():
       # change tile in advance
       for pos, pop in zip(entity_pos, entity_pop):
         if pop >= 0:  # is player
-          if self.tile_map[pos[0], pos[1]] == TILE_FOREST:
-              self.tile_map[pos[0], pos[1]] = TILE_SCRUB
-          if self.tile_map[pos[0], pos[1]] == TILE_ORE:
-              self.tile_map[pos[0], pos[1]] = TILE_SLAG
-          if self.tile_map[pos[0], pos[1]] == TILE_TREE:
-              self.tile_map[pos[0], pos[1]] = TILE_STUMP
-          if self.tile_map[pos[0], pos[1]] == TILE_CRYSTAL:
-              self.tile_map[pos[0], pos[1]] = TILE_FRAGMENT
-          if self.tile_map[pos[0], pos[1]] == TILE_HERB:
-              self.tile_map[pos[0], pos[1]] = TILE_WEEDS
-          if self.tile_map[pos[0], pos[1]+1] == TILE_FISH:
-              self.tile_map[pos[0], pos[1]+1] = TILE_OCEAN
-          if self.tile_map[pos[0], pos[1]-1] == TILE_FISH:
-              self.tile_map[pos[0], pos[1]-1] = TILE_OCEAN
-          if self.tile_map[pos[0]+1, pos[1]] == TILE_FISH:
-              self.tile_map[pos[0]+1, pos[1]] = TILE_OCEAN
-          if self.tile_map[pos[0]-1, pos[1]] == TILE_FISH:
-              self.tile_map[pos[0]-1, pos[1]] = TILE_OCEAN
+          new_tile = DEPLETION_MAP.get(self.tile_map[pos[0], pos[1]])
+          if new_tile is not None:
+            self.tile_map[pos[0], pos[1]] = new_tile
+
+            for row_offset in range(-1, 2):
+              for col_offset in range(-1, 2):
+                if self.tile_map[pos[0]+row_offset, pos[1]+col_offset] == material.Fish.index:
+                  self.tile_map[pos[0]+row_offset, pos[1]+col_offset] = material.Ocean.index
 
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
       entity_map[2] * NEGATIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
@@ -239,7 +309,7 @@ class FeatureExtractor():
 
   def _extract_tile_feature(self, obs):
     imgs = []
-    for i in range(N_PLAYER_PER_TEAM):
+    for i in range(self.team_size):
       # replace with dummy feature if dead
       if i not in obs:
           imgs.append(DUMMY_IMG_FEAT)
@@ -262,154 +332,154 @@ class FeatureExtractor():
     return imgs
 
   def _process_items(self, obs):
-      # reset
-      self.best_hats = [None] * N_PLAYER_PER_TEAM
-      self.best_tops = [None] * N_PLAYER_PER_TEAM
-      self.best_bottoms = [None] * N_PLAYER_PER_TEAM
-      self.best_weapons = [None] * N_PLAYER_PER_TEAM
-      self.best_tools = [None] * N_PLAYER_PER_TEAM
-      self.force_use_idx = [None] * N_PLAYER_PER_TEAM
-      self.force_sell_idx = [None] * N_PLAYER_PER_TEAM
-      self.force_sell_price = [None] * N_PLAYER_PER_TEAM
+    # reset
+    self.best_hats = [None] * self.team_size
+    self.best_tops = [None] * self.team_size
+    self.best_bottoms = [None] * self.team_size
+    self.best_weapons = [None] * self.team_size
+    self.best_tools = [None] * self.team_size
+    self.force_use_idx = [None] * self.team_size
+    self.force_sell_idx = [None] * self.team_size
+    self.force_sell_price = [None] * self.team_size
 
-      for i in range(N_PLAYER_PER_TEAM):
-          if i not in obs:
-              continue
-          item_obs = obs[i]['Inventory']
-          my_obs = obs[i]['Entity'][0]
+    for i in range(self.team_size):
+      if i not in obs:
+        continue
+      item_obs = obs[i]['Inventory']
+      my_obs = obs[i]['Entity'][0]
 
-          # force use weapons and armors
-          usable_types = [  # reflect priority
-              ATK_TO_WEAPON[self.prof[i]],
-              ITEM_HAT,
-              ITEM_TOP,
-              ITEM_BOTTOM,
-          ]
-          best_savers = [
-              self.best_weapons,
-              self.best_hats,
-              self.best_tops,
-              self.best_bottoms,
-          ]
-          for item_type, saver in zip(usable_types, best_savers):
-              if item_type in ARMORS:
-                  max_equipable_lvl = max(my_obs[-N_PROF:])  # maximum of all levels
-              else:
-                  max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[item_type]]
-              items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
-              items = items[items[:, ItemAttr["level"]] <= max_equipable_lvl]  # those within the equipable level
-              if len(items) > 0:
-                  max_item_lvl = max(items[:, ItemAttr["level"]])
-                  items = items[items[:, ItemAttr["level"]] == max_item_lvl]  # those with highest level
-                  min_id = min(items[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
-                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
-                  saver[i] = item_obs[idx]
-                  if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
-                      self.force_use_idx[i] = idx  # save for later translation
-
-          # force use tools
-          if self.best_weapons[i] is None:
-              tools = []
-              for tool_type in TOOLS:
-                  tools_ = item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
-                  max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[tool_type]]
-                  tools_ = tools_[tools_[:, ItemAttr["level"]] <= max_equipable_lvl]
-                  tools.append(tools_)
-              tools = np.concatenate(tools)
-              if len(tools) > 0:
-                  max_tool_lvl = max(tools[:, ItemAttr["level"]])
-                  tools = tools[tools[:, ItemAttr["level"]] == max_tool_lvl]  # those with highest level
-                  min_id = min(tools[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
-                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
-                  self.best_tools[i] = item_obs[idx]
-                  if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
-                      self.force_use_idx[i] = idx  # save for later translation
-
-          # directly sell ammo
-          items = np.concatenate([
-              item_obs[item_obs[:, ItemAttr["type_id"]] == ammo_type]
-              for ammo_type in AMMOS
-          ], axis=0)
+      # force use weapons and armors
+      usable_types = [  # reflect priority
+          ATK_TO_WEAPON[self.prof[i]],
+          item.Hat.ITEM_TYPE_ID,
+          item.Top.ITEM_TYPE_ID,
+          item.Bottom.ITEM_TYPE_ID,
+      ]
+      best_savers = [
+          self.best_weapons,
+          self.best_hats,
+          self.best_tops,
+          self.best_bottoms,
+      ]
+      for item_type, saver in zip(usable_types, best_savers):
+          if item_type in ARMORS:
+              max_equipable_lvl = max(my_obs[-N_PROF:])  # maximum of all levels
+          else:
+              max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[item_type]]
+          items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
+          items = items[items[:, ItemAttr["level"]] <= max_equipable_lvl]  # those within the equipable level
           if len(items) > 0:
-              item_id = items[0][ItemAttr["id"]]
-              item_lvl = items[0][ItemAttr["level"]]
-              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
-              self.force_sell_idx[i] = idx
-              self.force_sell_price[i] = max(1, int(item_lvl) - 1)
-              continue
+              max_item_lvl = max(items[:, ItemAttr["level"]])
+              items = items[items[:, ItemAttr["level"]] == max_item_lvl]  # those with highest level
+              min_id = min(items[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
+              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
+              saver[i] = item_obs[idx]
+              if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
+                  self.force_use_idx[i] = idx  # save for later translation
 
-          # directly sell weapons not belong to my profession
-          other_weapon_types = [w for w in WEAPONS
-                                if w != ATK_TO_WEAPON[self.prof[i]]]
-          items = np.concatenate([
-              item_obs[item_obs[:, ItemAttr["type_id"]] == weapon_type]
-              for weapon_type in other_weapon_types
-          ], axis=0)
-          if len(items) > 0:
-              item_id = items[0][ItemAttr["id"]]
-              item_lvl = items[0][ItemAttr["level"]]
-              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
-              self.force_sell_idx[i] = idx
-              self.force_sell_price[i] = min(99, np.random.randint(10) + int(item_lvl) * 25 - 10)
-              continue
+      # force use tools
+      if self.best_weapons[i] is None:
+        tools = []
+        for tool_type in TOOLS:
+          tools_ = item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
+          max_equipable_lvl = my_obs[ITEM_TO_PROF_IDX[tool_type]]
+          tools_ = tools_[tools_[:, ItemAttr["level"]] <= max_equipable_lvl]
+          tools.append(tools_)
+        tools = np.concatenate(tools)
+        if len(tools) > 0:
+          max_tool_lvl = max(tools[:, ItemAttr["level"]])
+          tools = tools[tools[:, ItemAttr["level"]] == max_tool_lvl]  # those with highest level
+          min_id = min(tools[:, ItemAttr["id"]])  # always choose the one with the minimal item id as the best
+          idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
+          self.best_tools[i] = item_obs[idx]
+          if not item_obs[idx][ItemAttr["equipped"]] and self.force_use_idx[i] is None:
+            self.force_use_idx[i] = idx  # save for later translation
 
-          # sell tools
-          items = np.concatenate([
-              item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
-              for tool_type in TOOLS
-          ], axis=0)
-          if self.best_weapons[i] is None and self.best_tools[i] is not None:
-              best_idx = self.best_tools[i][ItemAttr["id"]]
-              items = items[items[:, ItemAttr["id"]] != best_idx]  # filter out the best
-          if len(items) > 0:
-              to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
-              idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
-              lvl = to_sell[ItemAttr["level"]]
-              self.force_sell_idx[i] = idx
-              self.force_sell_price[i] = int(lvl) * 6 + np.random.randint(3)
-              continue
+      # directly sell ammo
+      items = np.concatenate([
+        item_obs[item_obs[:, ItemAttr["type_id"]] == ammo_type]
+        for ammo_type in AMMOS
+      ], axis=0)
+      if len(items) > 0:
+        item_id = items[0][ItemAttr["id"]]
+        item_lvl = items[0][ItemAttr["level"]]
+        idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
+        self.force_sell_idx[i] = idx
+        self.force_sell_price[i] = max(1, int(item_lvl) - 1)
+        continue
 
-          # sell armors and weapons of my profession
-          sell_not_best_types = [
-              ITEM_HAT,
-              ITEM_TOP,
-              ITEM_BOTTOM,
-              ATK_TO_WEAPON[self.prof[i]],
-          ]  # reflect priority
-          best_savers = [
-              self.best_hats,
-              self.best_tops,
-              self.best_bottoms,
-              self.best_weapons,
-          ]
-          for item_type, saver in zip(sell_not_best_types, best_savers):
-              items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
-              if saver[i] is not None:
-                  items = items[items[:, ItemAttr["id"]] != saver[i][ItemAttr["id"]]]  # filter out the best
-                  best_lvl = saver[i][ItemAttr["level"]]
-                  if best_lvl < 6:
-                      # reserve items no more than level 6 for future use
-                      reserves = items[items[:, ItemAttr["level"]] > best_lvl]
-                      reserves = reserves[reserves[:, ItemAttr["level"]] <= 6]
-                      if len(reserves) > 0:
-                          reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]  # the best one to reserve
-                          items = items[items[:, ItemAttr["id"]] != reserve[ItemAttr["id"]]]  # filter out the reserved
-              if len(items) > 0:
-                  to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
-                  idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
-                  lvl = to_sell[ItemAttr["level"]]
-                  self.force_sell_idx[i] = idx
-                  if item_type in WEAPONS:
-                      self.force_sell_price[i] = min(99, np.random.randint(10) + int(lvl) * 25 - 10)
-                  else:  # ARMORS
-                      self.force_sell_price[i] = 3 + np.random.randint(3) + int(lvl - 1) * 4
-                  break
+      # directly sell weapons not belong to my profession
+      other_weapon_types = [w for w in WEAPONS
+                            if w != ATK_TO_WEAPON[self.prof[i]]]
+      items = np.concatenate([
+        item_obs[item_obs[:, ItemAttr["type_id"]] == weapon_type]
+        for weapon_type in other_weapon_types
+      ], axis=0)
+      if len(items) > 0:
+        item_id = items[0][ItemAttr["id"]]
+        item_lvl = items[0][ItemAttr["level"]]
+        idx = np.argwhere(item_obs[:, ItemAttr["id"]] == item_id).item()
+        self.force_sell_idx[i] = idx
+        self.force_sell_price[i] = min(99, np.random.randint(10) + int(item_lvl) * 25 - 10)
+        continue
+
+      # sell tools
+      items = np.concatenate([
+        item_obs[item_obs[:, ItemAttr["type_id"]] == tool_type]
+        for tool_type in TOOLS
+      ], axis=0)
+      if self.best_weapons[i] is None and self.best_tools[i] is not None:
+        best_idx = self.best_tools[i][ItemAttr["id"]]
+        items = items[items[:, ItemAttr["id"]] != best_idx]  # filter out the best
+      if len(items) > 0:
+        to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
+        idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
+        lvl = to_sell[ItemAttr["level"]]
+        self.force_sell_idx[i] = idx
+        self.force_sell_price[i] = int(lvl) * 6 + np.random.randint(3)
+        continue
+
+      # sell armors and weapons of my profession
+      sell_not_best_types = [
+        item.Hat.ITEM_TYPE_ID,
+        item.Top.ITEM_TYPE_ID,
+        item.Bottom.ITEM_TYPE_ID,
+        ATK_TO_WEAPON[self.prof[i]],
+      ]  # reflect priority
+      best_savers = [
+        self.best_hats,
+        self.best_tops,
+        self.best_bottoms,
+        self.best_weapons,
+      ]
+      for item_type, saver in zip(sell_not_best_types, best_savers):
+        items = item_obs[item_obs[:, ItemAttr["type_id"]] == item_type]  # those with the target type
+        if saver[i] is not None:
+          items = items[items[:, ItemAttr["id"]] != saver[i][ItemAttr["id"]]]  # filter out the best
+          best_lvl = saver[i][ItemAttr["level"]]
+          if best_lvl < 6:
+            # reserve items no more than level 6 for future use
+            reserves = items[items[:, ItemAttr["level"]] > best_lvl]
+            reserves = reserves[reserves[:, ItemAttr["level"]] <= 6]
+            if len(reserves) > 0:
+              reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]  # the best one to reserve
+              items = items[items[:, ItemAttr["id"]] != reserve[ItemAttr["id"]]]  # filter out the reserved
+        if len(items) > 0:
+          to_sell = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]  # sell the worst first
+          idx = np.argwhere(item_obs[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
+          lvl = to_sell[ItemAttr["level"]]
+          self.force_sell_idx[i] = idx
+          if item_type in WEAPONS:
+            self.force_sell_price[i] = min(99, np.random.randint(10) + int(lvl) * 25 - 10)
+          else:  # ARMORS
+            self.force_sell_price[i] = 3 + np.random.randint(3) + int(lvl - 1) * 4
+          break
 
   def _process_market(self, obs):
       # reset
-      self.force_buy_idx = [None] * N_PLAYER_PER_TEAM
+      self.force_buy_idx = [None] * self.team_size
 
-      alive_ids = np.array([i for i in range(N_PLAYER_PER_TEAM) if i in obs])
+      alive_ids = np.array([i for i in range(self.team_size) if i in obs])
       raw_market_obs = obs[alive_ids[0]]['Market']
       market_obs = copy.deepcopy(raw_market_obs)  # will be modified later
 
@@ -436,10 +506,7 @@ class FeatureExtractor():
       for i in alive_ids:
           my_obs = obs[i]['Entity'][0]
           my_items = obs[i]['Inventory']
-          try:
-              my_gold = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_GOLD][0][ItemAttr["quantity"]]
-          except IndexError:
-              my_gold = 0
+          my_gold = my_obs[EntityAttr["gold"]]
 
           care_types = [ATK_TO_WEAPON[self.prof[i]], *ARMORS]
           savers = [
@@ -484,13 +551,13 @@ class FeatureExtractor():
                   market_obs = np.concatenate([market_obs[:idx], market_obs[idx+1:]])
 
       # survival rating
-      alive_ids = np.array([i for i in range(N_PLAYER_PER_TEAM) if i in obs])
+      alive_ids = np.array([i for i in range(self.team_size) if i in obs])
       ratings = []
       for i in alive_ids:
           rating = 0
           my_items = obs[i]['Inventory']
-          n_poultice = len(my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE])
-          n_ration = len(my_items[my_items[:, ItemAttr["type_id"]] == ITEM_RATION])
+          n_poultice = len(my_items[my_items[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID])
+          n_ration = len(my_items[my_items[:, ItemAttr["type_id"]] == item.Ration.ITEM_TYPE_ID])
           if n_poultice == 1:
               rating += 4
           elif n_poultice >= 2:
@@ -503,11 +570,11 @@ class FeatureExtractor():
       # emergent case to buy poultice
       will_die_id = None
       will_die_gold = None
-      team_n_poultice = [None] * N_PLAYER_PER_TEAM
+      team_n_poultice = [None] * self.team_size
       for i in alive_ids:
           my_obs = obs[i]['Entity'][0]
           my_items = obs[i]['Inventory']
-          my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+          my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
           team_n_poultice[i] = len(my_poultices)
           if len(my_poultices) > 0:  # not emergent
               continue
@@ -519,11 +586,8 @@ class FeatureExtractor():
           #     n_ent_observed = obs[i]['Entity']['N'][0]
           #     other_entities = entity_obs[1:n_ent_observed]
           #     other_enemies =
-          try:
-              my_gold = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_GOLD][0][ItemAttr["quantity"]]
-          except IndexError:
-              my_gold = 0
-          mkt_ps = market_obs[market_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+          my_gold = my_obs[EntityAttr["gold"]]
+          mkt_ps = market_obs[market_obs[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
           mkt_ps = mkt_ps[mkt_ps[:, ItemAttr["listed_price"]] <= my_gold]
           if len(mkt_ps) > 0:
               to_buy = sorted(mkt_ps, key=lambda x: x[ItemAttr["listed_price"]])[0]  # cheapest
@@ -542,7 +606,7 @@ class FeatureExtractor():
           for i in reversed(alive_ids):
               if team_n_poultice[i] > 0 and self.force_sell_idx[i] is not None:
                   my_items = obs[i]['Inventory']
-                  my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+                  my_poultices = my_items[my_items[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
                   team_pop = next(iter(obs.values()))['Entity'][0][EntityAttr["population_id"]]
                   to_sell = sorted(my_poultices, key=lambda x: x[ItemAttr["level"]])[-1]  # sell the best
                   idx = np.argwhere(my_items[:, ItemAttr["id"]] == to_sell[ItemAttr["id"]]).item()
@@ -554,14 +618,14 @@ class FeatureExtractor():
       # normal case to buy at least two poultices, at least one ration
       agent_order = np.argsort(ratings)
       alive_ids = alive_ids[agent_order]  # reorder, low rating buy first
-      for cons_type in [ITEM_POULTICE, ITEM_RATION]:
+      for cons_type in [item.Poultice.ITEM_TYPE_ID, item.Ration.ITEM_TYPE_ID]:
           for i in alive_ids:
               if self.force_buy_idx[i] is not None:
                   continue
               my_items = obs[i]['Inventory']
-              if cons_type == ITEM_RATION and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 1:
+              if cons_type == item.Ration.ITEM_TYPE_ID and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 1:
                   continue
-              if cons_type == ITEM_POULTICE and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 2:
+              if cons_type == item.Poultice.ITEM_TYPE_ID and len(my_items[my_items[:, ItemAttr["type_id"]] == cons_type]) >= 2:
                   continue
               mkt_cons = market_obs[market_obs[:, ItemAttr["type_id"]] == cons_type]
               acceptable_price = 2 + self.curr_step // 300
@@ -578,7 +642,7 @@ class FeatureExtractor():
   def _extract_item_feature(self, obs):
       items_arrs = []
       items_types = []
-      for i in range(N_PLAYER_PER_TEAM):
+      for i in range(self.team_size):
           # replace with dummy feature if dead
           if i not in obs:
               items_types.append(DUMMY_ITEM_TYPES)
@@ -605,55 +669,55 @@ class FeatureExtractor():
 
   @staticmethod
   def _extract_per_item_feature(o):
-      if o is not None:
-          arr = np.array([
-              o[ItemAttr["level"]] / 10.,
-              o[ItemAttr["quantity"]] / 10.,
-              o[ItemAttr["melee_attack"]] / 100.,
-              o[ItemAttr["range_attack"]] / 100.,
-              o[ItemAttr["mage_attack"]] / 100.,
-              o[ItemAttr["melee_defense"]] / 40.,
-              o[ItemAttr["range_defense"]] / 40.,
-              o[ItemAttr["mage_defense"]] / 40.,
-              o[ItemAttr["health_restore"]] / 100.,
-              o[ItemAttr["listed_price"]] / 100.,
-              o[ItemAttr["equipped"]],
-          ])
-      else:
-          arr = np.zeros(PER_ITEM_FEATURE)
-      return arr
+    if o is not None:
+      arr = np.array([
+        o[ItemAttr["level"]] / 10.,
+        o[ItemAttr["quantity"]] / 10.,
+        o[ItemAttr["melee_attack"]] / 100.,
+        o[ItemAttr["range_attack"]] / 100.,
+        o[ItemAttr["mage_attack"]] / 100.,
+        o[ItemAttr["melee_defense"]] / 40.,
+        o[ItemAttr["range_defense"]] / 40.,
+        o[ItemAttr["mage_defense"]] / 40.,
+        o[ItemAttr["health_restore"]] / 100.,
+        o[ItemAttr["listed_price"]] / 100.,
+        o[ItemAttr["equipped"]],
+      ])
+    else:
+      arr = np.zeros(PER_ITEM_FEATURE)
+    return arr
 
   def _extract_entity_feature(self, obs):
     team_pop = next(iter(obs.values()))['Entity'][0][EntityAttr["population_id"]]
-    team_members_idx = np.arange(8) + team_pop * N_PLAYER_PER_TEAM + 1
+    team_members_idx = np.arange(8) + team_pop * self.team_size + 1
 
     # merge obs from all the 8 agents
     team_members = {}  # 0~7 -> raw_arr
     enemies = {}  # entity_id -> raw_arr
     npcs = {}  # entity_id -> raw_arr
-    for i in range(N_PLAYER_PER_TEAM):
+    for i in range(self.team_size):
         if i not in obs:
             continue
         entity_obs = obs[i]['Entity']
         team_members[i] = entity_obs[0]
-        for j in range(1, N_PLAYER_PER_TEAM):
+        for j in range(1, self.team_size):
             if entity_obs[j][EntityAttr["id"]] < 0:
                 npcs[entity_obs[j][EntityAttr["id"]]] = entity_obs[j]
             elif entity_obs[j][EntityAttr["id"]] not in team_members_idx:
                 enemies[entity_obs[j][EntityAttr["id"]]] = entity_obs[j]
 
     # extract feature of each team member itself
-    team_members_arr = np.zeros((N_PLAYER_PER_TEAM, N_SELF_FEATURE))
-    team_mask = np.array([i not in obs for i in range(N_PLAYER_PER_TEAM)])
-    for i in range(N_PLAYER_PER_TEAM):
+    team_members_arr = np.zeros((self.team_size, N_SELF_FEATURE))
+    team_mask = np.array([i not in obs for i in range(self.team_size)])
+    for i in range(self.team_size):
         team_members_arr[i] = self._extract_per_entity_feature(team_members.get(i, None), team_pop, i)
 
     # assign the features of npcs and enemies to each member
-    others_arrs = [np.zeros((N_PLAYER_PER_TEAM, n, PER_ENTITY_FEATURE))
+    others_arrs = [np.zeros((self.team_size, n, PER_ENTITY_FEATURE))
                     for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
-    entity_mask = [np.ones((N_PLAYER_PER_TEAM, n))
+    entity_mask = [np.ones((self.team_size, n))
                     for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
-    ids_as_target = [np.zeros((N_PLAYER_PER_TEAM, n))
+    ids_as_target = [np.zeros((self.team_size, n))
                       for n in (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)]
     for k in range(2):
         n_considered = (N_NPC_CONSIDERED, N_ENEMY_CONSIDERED)[k]
@@ -667,7 +731,7 @@ class FeatureExtractor():
             'arr': self._extract_per_entity_feature(raw_arr, team_pop),
         } for idx, raw_arr in entities.items()]
 
-        for i in range(N_PLAYER_PER_TEAM):
+        for i in range(self.team_size):
             if i not in team_members:  # dead
                 continue
             my_row = team_members[i][EntityAttr["row"]]
@@ -726,8 +790,8 @@ class FeatureExtractor():
           arr = np.zeros(PER_ENTITY_FEATURE)
 
       if my_index is not None:
-          population_arr = one_hot_generator(N_TEAM, int(team_pop))
-          index_arr = one_hot_generator(N_PLAYER_PER_TEAM, my_index)
+          population_arr = one_hot_generator(self.num_teams, int(team_pop))
+          index_arr = one_hot_generator(self.team_size, my_index)
           prof_idx = ATK_TYPE.index(self.prof[my_index])
           prof_arr = one_hot_generator(N_ATK_TYPE, prof_idx)
           if o is not None:
@@ -740,13 +804,13 @@ class FeatureExtractor():
               fish_arr = []
               obstacle_arr = []
               for i in range(9):
-                  for j in range(9):
-                      if abs(i-4) + abs(j-4) <= 4:
-                          food_arr.append(near_tile_map[i, j] == TILE_FOREST)
-                          water_arr.append(near_tile_map[i, j] == TILE_WATER)
-                          herb_arr.append(near_tile_map[i, j] == TILE_HERB)
-                          fish_arr.append(near_tile_map[i, j] == TILE_FISH)
-                          obstacle_arr.append(near_tile_map[i, j] in OBSTACLE_TILES)
+                for j in range(9):
+                  if abs(i-4) + abs(j-4) <= 4:
+                    food_arr.append(near_tile_map[i, j] == material.Forest.index)
+                    water_arr.append(near_tile_map[i, j] == material.Water.index)
+                    herb_arr.append(near_tile_map[i, j] == material.Herb.index)
+                    fish_arr.append(near_tile_map[i, j] == material.Fish.index)
+                    obstacle_arr.append(near_tile_map[i, j] in OBSTACLE_TILES)
               food_arr[-1] = max(0, self.poison_map[row, col]) / 20.  # patch after getting trained
               water_arr[-1] = max(0, self.poison_map[row+1, col]) / 20.  # patch after getting trained
               herb_arr[-1] = max(0, self.poison_map[row, col+1]) / 20.  # patch after getting trained
@@ -762,24 +826,24 @@ class FeatureExtractor():
 
   def _extract_game_feature(self, obs):
       game_progress = self.curr_step / MAX_STEP
-      n_alive = sum([i in obs for i in range(N_PLAYER_PER_TEAM)])
+      n_alive = sum([i in obs for i in range(self.team_size)])
       arr = np.array([
           game_progress,
-          n_alive / N_PLAYER_PER_TEAM,
+          n_alive / self.team_size,
           *multi_hot_generator(n_feature=16, index=int(game_progress*16)+1),
-          *multi_hot_generator(n_feature=N_PLAYER_PER_TEAM, index=n_alive),
+          *multi_hot_generator(n_feature=self.team_size, index=n_alive),
       ])
       return arr
 
   def _extract_legal_action(self, obs, npc_target, enemy_target):
       # --- move ---
-      team_pos = np.zeros((N_PLAYER_PER_TEAM, 2), dtype=int)
-      team_food = np.ones(N_PLAYER_PER_TEAM) * 100
-      team_stuck = [False] * N_PLAYER_PER_TEAM
+      team_pos = np.zeros((self.team_size, 2), dtype=int)
+      team_food = np.ones(self.team_size) * 100
+      team_stuck = [False] * self.team_size
 
       # first filter out obstacles
-      legal_move = np.zeros((N_PLAYER_PER_TEAM, N_MOVE + 1))
-      for i in range(N_PLAYER_PER_TEAM):
+      legal_move = np.zeros((self.team_size, N_MOVE + 1))
+      for i in range(self.team_size):
           if i not in obs:
               legal_move[i][-1] = 1
               continue
@@ -787,20 +851,20 @@ class FeatureExtractor():
           entity_pos = obs[i]['Entity'][1:, 7:9].astype(int).tolist()
           center = np.array([WINDOW_CENTER, WINDOW_CENTER])
           for j, e in enumerate(nmmo_act.Direction.edges):
-              next_pos = center + e.delta
-              if tiles_type[next_pos[0]][next_pos[1]] in PASSABLE_TILES:
-                  if next_pos.tolist() not in entity_pos:
-                      legal_move[i][j] = 1
-                  else:
-                      ent_on_next_pos_can_move = False
-                      for ee in nmmo_act.Direction.edges:  # a rough secondary judgement
-                          next_next_pos = next_pos + ee.delta
-                          if tiles_type[next_next_pos[0]][next_next_pos[1]] in PASSABLE_TILES:
-                              if next_next_pos.tolist() not in entity_pos:
-                                  ent_on_next_pos_can_move = True
-                                  break
-                      if ent_on_next_pos_can_move:
-                          legal_move[i][j] = 1
+            next_pos = center + e.delta
+            if tiles_type[next_pos[0]][next_pos[1]] in PASSABLE_TILES:
+              if next_pos.tolist() not in entity_pos:
+                legal_move[i][j] = 1
+              else:
+                ent_on_next_pos_can_move = False
+                for ee in nmmo_act.Direction.edges:  # a rough secondary judgement
+                  next_next_pos = next_pos + ee.delta
+                  if tiles_type[next_next_pos[0]][next_next_pos[1]] in PASSABLE_TILES:
+                    if next_next_pos.tolist() not in entity_pos:
+                      ent_on_next_pos_can_move = True
+                      break
+                if ent_on_next_pos_can_move:
+                  legal_move[i][j] = 1
           # save something for later use, and detect whether it is stuck
           my_obs = obs[i]['Entity'][0]
           my_pos = my_obs[7:9].astype(int)
@@ -808,36 +872,36 @@ class FeatureExtractor():
           team_food[i] = my_obs[EntityAttr["food"]]
           stuck = []
           for e in nmmo_act.Direction.edges:
-              d = np.array(e.delta).astype(int)
-              near_pos = my_pos + d
-              tile_type = self.tile_map[near_pos[0], near_pos[1]]
-              entity_type = self.entity_map[near_pos[0], near_pos[1]]
-              st = tile_type in OBSTACLE_TILES or entity_type == TEAMMATE_REPR
-              stuck.append(st)
+            d = np.array(e.delta).astype(int)
+            near_pos = my_pos + d
+            tile_type = self.tile_map[near_pos[0], near_pos[1]]
+            entity_type = self.entity_map[near_pos[0], near_pos[1]]
+            st = tile_type in OBSTACLE_TILES or entity_type == TEAMMATE_REPR
+            stuck.append(st)
           if sum(stuck) == 4:
-              team_stuck[i] = True
+            team_stuck[i] = True
 
       # then prevent blocking out from teammates
-      for i in range(N_PLAYER_PER_TEAM):
-          if i not in obs:
-              continue
-          for j, e in enumerate(nmmo_act.Direction.edges):  # [North, South, East, West]
-              d = np.array(e.delta).astype(int)
-              near_pos = (team_pos[i] + d).tolist()
-              if near_pos in team_pos.tolist():
-                  teammate_idx = team_pos.tolist().index(near_pos)
-                  counter_dir = [1, 0, 3, 2][j]
-                  if team_stuck[i]:
-                      legal_move[teammate_idx][counter_dir] = 0
-                  else:
-                      my_food = team_food[i]
-                      teammate_food = team_food[teammate_idx]
-                      if my_food < teammate_food:
-                          legal_move[teammate_idx][counter_dir] = 0
+      for i in range(self.team_size):
+        if i not in obs:
+          continue
+        for j, e in enumerate(nmmo_act.Direction.edges):  # [North, South, East, West]
+          d = np.array(e.delta).astype(int)
+          near_pos = (team_pos[i] + d).tolist()
+          if near_pos in team_pos.tolist():
+            teammate_idx = team_pos.tolist().index(near_pos)
+            counter_dir = [1, 0, 3, 2][j]
+            if team_stuck[i]:
+              legal_move[teammate_idx][counter_dir] = 0
+            else:
+              my_food = team_food[i]
+              teammate_food = team_food[teammate_idx]
+              if my_food < teammate_food:
+                legal_move[teammate_idx][counter_dir] = 0
 
-      for i in range(N_PLAYER_PER_TEAM):
-          if sum(legal_move[i][:N_MOVE]) == 0:
-              legal_move[i][-1] = 1
+      for i in range(self.team_size):
+        if sum(legal_move[i][:N_MOVE]) == 0:
+          legal_move[i][-1] = 1
 
       # --- attack ---
       target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)  # first npc, then enemy
@@ -845,27 +909,27 @@ class FeatureExtractor():
       legal_target = np.concatenate([target_attackable, no_target], axis=-1)
 
       # --- use & sell ---
-      legal_use = np.zeros((N_PLAYER_PER_TEAM, N_USE + 1))
-      legal_sell = np.zeros((N_PLAYER_PER_TEAM, N_SELL + 1))
+      legal_use = np.zeros((self.team_size, N_USE + 1))
+      legal_sell = np.zeros((self.team_size, N_SELL + 1))
       legal_use[:, -1] = 1
       legal_sell[:, -1] = 1
-      for i in range(N_PLAYER_PER_TEAM):
+      for i in range(self.team_size):
           if i not in obs:
               continue
           item_obs = obs[i]['Inventory']
           my_obs = obs[i]['Entity'][0]
 
           if self.force_use_idx[i] is None:
-              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
               if my_obs[EntityAttr["health"]] <= 60 and len(poultices) > 0:
                   legal_use[i][USE_POULTICE] = 1
-              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Ration.ITEM_TYPE_ID]
               if (my_obs[EntityAttr["food"]] < 50 or my_obs[EntityAttr["water"]] < 50) and len(rations) > 0:
                   legal_use[i][USE_RATION] = 1
 
           if n > N_ITEM_LIMIT and self.force_sell_idx[i] is None:
-              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
-              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Ration.ITEM_TYPE_ID]
               if len(poultices) > 1:
                   legal_sell[i][SELL_POULTICE] = 1
                   legal_sell[i][-1] = 0
@@ -886,7 +950,7 @@ class FeatureExtractor():
       self.prev_actions = actions.T.copy()
 
       raw_actions = collections.defaultdict(dict)
-      for i in range(N_PLAYER_PER_TEAM):
+      for i in range(self.team_size):
           move, target, use, sell = actions[:, i]
           self._trans_move(i, raw_actions, move)
           self._trans_attack(i, raw_actions, target)
@@ -900,8 +964,8 @@ class FeatureExtractor():
 
   @staticmethod
   def _trans_move(i, raw_actions, move):
-      if move != N_MOVE:  # is not idle
-          raw_actions[i][nmmo_act.Move] = {nmmo_act.Direction: move}
+    if move != N_MOVE:  # is not idle
+      raw_actions[i][nmmo_act.Move] = {nmmo_act.Direction: move}
 
   def _trans_attack(self, i, raw_actions, target):
       if target != N_ATK_TARGET:  # exist some target to attack
@@ -933,13 +997,13 @@ class FeatureExtractor():
       elif use != N_USE:
           item_obs = self.curr_obs[i]['Inventory']
           if use == USE_POULTICE:
-              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
               min_lvl = min(poultices[:, ItemAttr["level"]])
               poultices = poultices[poultices[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
               min_id = min(poultices[:, ItemAttr["id"]])
               idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
           else:  # USE_RATION
-              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Ration.ITEM_TYPE_ID]
               min_lvl = min(rations[:, ItemAttr["level"]])
               rations = rations[rations[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
               min_id = min(rations[:, ItemAttr["id"]])
@@ -959,13 +1023,13 @@ class FeatureExtractor():
       elif sell != N_SELL:
           item_obs = self.curr_obs[i]['Inventory']
           if sell == SELL_POULTICE:
-              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_POULTICE]
+              poultices = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Poultice.ITEM_TYPE_ID]
               min_lvl = min(poultices[:, ItemAttr["level"]])
               poultices = poultices[poultices[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
               min_id = min(poultices[:, ItemAttr["id"]])
               idx = np.argwhere(item_obs[:, ItemAttr["id"]] == min_id).item()
           else:  # SELL_RATION
-              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == ITEM_RATION]
+              rations = item_obs[item_obs[:, ItemAttr["type_id"]] == item.Ration.ITEM_TYPE_ID]
               min_lvl = min(rations[:, ItemAttr["level"]])
               rations = rations[rations[:, ItemAttr["level"]] == min_lvl]  # those with lowest level
               min_id = min(rations[:, ItemAttr["id"]])
@@ -985,12 +1049,10 @@ class FeatureExtractor():
               nmmo_act.Item: self.force_buy_idx[i],
           }
 
-
-  @staticmethod
-  def _choose_prof():
+  def _choose_prof(self):
     seed = np.random.randint(N_ATK_TYPE)
     profs = [ATK_TYPE[(seed + i) % N_ATK_TYPE]
-              for i in range(N_PLAYER_PER_TEAM)]
+              for i in range(self.team_size)]
     np.random.shuffle(profs)
     return profs
 
