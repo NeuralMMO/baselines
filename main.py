@@ -7,11 +7,15 @@ import pufferlib.frameworks.cleanrl
 import nmmo
 from team_env import TeamEnv
 from model.policy import Policy
+from team_helper import TeamHelper
+
+
+teams = [[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]
+team_helper = TeamHelper(teams)
 
 def create_env():
   nmmo_env = nmmo.Env()
-  teams = [[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]
-  env = BaselineEnv(nmmo_env, teams)
+  env = BaselineEnv(nmmo_env, team_helper)
   return env
 
 if __name__ == "__main__":
@@ -37,7 +41,7 @@ if __name__ == "__main__":
     num_cores=num_cores,
     num_buffers=4,
     num_minibatches=4,
-    num_agents=16,
+    num_agents=team_helper.num_teams,
     wandb_project_name="pufferlib",
     wandb_entity="platypus",
   )

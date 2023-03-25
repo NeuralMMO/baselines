@@ -57,26 +57,26 @@ ItemAttr = ItemState.State.attr_name_to_col
 TileAttr = TileState.State.attr_name_to_col
 
 ITEM_TO_PROF_IDX = {
-    item.Sword.ITEM_TYPE_ID: EntityAttr["melee_level"],
-    item.Bow.ITEM_TYPE_ID: EntityAttr["range_level"],
-    item.Wand.ITEM_TYPE_ID: EntityAttr["mage_level"],
-    item.Scrap.ITEM_TYPE_ID: EntityAttr["melee_level"],
-    item.Shaving.ITEM_TYPE_ID:EntityAttr["range_level"],
-    item.Shard.ITEM_TYPE_ID: EntityAttr["mage_level"],
-    item.Rod.ITEM_TYPE_ID: EntityAttr["fishing_level"],
-    item.Gloves.ITEM_TYPE_ID: EntityAttr["herbalism_level"],
-    item.Pickaxe.ITEM_TYPE_ID: EntityAttr["prospecting_level"],
-    item.Chisel.ITEM_TYPE_ID: EntityAttr["carving_level"],
-    item.Arcane.ITEM_TYPE_ID: EntityAttr["alchemy_level"],
+  item.Sword.ITEM_TYPE_ID: EntityAttr["melee_level"],
+  item.Bow.ITEM_TYPE_ID: EntityAttr["range_level"],
+  item.Wand.ITEM_TYPE_ID: EntityAttr["mage_level"],
+  item.Scrap.ITEM_TYPE_ID: EntityAttr["melee_level"],
+  item.Shaving.ITEM_TYPE_ID:EntityAttr["range_level"],
+  item.Shard.ITEM_TYPE_ID: EntityAttr["mage_level"],
+  item.Rod.ITEM_TYPE_ID: EntityAttr["fishing_level"],
+  item.Gloves.ITEM_TYPE_ID: EntityAttr["herbalism_level"],
+  item.Pickaxe.ITEM_TYPE_ID: EntityAttr["prospecting_level"],
+  item.Chisel.ITEM_TYPE_ID: EntityAttr["carving_level"],
+  item.Arcane.ITEM_TYPE_ID: EntityAttr["alchemy_level"],
 }
 
 DEPLETION_MAP = {
-    material.Forest.index: material.Scrub.index,
-    material.Tree.index: material.Stump.index,
-    material.Ore.index: material.Slag.index,
-    material.Crystal.index: material.Fragment.index,
-    material.Herb.index: material.Weeds.index,
-    material.Fish.index: material.Ocean.index,
+  material.Forest.index: material.Scrub.index,
+  material.Tree.index: material.Stump.index,
+  material.Ore.index: material.Slag.index,
+  material.Crystal.index: material.Fragment.index,
+  material.Herb.index: material.Weeds.index,
+  material.Fish.index: material.Ocean.index,
 }
 
 
@@ -318,8 +318,8 @@ class FeatureExtractor():
       curr_pos = obs[i]['Entity'][0, 7:9].astype(int)
       l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
       u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
-      tile_img = self.tile_map[l:r, u:d] / N_TILE_TYPE
-      # obstacle_img = np.sum([self.tile_map[l:r, u:d] == t for t in OBSTACLE_TILES], axis=0)
+      tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
+      # obstacle_img = np.sum([self.tile_map[l:r, u:d] == t for t in material.Impassible.indicies], axis=0)
       entity_img = self.entity_map[l:r, u:d]
       poison_img = np.clip(self.poison_map[l:r, u:d], 0, np.inf) / 20.
       fog_img = self.fog_map[l:r, u:d] / DEFOGGING_VALUE
@@ -763,7 +763,7 @@ class FeatureExtractor():
               o[EntityAttr["item_level"]] / 20.,
               (o[EntityAttr["row"]] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
               (o[EntityAttr["col"]] - HALF_TERRAIN_SIZE) / HALF_TERRAIN_SIZE,
-              o[EntityAttr["time_alive"]] / MAX_STEP,
+              o[EntityAttr["time_alive"]] / self.config.HORIZON,
               (o[EntityAttr["row"]] - MAP_LEFT) / MAP_SIZE,
               (o[EntityAttr["col"]] - MAP_LEFT) / MAP_SIZE,
               o[EntityAttr["id"]] >= 0,  # player
@@ -772,7 +772,7 @@ class FeatureExtractor():
               o[EntityAttr["population_id"]] == -2,  # neutral npc
               o[EntityAttr["population_id"]] == -3,  # hostile npc
               o[EntityAttr["damage"]] / 10.,
-              o[EntityAttr["time_alive"]] / MAX_STEP,
+              o[EntityAttr["time_alive"]] / self.config.HORIZON,
               o[EntityAttr["gold"]] / 100.,
               o[EntityAttr["health"]] / 100.,
               o[EntityAttr["food"]] / 100.,
@@ -810,7 +810,7 @@ class FeatureExtractor():
                     water_arr.append(near_tile_map[i, j] == material.Water.index)
                     herb_arr.append(near_tile_map[i, j] == material.Herb.index)
                     fish_arr.append(near_tile_map[i, j] == material.Fish.index)
-                    obstacle_arr.append(near_tile_map[i, j] in OBSTACLE_TILES)
+                    obstacle_arr.append(near_tile_map[i, j] in material.Impassible.indices)
               food_arr[-1] = max(0, self.poison_map[row, col]) / 20.  # patch after getting trained
               water_arr[-1] = max(0, self.poison_map[row+1, col]) / 20.  # patch after getting trained
               herb_arr[-1] = max(0, self.poison_map[row, col+1]) / 20.  # patch after getting trained
@@ -825,7 +825,7 @@ class FeatureExtractor():
       return arr
 
   def _extract_game_feature(self, obs):
-      game_progress = self.curr_step / MAX_STEP
+      game_progress = self.curr_step / self.config.HORIZON
       n_alive = sum([i in obs for i in range(self.team_size)])
       arr = np.array([
           game_progress,
@@ -852,14 +852,14 @@ class FeatureExtractor():
           center = np.array([WINDOW_CENTER, WINDOW_CENTER])
           for j, e in enumerate(nmmo_act.Direction.edges):
             next_pos = center + e.delta
-            if tiles_type[next_pos[0]][next_pos[1]] in PASSABLE_TILES:
+            if tiles_type[next_pos[0]][next_pos[1]] in material.Habitable.indices:
               if next_pos.tolist() not in entity_pos:
                 legal_move[i][j] = 1
               else:
                 ent_on_next_pos_can_move = False
                 for ee in nmmo_act.Direction.edges:  # a rough secondary judgement
                   next_next_pos = next_pos + ee.delta
-                  if tiles_type[next_next_pos[0]][next_next_pos[1]] in PASSABLE_TILES:
+                  if tiles_type[next_next_pos[0]][next_next_pos[1]] in material.Habitable.indices:
                     if next_next_pos.tolist() not in entity_pos:
                       ent_on_next_pos_can_move = True
                       break
@@ -876,7 +876,7 @@ class FeatureExtractor():
             near_pos = my_pos + d
             tile_type = self.tile_map[near_pos[0], near_pos[1]]
             entity_type = self.entity_map[near_pos[0], near_pos[1]]
-            st = tile_type in OBSTACLE_TILES or entity_type == TEAMMATE_REPR
+            st = tile_type in material.Impassible.indices or entity_type == TEAMMATE_REPR
             stuck.append(st)
           if sum(stuck) == 4:
             team_stuck[i] = True
@@ -1061,7 +1061,7 @@ def get_init_tile_map():
     # mark the most outside circle of grass
     arr[MAP_LEFT:MAP_RIGHT+1, MAP_LEFT:MAP_RIGHT+1] = 2
     # mark the unseen tiles
-    arr[MAP_LEFT+1:MAP_RIGHT, MAP_LEFT+1:MAP_RIGHT] = N_TILE_TYPE
+    arr[MAP_LEFT+1:MAP_RIGHT, MAP_LEFT+1:MAP_RIGHT] = max(material.All.indices) + 1
     return arr
 
 def get_init_poison_map():
