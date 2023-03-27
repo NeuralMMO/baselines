@@ -1,7 +1,7 @@
 import torch
 
-from model.level import Level
-from model.replay import (
+from prioritized_level_replay.level import Level
+from prioritized_level_replay.replay import (
     PrioritizedReplayDistribution,
     PrioritizedReplay
 )

@@ -1,4 +1,4 @@
-from model.level import BaseLevel, Level
+from prioritized_level_replay.level import BaseLevel, Level
 
 def test_base_level():
     id = "level_1"

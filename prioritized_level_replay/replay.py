@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.distributions import Bernoulli
 from torchtyping import TensorType
 
-from model.level import Level
+from .level import Level
 
 
 class PrioritizedReplayDistribution:
