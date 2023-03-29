@@ -49,7 +49,9 @@ class FeatureExtractor():
 
     tile = self.map_helper.extract_tile_feature(obs)
     item_type, item = self.inventory.extract_item_features(obs)
-    team, npc, enemy, *masks, self.npc_tgt, self.enemy_tgt = self.extract_entity_features(obs)
+    team, team_mask = self.entity_helper.team_features_and_mask(obs)
+    npc, npc_mask = self.entity_helper.npc_features_and_mask(obs)
+    enemy, enemy_mask = self.entity_helper.enemy_features_and_mask(obs)
     game = self.extract_game_feature(obs)
 
     state = {
@@ -59,9 +61,9 @@ class FeatureExtractor():
       'team': team,
       'npc': npc,
       'enemy': enemy,
-      'team_mask': masks[0],
-      'npc_mask': masks[1],
-      'enemy_mask': masks[2],
+      'team_mask': team_mask,
+      'npc_mask': npc_mask,
+      'enemy_mask': enemy_mask,
       'game': game,
       'legal': {
         'move': map.legal_move(obs),

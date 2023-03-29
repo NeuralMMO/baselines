@@ -3,7 +3,7 @@ from typing import List
 
 class TeamHelper():
   def __init__(self, teams: List[List[int]]):
-    self._teams = teams
+    self.teams = teams
     self.num_teams = len(teams)
     self.team_size = {}
     self.team_and_position_for_agent = {}
