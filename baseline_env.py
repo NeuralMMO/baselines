@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 import nmmo
 
-from feature_extractor import FeatureExtractor
+from feature_extractor.feature_extractor import FeatureExtractor
 from team_env import TeamEnv
 
 
