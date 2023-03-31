@@ -85,3 +85,6 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
     return state
+
+def trans_action(self, actions):
+  return self.action.trans_actions(actions)

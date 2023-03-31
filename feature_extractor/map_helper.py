@@ -172,8 +172,8 @@ class MapHelper:
     return np.zeros(206)
 
   def legal_moves(self, obs):
-    moves = np.zeros((self.team_size, len(action.Direction.edges) + 1))
-    for i in range(self.team_size):
+    moves = np.zeros((self.TEAM_SIZE, len(action.Direction.edges) + 1))
+    for i in range(self.TEAM_SIZE):
       if i in obs:
         moves[i,:-1] = obs[i]["ActionTargets"][action.Move][action.Direction]
       if sum(moves[i]) == 0:
