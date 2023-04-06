@@ -9,6 +9,7 @@ from feature_extractor.entity_helper import EntityHelper
 from nmmo.io import action
 
 from feature_extractor.game_state import GameState
+from team_helper import TeamHelper
 
 
 EntityAttr = EntityState.State.attr_name_to_col
@@ -38,11 +39,12 @@ DEPLETION_MAP = {
 }
 
 class MapHelper:
-  def __init__(self, config: nmmo.config.Config, team_helper) -> None:
+  def __init__(self, config: nmmo.config.Config, team_id: int, team_size: int) -> None:
     self.config = config
 
-    self.MAP_SIZE = self.MAP_SIZE
-    self.TEAM_SIZE = team_helper.team_size
+    self.MAP_SIZE = self.config.MAP_SIZE
+    self.TEAM_SIZE = team_size
+    self.team_id = team_id
 
     self.tile_map = None
     self.fog_map = None
@@ -98,7 +100,8 @@ class MapHelper:
       self._mark_point(entity_map[4], entity_positions, entity_populations == -3)  # hostile
 
       # update visit map
-      self._mark_point(self.visit_map[player_id], entity_helper.member_position(player_id), VISITATION_MEMORY)
+      # xcxc
+      # self._mark_point(self.visit_map[player_id], entity_helper._member_location[player_id], VISITATION_MEMORY)
 
       # change tile in advance
       for pos, pop in zip(entity_positions, entity_populations):
@@ -115,7 +118,7 @@ class MapHelper:
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
       entity_map[2] * NEGATIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
 
-  def extract_tile_feature(self, obs):
+  def extract_tile_feature(self, obs, entity_helper: EntityHelper):
     imgs = []
     for i in range(self.TEAM_SIZE):
       # replace with dummy feature if dead
@@ -123,7 +126,7 @@ class MapHelper:
         imgs.append(DUMMY_IMG_FEAT)
         continue
 
-      curr_pos = self._entity_pos(self._my_entity(obs, i))
+      curr_pos = entity_helper._member_location[i]
       l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
       u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
@@ -155,6 +158,8 @@ class MapHelper:
     herb_arr[-1] = max(0, self.poison_map[row, col+1]) / 20.  # patch after getting trained
     fish_arr[-1] = max(0, self.poison_map[row-1, col]) / 20.  # patch after getting trained
     obstacle_arr[-1] = max(0, self.poison_map[row, col-1]) / 20.  # patch after getting trained
+    # xcxc
+    return np.zeros(206)
     return np.concatenate([
         food_arr, water_arr, herb_arr, fish_arr, obstacle_arr,
     ])

@@ -74,7 +74,7 @@ class EntityHelper:
 
       agent_id = self._team_agent_ids[member_id]
       (row, col) = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
-      self._member_location[member_id] = (row, col)
+      self._member_location[member_id] = (int(row), int(col))
 
   def team_features_and_mask(self, obs):
     team_members_features = np.zeros((self.TEAM_SIZE, N_SELF_FEATURE))
@@ -123,7 +123,7 @@ class EntityHelper:
     nearby_entities = []
     for id, entity_ob in self._entities.items():
       if filter_func(id):
-        dist_and_id = (max_entities(
+        dist_and_id = (max(
             abs(entity_ob[EntityAttr['row']] - row),
             abs(entity_ob[EntityAttr['col']] - col)), id)
         nearby_entities.append(dist_and_id)
