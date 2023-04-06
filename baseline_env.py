@@ -1,6 +1,8 @@
 from typing import Any, Dict
+import gym
 
 import nmmo
+import numpy as np
 
 from feature_extractor.feature_extractor import FeatureExtractor
 from team_env import TeamEnv
@@ -18,7 +20,17 @@ class BaselineEnv(TeamEnv):
     return self._env.action_space(team)
 
   def observation_space(self, team):
-    return self._env.observation_space(team)
+    def box(rows, cols):
+      return gym.spaces.Box(
+          low=-2**20, high=2**20,
+          shape=(rows, cols),
+          dtype=np.float32)
+
+    return gym.spaces.Dict({
+      "tile": box(1, 41425),
+    })
+
+    # return self._env.observation_space(team)
 
   def reset(self, **kwargs) -> Dict[int, Any]:
     obs = super().reset(**kwargs)
