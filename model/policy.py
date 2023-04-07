@@ -4,7 +4,7 @@ import pufferlib
 from model.model import EntityEncoder, InteractionBlock, MemoryBlock, NMMONet, PolicyHead, SelfEncoder
 
 class Policy(pufferlib.models.Policy):
-    def __init__(self, binding, input_size=512, hidden_size=512):
+    def __init__(self, binding, input_size=2048, hidden_size=4096):
         super().__init__(binding, input_size, hidden_size)
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.state_handler_dict = {}
@@ -33,7 +33,7 @@ class Policy(pufferlib.models.Policy):
         self.enemy_net = EntityEncoder('enemy', n_enemy_feat, n_attn_hidden)
 
         self.interact_net = InteractionBlock(n_attn_hidden)
-        self.lstm_net = MemoryBlock(n_attn_hidden, n_lstm_hidden)
+        #self.lstm_net = MemoryBlock(n_attn_hidden, n_lstm_hidden)
 
         self.value_head = torch.nn.Linear(n_lstm_hidden, 1)
 
@@ -43,31 +43,56 @@ class Policy(pufferlib.models.Policy):
         # observation_size = binding.raw_single_observation_space["Entity"].shape[1]
 
         self.policy_head = PolicyHead(n_lstm_hidden, n_legal)
-        # self.decoders = torch.nn.ModuleList(
-        #     [torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec]
-        # )
+        self.decoders = torch.nn.ModuleList(
+            [torch.nn.Linear(512, n) for n in binding.single_action_space.nvec[:13]]
+        )
 
     def critic(self, hidden):
+        hidden = hidden.view(-1, 8, 512)
         return self.value_head(hidden.mean(dim=1))
 
     def encode_observations(self, env_outputs):
-        env_outputs = pufferlib.emulation.unpack_batched_obs(
+        x = pufferlib.emulation.unpack_batched_obs(
             self.raw_single_observation_space, env_outputs
         )
 
         x = self._preprocess(x)
 
         h_self = self.self_net(x)
-        h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
-        h_npc = self.npc_net(x, h_self)
-        h_enemy = self.enemy_net(x, h_self)
+        # Add to 25 (+1 from h_self) ... not sure what actual dimensions are
+        h_ally = torch.ones(16, 8, 10, 256).cuda()
+        h_npc = torch.ones(16, 8, 10, 256).cuda()
+        h_enemy = torch.ones(16, 8, 5, 256).cuda()
+        #h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
+        #h_npc = self.npc_net(x, h_self)
+        #h_enemy = self.enemy_net(x, h_self)
 
-        return self.interact_net(x, h_self, h_ally, h_npc, h_enemy), None
+        h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy)
 
+        self.recurrent_policy.h_self = h_self
+        self.recurrent_policy.h_inter = h_inter
+        
+        bs, na, nf = h_inter.shape # batch_size, num_agent, num_feature
+        h_inter = h_inter.view(bs, na*nf)
+        
+        return h_inter, None
+        
     def decode_actions(self, hidden, lookup, concat=True):
-        actions = [dec(hidden) for dec in self.decoders]
+        hidden = hidden.view(-1, 8, 512)
+
+        actions = [0 * dec(hidden) for dec in self.decoders]
+
+        action_list = []
+        for team_id in range(8):
+            action_list += [a[:, team_id] for a in actions]
+        actions = action_list
+
+        # TODO: Remove this after eliminating NaNs
+        actions = [torch.zeros_like(e) for e in actions]
+
         if concat:
             return torch.cat(actions, dim=-1)
+
         return actions
 
     @staticmethod

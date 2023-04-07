@@ -1,5 +1,7 @@
 from typing import Any, Dict
 
+import numpy as np
+import gym
 import nmmo
 
 from feature_extractor.feature_extractor import FeatureExtractor
@@ -14,10 +16,18 @@ class BaselineEnv(TeamEnv):
         team_id: FeatureExtractor(env.config, team_helper, team_id) for team_id in range(team_helper.num_teams)
     }
 
-  def action_space(self, team):
-    return self._env.action_space(team)
+    ob = self.reset()[0]
+    ob = sorted((k, v) for k, v in ob.items())
+    self._observation_space = gym.spaces.Dict({
+        k: gym.spaces.Box(
+          low=-2**20, high=2**20,
+          shape=v.shape,
+          dtype=np.float32)
+        for k, v in ob if len(v)
+    })
 
   def observation_space(self, team):
+    return self._observation_space
     return self._env.observation_space(team)
 
   def reset(self, **kwargs) -> Dict[int, Any]:
@@ -28,8 +38,8 @@ class BaselineEnv(TeamEnv):
     return obs
 
   def step(self, actions: Dict[int, Dict[str, Any]]):
-    for k, v in actions.items():
-      actions[k] = self._feature_extractors[k].trans_action(v)
+    #for k, v in actions.items():
+    #  actions[k] = self._feature_extractors[k].trans_action(v)
 
     obs, rew, done, info = super().step(actions)
     for k, v in obs.items():

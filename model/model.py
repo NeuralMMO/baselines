@@ -213,22 +213,23 @@ class SelfEncoder(nn.Module):
         self.prev_act_embed = PrevActionEncoder(n_legal, prev_act_embed_size)
         self.item_net = ItemEncoder(item_hidden_size)
         self.img_net = TileEncoder(in_img_ch, in_img_size)
-        mlp_input_size = n_self_feat + self.img_net.h_size + \
-            prev_act_hidden_size + item_hidden_size
+        #mlp_input_size = n_self_feat + self.img_net.h_size + \
+        #    prev_act_hidden_size + item_hidden_size
+        mlp_input_size = self.img_net.h_size
         self.mlp_net = MLPEncoder(mlp_input_size, n_hiddens=[n_self_hidden])
 
     def forward(self, x):
         bs, na, _ = x['team'].shape
         h_tile = self.img_net(x)
-        h_pre_act = self.prev_act_embed(x)
-        h_item = self.item_net(x)
+        #h_pre_act = self.prev_act_embed(x)
+        #h_item = self.item_net(x)
         h_self = torch.cat([
             h_tile,
-            x['team'],
-            h_item,
-            h_pre_act,
-            *x['legal'].values(),
-            x['game'].unsqueeze(1).expand(-1, na, -1),
+            #x['team'],
+            #h_item,
+            #h_pre_act,
+            #*x['legal'].values(),
+            #x['game'].unsqueeze(1).expand(-1, na, -1),
         ], dim=-1)
         h_self = self.mlp_net(h_self)
         return h_self
@@ -277,23 +278,42 @@ class InteractionBlock(nn.Module):
 
 
 class MemoryBlock(nn.Module):
-    def __init__(self, n_attn_hidden, n_lstm_hidden):
+    def __init__(self, n_attn_hidden, n_lstm_hidden, recurrent_layers):
         super().__init__()
 
-        self.n_attn_hidden = n_attn_hidden
-        self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden)
+        self.num_layers = recurrent_layers
+        self.hidden_size = n_lstm_hidden
 
-    def forward(self, x, h_self, h_inter, hxs, cxs, seq_len):
+        # Hardcoded for compatibility with CleanRL wrapper shape checks
+        n_attn_hidden = 256
+        n_lstm_hidden = 512
+
+        self.n_attn_hidden = n_attn_hidden
+        self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden, recurrent_layers)
+
+    def forward(self, x, state):
+        # @daveey - Any idea on where seq_len comes from?
+        seq_len = x.shape[0]
+        hxs, cxs = state
+        h_self = self.h_self
+        h_inter = self.h_inter
+
+        hxs = hxs.view(-1, 128, 512)
+        cxs = cxs.view(-1, 128, 512)
+
+        #bs, na, nf = x.shape # batch_size * num_agent, num_feature
+        #x = x.view(-1, 8, nf)
+
         h = torch.cat([h_self[:, :, self.n_attn_hidden:], h_inter], dim=-1)
         bs, na, nf = h.shape  # batch_size, num_agent, num_feature
         nt = bs // seq_len  # num of truncation
-        resets = x['reset'].repeat(1, na)
+        #resets = x['reset'].repeat(1, na)
         h = h.view(nt, seq_len, na, -1).transpose(1, 0).reshape(seq_len, nt * na, -1)
         hys = [hxs[::seq_len].reshape(-1, nf)]  # [nt * na, nf]
         cys = [cxs[::seq_len].reshape(-1, nf)]
         for i in range(seq_len):
-            hys[i] = hys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
-            cys[i] = cys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
+            #hys[i] = hys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
+            #cys[i] = cys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
             hy, cy = self.lstm(h[i], (hys[i], cys[i]))
             hys.append(hy)
             cys.append(cy)
@@ -301,7 +321,12 @@ class MemoryBlock(nn.Module):
         cys = torch.stack(cys[1:], dim=0)
         hys = hys.view(seq_len, nt, na, -1).transpose(1, 0).reshape(bs, na, -1)
         cys = cys.view(seq_len, nt, na, -1).transpose(1, 0).reshape(bs, na, -1)
-        return hys, cys
+
+        hys = hys.view(seq_len, nt, -1)
+        cys = cys.view(seq_len, nt, -1)
+
+        #bs, na, nf = h.shape # batch_size * num_agent, num_feature
+        return hys, (hys, cys)
 
 
 class PolicyHead(nn.Module):

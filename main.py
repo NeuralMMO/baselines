@@ -1,12 +1,16 @@
+import numpy as np
 import torch
 from baseline_env import BaselineEnv
 import cleanrl_ppo_lstm
 import pufferlib.emulation
 import pufferlib.registry.nmmo
 import pufferlib.frameworks.cleanrl
+import gym
 import nmmo
 from team_env import TeamEnv
 from model.policy import Policy
+from model.model import MemoryBlock
+from feature_extractor.feature_extractor import FeatureExtractor
 from team_helper import TeamHelper
 
 
@@ -21,12 +25,29 @@ def create_env():
 if __name__ == "__main__":
   num_cores = 1
 
+  '''
+  class Binding(pufferlib.emulation.Binding):
+    @property
+    def single_observation_space(self):
+      return gym.spaces.Box(
+        low=-2**20, high=2**20,
+        shape=(41425,),
+        dtype=np.float32)
+
+    @property
+    def raw_single_observation_space(self):
+      return 
+  '''
+
   binding = pufferlib.emulation.Binding(
     env_creator=create_env,
     env_name="Neural MMO",
   )
 
-  agent = pufferlib.frameworks.cleanrl.make_policy(Policy, lstm_layers=1)(
+  agent = pufferlib.frameworks.cleanrl.make_policy(
+      Policy,
+      recurrent_cls=MemoryBlock,
+      recurrent_layers=1)(
     binding
   )
 
@@ -36,7 +57,7 @@ if __name__ == "__main__":
     agent,
     cuda=torch.cuda.is_available(),
     total_timesteps=10_000_000,
-    track=True,
+    track=False,
     num_envs=num_cores,
     num_cores=num_cores,
     num_buffers=4,
