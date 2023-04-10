@@ -37,7 +37,7 @@ class Policy(pufferlib.models.Policy):
 
         self.value_head = torch.nn.Linear(n_lstm_hidden, 1)
 
-        self.raw_single_observation_space = binding.raw_single_observation_space
+        self.featurized_single_observation_space = binding.featurized_single_observation_space
 
         # # A dumb example encoder that applies a linear layer to agent self features
         # observation_size = binding.raw_single_observation_space["Entity"].shape[1]
@@ -53,7 +53,7 @@ class Policy(pufferlib.models.Policy):
 
     def encode_observations(self, env_outputs):
         x = pufferlib.emulation.unpack_batched_obs(
-            self.raw_single_observation_space, env_outputs
+            self.featurized_single_observation_space, env_outputs
         )
 
         x = self._preprocess(x)

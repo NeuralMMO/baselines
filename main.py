@@ -14,40 +14,25 @@ from feature_extractor.feature_extractor import FeatureExtractor
 from team_helper import TeamHelper
 
 
-teams = [[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]
-team_helper = TeamHelper(teams)
-
-def create_env():
-  nmmo_env = nmmo.Env()
-  env = BaselineEnv(nmmo_env, team_helper)
-  return env
-
 if __name__ == "__main__":
   num_cores = 1
 
-  '''
-  class Binding(pufferlib.emulation.Binding):
-    @property
-    def single_observation_space(self):
-      return gym.spaces.Box(
-        low=-2**20, high=2**20,
-        shape=(41425,),
-        dtype=np.float32)
-
-    @property
-    def raw_single_observation_space(self):
-      return 
-  '''
+  config = nmmo.Env().config
 
   binding = pufferlib.emulation.Binding(
-    env_creator=create_env,
+    env_cls=nmmo.Env,
     env_name="Neural MMO",
+    teams = {i+1: [i*8+j+1 for j in range(8)] for i in range(16)},
+    featurizer_cls=FeatureExtractor,
+    featurizer_args=[config],
   )
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
       Policy,
       recurrent_cls=MemoryBlock,
-      recurrent_layers=1)(
+      recurrent_args=[2048, 4096],
+      recurrent_kwargs={'num_layers': 1},
+      )(
     binding
   )
 
@@ -62,7 +47,7 @@ if __name__ == "__main__":
     num_cores=num_cores,
     num_buffers=4,
     num_minibatches=4,
-    num_agents=team_helper.num_teams,
+    num_agents=16,
     wandb_project_name="pufferlib",
     wandb_entity="platypus",
   )

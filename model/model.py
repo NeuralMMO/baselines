@@ -154,7 +154,7 @@ class TileEncoder(nn.Module):
 
     def forward(self, x):
         bs, na = x['tile'].shape[:2]
-        x_tile = x['tile'].view(-1, *x['tile'].shape[2:])
+        x_tile = x['tile'].contiguous().view(-1, *x['tile'].shape[2:])
         h_tile = self.tile_net(x_tile)
         h_tile = h_tile.view(bs, na, -1)  # flatten
         return h_tile
@@ -278,10 +278,10 @@ class InteractionBlock(nn.Module):
 
 
 class MemoryBlock(nn.Module):
-    def __init__(self, n_attn_hidden, n_lstm_hidden, recurrent_layers):
+    def __init__(self, n_attn_hidden, n_lstm_hidden, num_layers):
         super().__init__()
 
-        self.num_layers = recurrent_layers
+        self.num_layers = num_layers
         self.hidden_size = n_lstm_hidden
 
         # Hardcoded for compatibility with CleanRL wrapper shape checks
@@ -289,7 +289,7 @@ class MemoryBlock(nn.Module):
         n_lstm_hidden = 512
 
         self.n_attn_hidden = n_attn_hidden
-        self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden, recurrent_layers)
+        self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden, num_layers)
 
     def forward(self, x, state):
         # @daveey - Any idea on where seq_len comes from?

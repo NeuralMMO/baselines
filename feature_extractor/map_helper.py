@@ -122,7 +122,7 @@ class MapHelper:
     imgs = []
     for i in range(self.TEAM_SIZE):
       # replace with dummy feature if dead
-      if i not in obs:
+      if i-1 not in obs:
         imgs.append(DUMMY_IMG_FEAT)
         continue
 
