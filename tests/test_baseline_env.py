@@ -2,7 +2,7 @@
 import unittest
 from typing import List
 
-import random
+#import random
 from tqdm import tqdm
 
 import nmmo
@@ -18,7 +18,7 @@ from team_helper import TeamHelper
 # pylint: disable=protected-access
 
 # 30 seems to be enough to test variety of agent actions
-TEST_HORIZON = 30
+TEST_HORIZON = 1 # TODO: test is not implemented. make it short
 RANDOM_SEED = 0 # random.randint(0, 10000)
 
 class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
@@ -29,13 +29,13 @@ class Config(nmmo.config.Medium, nmmo.config.AllGameSystems):
     baselines.Carver, baselines.Alchemist,
     baselines.Melee, baselines.Range, baselines.Mage]
 
-class TestEnv(unittest.TestCase):
+class TestBaselineEnv(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     cls.config = Config()
     cls.env = BaselineEnv(
       nmmo.Env(cls.config, RANDOM_SEED),
-      TeamHelper([[player for player in range(team * 8 + 1, (team + 1) * 8 + 1)] for team in range(16)]))
+      TeamHelper([list(range(team * 8 + 1, (team + 1) * 8 + 1)) for team in range(16)]))
 
   def test_action_space(self):
     action_space = self.env.action_space(0)
@@ -45,22 +45,28 @@ class TestEnv(unittest.TestCase):
 
   def test_observations(self):
     obs = self.env.reset()
+    team_helper = self.env._team_helper
+    realm = self.env._env.realm
 
-    self.assertEqual(obs.keys(), self.env.realm.players.keys())
+    # check team_id
+    self.assertEqual(obs.keys(), team_helper.team_size.keys())
 
     for _ in tqdm(range(TEST_HORIZON)):
+      # pylint: disable=unused-variable
       entity_locations = [
-        [ev.row.val, ev.col.val, e] for e, ev in self.env.realm.players.entities.items()
+        [ev.row.val, ev.col.val, e] for e, ev in realm.players.entities.items()
       ] + [
-        [ev.row.val, ev.col.val, e] for e, ev in self.env.realm.npcs.entities.items()
+        [ev.row.val, ev.col.val, e] for e, ev in realm.npcs.entities.items()
       ]
 
-      for player_id, player_obs in obs.items():
-        self._validate_tiles(player_obs, self.env.realm)
-        self._validate_entitites(
-            player_id, player_obs, self.env.realm, entity_locations)
-        self._validate_inventory(player_id, player_obs, self.env.realm)
-        self._validate_market(player_obs, self.env.realm)
+      # TODO: baseline obs is the result of feature extractor
+      #   the below should be rewritten after the feature extractor is complete
+      # for player_id, player_obs in obs.items():
+      #   self._validate_tiles(player_obs, realm)
+      #   self._validate_entitites(
+      #       player_id, player_obs, realm, entity_locations)
+      #   self._validate_inventory(player_id, player_obs, realm)
+      #   self._validate_market(player_obs, realm)
       obs, _, _, _ = self.env.step({})
 
   def _validate_tiles(self, obs, realm: Realm):
@@ -94,17 +100,16 @@ class TestEnv(unittest.TestCase):
     # Make sure that we see entities IFF they are in our vision radius
     row = realm.players.entities[player_id].row.val
     col = realm.players.entities[player_id].col.val
+    radius = realm.config.PLAYER_VISION_RADIUS
     visible_entities = {
       e for r, c, e in entity_locations
-      if r >= row - realm.config.PLAYER_VISION_RADIUS
-      and c >= col - realm.config.PLAYER_VISION_RADIUS
-      and r <= row + realm.config.PLAYER_VISION_RADIUS
-      and c <= col + realm.config.PLAYER_VISION_RADIUS
+      if row - radius <= r <= row + radius
+      and col - radius <= c <= col + radius
     }
     self.assertSetEqual(visible_entities, observed_entities,
       f"Mismatch between observed: {observed_entities} " \
         f"and visible {visible_entities} for player {player_id}, "\
-        f" step {self.env.realm.tick}")
+        f" step {realm.tick}")
 
   def _validate_inventory(self, player_id, obs, realm: Realm):
     self._validate_items(
