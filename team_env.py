@@ -42,6 +42,7 @@ class TeamEnv(ParallelEnv):
 
   def reset(self, **kwargs) -> Dict[int, Any]:
     gym_obs = self._env.reset(**kwargs)
+    ret = self._group_by_team(gym_obs)
     return self._group_by_team(gym_obs)
 
   def step(self, actions: Dict[int, Dict[str, Any]]):

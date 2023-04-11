@@ -9,21 +9,23 @@ from feature_extractor.stats import Stats
 from feature_extractor.target_tracker import TargetTracker
 from team_helper import TeamHelper
 
+import pufferlib.emulation
 
-class FeatureExtractor():
-  def __init__(self, config: nmmo.config.AllGameSystems, team_helper: TeamHelper, team_id: int):
+
+class FeatureExtractor(pufferlib.emulation.Featurizer):
+  def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):
+    super().__init__(teams, team_id)
     self.config = config
     self.team_id = team_id
-    self.team_size = team_helper.team_size[team_id]
-    self.num_teams = team_helper.num_teams
-    self.team_helper = team_helper
+    self.team_size = self.team_size
+    self.num_teams = self.num_teams
 
     self.game_state = GameState(config, self.team_size)
     self.map_helper = MapHelper(config, team_id, self.team_size)
-    self.target_tracker = TargetTracker(team_id, self.team_helper)
+    self.target_tracker = TargetTracker(self.team_size)
     self.stats = Stats(config, self.team_size, self.target_tracker)
     self.entity_helper = EntityHelper(
-      config, team_id, self.team_helper, self.target_tracker, self.map_helper)
+      config, teams, team_id, self.target_tracker, self.map_helper)
     # self.inventory = Inventory(config)
     # self.market = Market(config)
 
@@ -36,7 +38,7 @@ class FeatureExtractor():
     # self.inventory.reset()
     # self.market.reset()
 
-  def trans_obs(self, obs):
+  def __call__(self, obs, step):
     self.game_state.update(obs)
     self.entity_helper.update(obs)
     self.stats.update(obs)
