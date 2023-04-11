@@ -60,9 +60,11 @@ class Policy(pufferlib.models.Policy):
 
         h_self = self.self_net(x)
         # Add to 25 (+1 from h_self) ... not sure what actual dimensions are
-        h_ally = torch.ones(16, 8, 10, 256).cuda()
-        h_npc = torch.ones(16, 8, 10, 256).cuda()
-        h_enemy = torch.ones(16, 8, 5, 256).cuda()
+        h_ally = torch.ones(16, 8, 10, 256).to(self.device)
+        h_npc = torch.ones(16, 8, 10, 256).to(self.device)
+        h_enemy = torch.ones(16, 8, 5, 256).to(self.device)
+
+
         #h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
         #h_npc = self.npc_net(x, h_self)
         #h_enemy = self.enemy_net(x, h_self)
@@ -71,12 +73,12 @@ class Policy(pufferlib.models.Policy):
 
         self.recurrent_policy.h_self = h_self
         self.recurrent_policy.h_inter = h_inter
-        
+
         bs, na, nf = h_inter.shape # batch_size, num_agent, num_feature
         h_inter = h_inter.view(bs, na*nf)
-        
+
         return h_inter, None
-        
+
     def decode_actions(self, hidden, lookup, concat=True):
         hidden = hidden.view(-1, 8, 512)
 

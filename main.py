@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from baseline_env import BaselineEnv
 import cleanrl_ppo_lstm
 import pufferlib.emulation
 import pufferlib.registry.nmmo
