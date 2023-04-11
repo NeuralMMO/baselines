@@ -1,16 +1,12 @@
-import numpy as np
 import torch
 import cleanrl_ppo_lstm
 import pufferlib.emulation
 import pufferlib.registry.nmmo
 import pufferlib.frameworks.cleanrl
-import gym
 import nmmo
-from team_env import TeamEnv
 from model.policy import Policy
 from model.model import MemoryBlock
 from feature_extractor.feature_extractor import FeatureExtractor
-from team_helper import TeamHelper
 
 
 if __name__ == "__main__":
@@ -21,7 +17,7 @@ if __name__ == "__main__":
   binding = pufferlib.emulation.Binding(
     env_cls=nmmo.Env,
     env_name="Neural MMO",
-    teams = {i+1: [i*8+j+1 for j in range(8)] for i in range(16)},
+    teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
     featurizer_cls=FeatureExtractor,
     featurizer_args=[config],
   )
