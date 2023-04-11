@@ -1,3 +1,6 @@
+# TODO: remove the below line
+# pylint: disable=all
+
 import unittest
 from unittest.mock import MagicMock
 import numpy as np
@@ -9,7 +12,7 @@ from team_helper import TeamHelper
 import nmmo
 from nmmo.entity.entity import EntityState
 from nmmo.core.tile import TileState
-from nmmo.lib.datastore.numpy_datastore import NumpyDatastore
+from nmmo.datastore.numpy_datastore import NumpyDatastore
 from nmmo.core.observation import Observation
 
 EntityAttr = EntityState.State.attr_name_to_col

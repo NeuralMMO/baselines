@@ -1,7 +1,9 @@
 import unittest
 import numpy as np
 import nmmo
-from feature_extractor.game_state import GameState, ATK_TYPE, N_ATK_TYPE
+# pylint: disable=import-error
+from feature_extractor.game_state import GameState
+from feature_extractor.entity_helper import ATK_TYPE
 
 class TestGameState(unittest.TestCase):
   def setUp(self):
@@ -53,6 +55,7 @@ class TestGameState(unittest.TestCase):
     self.assertEqual(game_features[1], expected_n_alive / self.team_size)
 
   def test_choose_profession(self):
+    # pylint: disable=protected-access
     professions = self.game_state._choose_profession()
     self.assertEqual(len(professions), self.team_size)
     self.assertTrue(set(professions).issubset(set(ATK_TYPE)))

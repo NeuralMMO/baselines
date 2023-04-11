@@ -1,7 +1,7 @@
 experiments/
 maps/
 wandb*
-runs/*
+runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -131,3 +131,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# IDEs
+.idea/
+.vscode/
