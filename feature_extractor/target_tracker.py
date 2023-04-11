@@ -2,9 +2,8 @@ from team_helper import TeamHelper
 
 
 class TargetTracker():
-  def __init__(self, team_id: int, team_helper: TeamHelper) -> None:
-    self._team_helper = team_helper
-    self.TEAM_SIZE = self._team_helper.team_size[team_id]
+  def __init__(self, team_size: TeamHelper) -> None:
+    self.TEAM_SIZE = team_size
 
     self.target_entity_id = None
     self.target_entity_pop = None

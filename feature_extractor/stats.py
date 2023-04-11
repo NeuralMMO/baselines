@@ -26,6 +26,10 @@ class Stats:
 
   def update(self, obs):
     for player_id, player_obs in obs.items():
+      # TODO: Find some other way to ensure this is populated correctly
+      # Had to add this exception for observation space computation
+      if player_id not in self.target_tracker.target_entity_id:
+        continue
       if self.target_tracker.target_entity_id[player_id] is None:  # no target
           continue
       entity_obs = player_obs['Entity']
