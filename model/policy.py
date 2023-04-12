@@ -21,7 +21,7 @@ class Policy(pufferlib.models.Policy):
             'sell': 3,
         }
         n_self_feat = n_player_feat + n_game_feat + sum(n_legal.values())
-        n_npc_feat = n_enemy_feat = 30
+        n_npc_feat = n_enemy_feat = 29
 
         self.n_attn_hidden = n_attn_hidden = n_ally_hidden = 256
         self.n_lstm_hidden = n_lstm_hidden = n_self_hidden = 512
@@ -33,14 +33,10 @@ class Policy(pufferlib.models.Policy):
         self.enemy_net = EntityEncoder('enemy', n_enemy_feat, n_attn_hidden)
 
         self.interact_net = InteractionBlock(n_attn_hidden)
-        #self.lstm_net = MemoryBlock(n_attn_hidden, n_lstm_hidden)
 
         self.value_head = torch.nn.Linear(n_lstm_hidden, 1)
 
         self.featurized_single_observation_space = binding.featurized_single_observation_space
-
-        # # A dumb example encoder that applies a linear layer to agent self features
-        # observation_size = binding.raw_single_observation_space["Entity"].shape[1]
 
         self.policy_head = PolicyHead(n_lstm_hidden, n_legal)
         self.decoders = torch.nn.ModuleList(
@@ -59,15 +55,10 @@ class Policy(pufferlib.models.Policy):
         x = self._preprocess(x)
 
         h_self = self.self_net(x)
-        # Add to 25 (+1 from h_self) ... not sure what actual dimensions are
-        h_ally = torch.ones(16, 8, 10, 256).to(self.device)
-        h_npc = torch.ones(16, 8, 10, 256).to(self.device)
-        h_enemy = torch.ones(16, 8, 5, 256).to(self.device)
 
-
-        #h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
-        #h_npc = self.npc_net(x, h_self)
-        #h_enemy = self.enemy_net(x, h_self)
+        h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
+        h_npc = self.npc_net(x, h_self)
+        h_enemy = self.enemy_net(x, h_self)
 
         h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy)
 

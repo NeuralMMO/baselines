@@ -39,12 +39,14 @@ DEPLETION_MAP = {
 }
 
 class MapHelper:
-  def __init__(self, config: nmmo.config.Config, team_id: int, team_size: int) -> None:
+  def __init__(self, config: nmmo.config.Config, team_id: int, team_helper: TeamHelper) -> None:
     self.config = config
 
     self.MAP_SIZE = self.config.MAP_SIZE
-    self.TEAM_SIZE = team_size
-    self.team_id = team_id
+
+    self._team_id = team_id
+    self._team_helper = team_helper
+    self.TEAM_SIZE = team_helper.team_size[team_id]
 
     self.tile_map = None
     self.fog_map = None
@@ -93,8 +95,8 @@ class MapHelper:
       entity_populations = entity_obs[:, EntityAttr["population_id"]].astype(int)
 
       # xcxc rewrite to not use population
-      self._mark_point(entity_map[0], entity_positions, entity_populations == self.team_id)  # team
-      self._mark_point(entity_map[1], entity_positions, np.logical_and(entity_populations != self.team_id, entity_populations > 0))  # enemy
+      self._mark_point(entity_map[0], entity_positions, entity_populations == self._team_id)  # team
+      self._mark_point(entity_map[1], entity_positions, np.logical_and(entity_populations != self._team_id, entity_populations > 0))  # enemy
       self._mark_point(entity_map[2], entity_positions, entity_populations == -1)  # negative
       self._mark_point(entity_map[3], entity_positions, entity_populations == -2)  # neutral
       self._mark_point(entity_map[4], entity_positions, entity_populations == -3)  # hostile
@@ -118,24 +120,26 @@ class MapHelper:
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
       entity_map[2] * NEGATIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
 
+  # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self, obs, entity_helper: EntityHelper):
     imgs = []
-    for i in range(self.TEAM_SIZE):
-      # replace with dummy feature if dead
-      if i-1 not in obs:
+    for member_pos in range(self.TEAM_SIZE):
+      agent_id = self._team_helper.agent_id(self._team_id, member_pos)
+
+      if agent_id not in entity_helper.member_location:
         imgs.append(DUMMY_IMG_FEAT)
         continue
 
-      curr_pos = entity_helper._member_location[i]
-      l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
-      u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
+      curr_pos = entity_helper.member_location[member_pos]
+      l, r = int(curr_pos[0] - IMG_SIZE // 2), int(curr_pos[0] + IMG_SIZE // 2 + 1)
+      u, d = int(curr_pos[1] - IMG_SIZE // 2), int(curr_pos[1] + IMG_SIZE // 2 + 1)
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
       # obstacle_img = np.sum([self.tile_map[l:r, u:d] == t for t in material.Impassible.indicies], axis=0)
       entity_img = self.entity_map[l:r, u:d]
       poison_img = np.clip(self.poison_map[l:r, u:d], 0, np.inf) / 20.
       fog_img = self.fog_map[l:r, u:d] / DEFOGGING_VALUE
       # view_img = (fog_img == 1.).astype(np.float32)
-      visit_img = self.visit_map[i][l:r, u:d] / VISITATION_MEMORY
+      visit_img = self.visit_map[member_pos][l:r, u:d] / VISITATION_MEMORY
       coord_imgs = [self.X_IMG[l:r, u:d] / self.MAP_SIZE, self.Y_IMG[l:r, u:d] / self.MAP_SIZE]
       img = np.stack([tile_img, entity_img, poison_img, fog_img, visit_img, *coord_imgs])
       imgs.append(img)
@@ -163,6 +167,9 @@ class MapHelper:
     return np.concatenate([
         food_arr, water_arr, herb_arr, fish_arr, obstacle_arr,
     ])
+
+  def dummy_nearby_features(self):
+    return np.zeros(206)
 
   def legal_moves(self, obs):
     moves = np.zeros((self.team_size, len(action.Direction.edges) + 1))

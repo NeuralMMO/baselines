@@ -26,24 +26,26 @@ N_ATK_TYPE = len(ATK_TYPE)
 
 class EntityHelper:
   def __init__(self, config: nmmo.config.Config,
-               teams, team_id: int,
+               team_helper: TeamHelper, team_id: int,
                target_tracker: TargetTracker, map_helper) -> None:
 
     self._config = config
     self._target_tracker = target_tracker
     self._map_helper = map_helper
+    self._team_helper = team_helper
 
     self._team_id = team_id
-    self._team_agent_ids = teams[team_id]
-    self.TEAM_SIZE = len(self._team_agent_ids)
+    self.TEAM_SIZE = self._team_helper.team_size[team_id]
+    self._team_agent_ids = set(self._team_helper.teams[team_id])
 
     self.member_professions = None
 
     self._entities = {}
-    self._member_location = {}
+    self.member_location = {}
     self._entity_features = {}
 
-    self._team_feature = one_hot_generator(len(teams), int(self._team_id)-1)
+    self._team_feature = one_hot_generator(
+      self._team_helper.num_teams, int(self._team_id))
 
     # team position of each team member [0..TEAM_SIZE)
     self._team_position_feature = {
@@ -58,45 +60,47 @@ class EntityHelper:
   # self._entities, self._member_location, self._entity_features
   def update(self, obs: Dict) -> None:
     self._entities = {} # id -> entity_ob
-    self._member_location = {} # id -> (row, col)
+    self.member_location = {} # id -> (row, col)
     self._entity_features = {} # id -> entity_features
 
-    for member_id, member_obs in enumerate(obs.values()):
-      agent_id = self._team_agent_ids[member_id]
-      set_agent_id = False
-
-      for entity_ob in member_obs['Entity']:
-        id = entity_ob[EntityAttr["id"]]
-        if id == 0:
-          continue
+    for agent_id, agent_obs in obs.items():
+      entity_rows = agent_obs['Entity'][:,EntityAttr["id"]] != 0
+      for entity_ob in agent_obs['Entity'][entity_rows]:
+        id = int(entity_ob[EntityAttr["id"]])
         if id in self._entity_features:
           continue
-        if id == agent_id:
-          set_agent_id = True
         self._entities[id] = entity_ob
         self._entity_features[id] = self._extract_entity_features(entity_ob)
 
-      if set_agent_id:
-        (row, col) = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
-        self._member_location[member_id] = (int(row), int(col))
-      else: # Dummy location for observation shape
-        self._entities[agent_id] = entity_ob
-        self._entity_features[agent_id] = self._extract_entity_features(entity_ob)
-        self._member_location[member_id] = (42, 42)
+      # update the location of each team member
+      agent_pos = self._team_helper.agent_position(agent_id)
+      if agent_id in self._entities:
+        row, col = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
+        self.member_location[agent_pos] = (int(row), int(col))
 
   def team_features_and_mask(self, obs):
     team_members_features = np.zeros((self.TEAM_SIZE, N_SELF_FEATURE))
-    team_mask = np.ones(self.TEAM_SIZE)
+    team_mask = np.zeros(self.TEAM_SIZE)
     for idx in range(self.TEAM_SIZE):
-      team_mask[idx] = 0
-      (row, col) = self._member_location[idx]
-      agent_id = self._team_agent_ids[idx]
+      agent_id = self._team_helper.agent_id(self._team_id, idx)
+
+      if agent_id not in self._entity_features:
+        team_mask[idx] = 1
+        continue
+
+      if idx in self.member_location:
+        (row, col) = self.member_location[idx]
+        nearby_features = self._map_helper.nearby_features(row, col)
+      else:
+        nearby_features = self._map_helper.dummy_nearby_features()
+
       team_members_features[idx] = np.concatenate([
         self._entity_features[agent_id],
         self._team_feature,
         self._team_position_feature[idx],
         self._professions_feature[idx],
-        self._map_helper.nearby_features(row, col)
+        nearby_features
+
       ])
     return team_members_features, team_mask
 
@@ -104,9 +108,8 @@ class EntityHelper:
     npc_features = np.zeros((self.TEAM_SIZE, N_NPC_CONSIDERED, PER_ENTITY_FEATURE))
     npc_mask = np.ones((self.TEAM_SIZE, N_NPC_CONSIDERED))
     for idx in range(self.TEAM_SIZE):
-      (row, col) = self._member_location[idx]
       npc_features[idx], npc_mask[idx] = self._nearby_entity_features(
-        row, col, N_NPC_CONSIDERED,
+        idx, N_NPC_CONSIDERED,
         lambda id: id < 0
       )
     return npc_features, npc_mask
@@ -116,18 +119,21 @@ class EntityHelper:
     enemy_mask = np.ones((self.TEAM_SIZE, N_ENEMY_CONSIDERED))
 
     for idx in range(self.TEAM_SIZE):
-      (row, col) = self._member_location[idx]
       enemy_features[idx], enemy_mask[idx] = self._nearby_entity_features(
-        row, col, N_ENEMY_CONSIDERED,
+        idx, N_ENEMY_CONSIDERED,
         lambda id: id not in self._team_agent_ids
       )
     return enemy_features, enemy_mask
 
   # find closest entities matching filter_func
-  def _nearby_entity_features(self, row: int, col: int, max_entities: int, filter_func: Callable) -> Tuple[np.ndarray, np.ndarray]:
+  def _nearby_entity_features(self, member_pos, max_entities: int, filter_func: Callable) -> Tuple[np.ndarray, np.ndarray]:
     features = np.zeros((max_entities, PER_ENTITY_FEATURE))
     mask = np.ones(max_entities)
 
+    if member_pos not in self.member_location:
+      return features, mask
+
+    (row, col) = self.member_location[member_pos]
     nearby_entities = []
     for id, entity_ob in self._entities.items():
       if filter_func(id):
