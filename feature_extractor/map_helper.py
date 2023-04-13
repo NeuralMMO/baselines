@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import Dict, Any
 import numpy as np
 
 import nmmo
@@ -10,6 +10,8 @@ from nmmo.io import action
 
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
+
+from team_helper import TeamHelper
 
 EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
@@ -42,12 +44,13 @@ DEPLETION_MAP = {
 }
 
 class MapHelper:
-  def __init__(self, config: nmmo.config.Config, teammates: List[int]) -> None:
+  def __init__(self, config: nmmo.config.Config, team_id: int, team_helper: TeamHelper) -> None:
     self.config = config
-
     self.map_size = self.config.MAP_SIZE
-    self.team_size = len(teammates)
-    self.teammates = teammates
+
+    self._team_id = team_id
+    self._team_helper = team_helper
+    self.team_size = team_helper.team_size[team_id]
 
     self.tile_map = None
     self.fog_map = None
@@ -96,23 +99,24 @@ class MapHelper:
       entity_obs = player_obs['Entity']
       valid_entity = entity_obs[:, EntityAttr["id"]] != 0
       entities = entity_obs[valid_entity, EntityAttr["id"]]
-      ent_in_team = [ent in self.teammates for ent in entities]
+      ent_in_team = [self._team_helper.is_agent_in_team(ent, self._team_id)
+                     for ent in entities]
       ent_coords = entity_obs[valid_entity, EntityAttr["row"]:EntityAttr["col"]+1].astype(int)
 
       # CHECK ME: this is for npcs only
       # NOTE: if we are to remove population_id, we may want to other ways to flag npcs types
-      npc_pop = entity_obs[valid_entity, EntityAttr["population_id"]].astype(int)
+      npc_type = entity_obs[valid_entity, EntityAttr["population_id"]].astype(int)
 
       # merging all team obs into one entity map
       self._mark_point(entity_map[0], ent_coords, ent_in_team) # teammates
       self._mark_point(entity_map[1], ent_coords,
                        np.logical_and(np.logical_not(ent_in_team), entities > 0)) # enemy
-      self._mark_point(entity_map[2], ent_coords, npc_pop == -1)  # passive npcs
-      self._mark_point(entity_map[3], ent_coords, npc_pop == -2)  # passive-aggressive npcs
-      self._mark_point(entity_map[4], ent_coords, npc_pop == -3)  # hostile npcs
+      self._mark_point(entity_map[2], ent_coords, npc_type == -1)  # passive npcs
+      self._mark_point(entity_map[3], ent_coords, npc_type == -2)  # passive-aggressive npcs
+      self._mark_point(entity_map[4], ent_coords, npc_type == -3)  # hostile npcs
 
       # update visit map
-      self._mark_point(self.visit_map[self.teammates.index(ent_id)],
+      self._mark_point(self.visit_map[self._team_helper.agent_position(ent_id)],
                        ent_coords[entities == ent_id],
                        VISITATION_MEMORY)
 
@@ -136,28 +140,18 @@ class MapHelper:
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
       entity_map[2] * PASSIVE_REPR + entity_map[3] * PASSAGR_REPR + entity_map[4] * HOSTILE_REPR
 
-  # pylint: disable=unused-argument
-  # NOTE: extract_tile_feature no longer needs entity_helper
-  def extract_tile_feature(self, obs: Dict[int, Any], entity_helper: EntityHelper):
+  # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
+  def extract_tile_feature(self, entity_helper: EntityHelper):
     # obs for this team, key: ent_id
     imgs = []
-    # CHECK ME: with PufferEnv, do we need team helper?
-    #   how agent ids are indexed are different
-    # pl_pos_team: player's position within the team (consistent with TeamHelper)
-    for pl_pos_team, ent_id in enumerate(self.teammates):
-      # replace with dummy feature if dead or dummy obs
-      if (ent_id not in obs) or np.sum(obs[ent_id]['Entity']) == 0:
+    for member_pos in range(self.team_size):
+      if member_pos not in entity_helper.member_location:
         imgs.append(DUMMY_IMG_FEAT)
         continue
 
-      # NOTE: entity_helper was replaced with obs
-      #curr_pos = entity_helper._member_location[pl_pos_team]
-      ent_obs = obs[ent_id]['Entity']
-      ent_row = ent_obs[:, EntityAttr["id"]] == ent_id
-      curr_pos = ent_obs[ent_row, EntityAttr["row"]:EntityAttr["col"]+1][0].astype(int)
-
-      l, r = curr_pos[0] - IMG_SIZE // 2, curr_pos[0] + IMG_SIZE // 2 + 1
-      u, d = curr_pos[1] - IMG_SIZE // 2, curr_pos[1] + IMG_SIZE // 2 + 1
+      curr_pos = entity_helper.member_location[member_pos]
+      l, r = int(curr_pos[0] - IMG_SIZE // 2), int(curr_pos[0] + IMG_SIZE // 2 + 1)
+      u, d = int(curr_pos[1] - IMG_SIZE // 2), int(curr_pos[1] + IMG_SIZE // 2 + 1)
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
       entity_img = self.entity_map[l:r, u:d]
 
@@ -166,7 +160,7 @@ class MapHelper:
       poison_img = np.clip(self.poison_map[l:r, u:d], 0, np.inf) / POISON_CLIP
 
       fog_img = self.fog_map[l:r, u:d] / DEFOGGING_VALUE
-      visit_img = self.visit_map[pl_pos_team][l:r, u:d] / VISITATION_MEMORY
+      visit_img = self.visit_map[member_pos][l:r, u:d] / VISITATION_MEMORY
       coord_imgs = [self.x_img[l:r, u:d] / self.map_size, self.y_img[l:r, u:d] / self.map_size]
 
       # NOTE: realikun also considered obstacle_img, view_img
@@ -212,23 +206,19 @@ class MapHelper:
 
     return np.array(feat_arr)
 
+  def dummy_nearby_features(self):
+    return np.zeros(206)
+
   def legal_moves(self, obs: Dict[int, Any]):
-    # NOTE: the original code checked whether the agents would be blocked by other entities
-    #   but it's not needed since the nmmo env now allows multiple agents occupy the same tile
-
-    # CHECK ME: do we want to use ActionTargets, or to implement the checks in the featurizer?
+    # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
     moves = np.zeros((self.team_size, len(action.Direction.edges) + 1))
-    for pl_pos_team, ent_id in enumerate(self.teammates):
+    for member_pos in range(self.team_size):
+      ent_id = self._team_helper.agent_id(self._team_id, member_pos)
       if ent_id in obs:
-        ent_obs = obs[ent_id]['Entity']
-        ent_row = ent_obs[:, EntityAttr["id"]] == ent_id
-        ent_coord = ent_obs[ent_row, EntityAttr["row"]:EntityAttr["col"]+1][0].astype(int)
-        for idx, move_dir in enumerate(action.Direction.edges):
-          row, col = ent_coord + move_dir.delta
-          moves[pl_pos_team, idx] = self.tile_map[row, col] in material.Habitable
+        moves[member_pos,:-1] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
 
-      if sum(moves[pl_pos_team]) == 0:
-        moves[pl_pos_team][-1] = 1
+      if sum(moves[member_pos]) == 0:
+        moves[member_pos][-1] = 1
 
     return moves
 

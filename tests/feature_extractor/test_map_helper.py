@@ -10,6 +10,8 @@ from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.target_tracker import TargetTracker
 from feature_extractor.feature_extractor import FeatureExtractor
 
+from team_helper import TeamHelper
+
 TEST_HORIZON = 5
 RANDOM_SEED = 0 # random.randint(0, 10000)
 
@@ -28,18 +30,24 @@ class TestMapHelper(unittest.TestCase):
   def setUpClass(cls):
     cls.config = Config()
 
+    # pylint: disable=invalid-name
+    # CHECK ME: this provides action targets, at the cost of performance
+    #   We may want to revisit this
+    cls.config.PROVIDE_ACTION_TARGETS = True
+
     # 16 teams x 8 players
     cls.num_team = 16
     cls.team_size = 8
     # match the team definition to the default nmmo
-    cls.teams = {team_id: [cls.num_team*j+team_id+1 for j in range(cls.team_size)]
-                 for team_id in range(cls.num_team)}
+    teams = {team_id: [cls.num_team*j+team_id+1 for j in range(cls.team_size)]
+              for team_id in range(cls.num_team)}
+    cls.team_helper = TeamHelper(teams)
 
   def test_featurizer_init_only(self):
     # pylint: disable=unused-variable
     feature_extractors = {
-        team_id: FeatureExtractor(self.teams, team_id, self.config)
-        for team_id in self.teams
+        team_id: FeatureExtractor(self.team_helper.teams, team_id, self.config)
+        for team_id in self.team_helper.teams
     }
 
   def _filter_obs(self, obs, teammates):
@@ -53,16 +61,16 @@ class TestMapHelper(unittest.TestCase):
   def test_map_helper_shape_check_only(self):
     # init map_helper for team 1
     team_id = 1
-    team_size = len(self.teams[team_id])
-    map_helper = MapHelper(self.config, self.teams[team_id])
-    target_tracker = TargetTracker(self.team_size)
-    entity_helper = EntityHelper(self.config, self.teams, team_id, target_tracker, map_helper)
-    game_state = GameState(self.config, team_size)
+    map_helper = MapHelper(self.config, team_id, self.team_helper)
+    target_tracker = TargetTracker(self.team_helper.team_size[team_id])
+    entity_helper = EntityHelper(self.config, self.team_helper, team_id,
+                                 target_tracker, map_helper)
+    game_state = GameState(self.config, self.team_helper.team_size[team_id])
 
     # init the env
     env = nmmo.Env(self.config, RANDOM_SEED)
     init_obs = env.reset()
-    team_obs = self._filter_obs(init_obs, self.teams[team_id])
+    team_obs = self._filter_obs(init_obs, self.team_helper.teams[team_id])
 
     # init the helpers
     game_state.reset(team_obs)
@@ -73,25 +81,27 @@ class TestMapHelper(unittest.TestCase):
     # execute step and update the featurizers
     game_state.advance()
     obs, _, _, _ = env.step({})
-    team_obs = self._filter_obs(obs, self.teams[team_id])
+    team_obs = self._filter_obs(obs, self.team_helper.teams[team_id])
     game_state.update(team_obs)
     entity_helper.update(team_obs)
     map_helper.update(team_obs, game_state)
 
     # check extract_tile_feature() output shape
-    tile_img = map_helper.extract_tile_feature(team_obs, entity_helper)
-    self.assertEqual(tile_img.shape, (team_size, N_CH, IMG_SIZE, IMG_SIZE))
+    tile_img = map_helper.extract_tile_feature(entity_helper)
+    self.assertEqual(tile_img.shape,
+                     (self.team_helper.team_size[team_id], N_CH, IMG_SIZE, IMG_SIZE))
 
     # check nearyby_features() output shape
-    for pl_pos_team in range(team_size):
+    for member_pos in range(self.team_helper.team_size[team_id]):
       # CHECK ME: should entity_helper._member_loc be public?
       # pylint: disable=protected-access
-      nearby_feats = map_helper.nearby_features(*entity_helper._member_location[pl_pos_team])
+      nearby_feats = map_helper.nearby_features(*entity_helper.member_location[member_pos])
       self.assertTrue(len(nearby_feats) == 206)
 
     # check legal_moves() output shape
     legal_moves = map_helper.legal_moves(team_obs)
-    self.assertEqual(legal_moves.shape, (team_size, 5)) # 4 dirs + 1 for no move
+    self.assertEqual(legal_moves.shape, # 4 dirs + 1 for no move
+                     (self.team_helper.team_size[team_id], 5))
 
 
 if __name__ == '__main__':

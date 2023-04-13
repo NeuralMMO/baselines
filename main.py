@@ -10,16 +10,24 @@ from feature_extractor.feature_extractor import FeatureExtractor
 
 
 if __name__ == "__main__":
-  num_cores = 1
+  num_cores = 20
+
+  config = nmmo.config.Medium()
+
+  def make_env():
+    return nmmo.Env(config)
 
   config = nmmo.Env().config
+  config.MAP_N = num_cores*4
+  config.MAP_FORCE_GENERATION = False
 
   binding = pufferlib.emulation.Binding(
-    env_cls=nmmo.Env,
+    env_creator=make_env,
     env_name="Neural MMO",
     teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
     featurizer_cls=FeatureExtractor,
     featurizer_args=[config],
+    suppress_env_prints=True,
   )
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
@@ -37,12 +45,12 @@ if __name__ == "__main__":
     agent,
     cuda=torch.cuda.is_available(),
     total_timesteps=10_000_000,
-    track=False,
+    track=True,
     num_envs=num_cores,
     num_cores=num_cores,
     num_buffers=4,
     num_minibatches=4,
     num_agents=16,
-    wandb_project_name="pufferlib",
-    wandb_entity="platypus",
+    wandb_project_name="nmmo",
+    wandb_entity="daveey",
   )

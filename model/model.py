@@ -213,19 +213,22 @@ class SelfEncoder(nn.Module):
         self.prev_act_embed = PrevActionEncoder(n_legal, prev_act_embed_size)
         self.item_net = ItemEncoder(item_hidden_size)
         self.img_net = TileEncoder(in_img_ch, in_img_size)
+        # xcxc
         #mlp_input_size = n_self_feat + self.img_net.h_size + \
         #    prev_act_hidden_size + item_hidden_size
-        mlp_input_size = self.img_net.h_size
+        mlp_input_size = self.img_net.h_size + 262 # x["team"]
         self.mlp_net = MLPEncoder(mlp_input_size, n_hiddens=[n_self_hidden])
 
     def forward(self, x):
-        bs, na, _ = x['team'].shape
+        batch_size, num_agents, _ = x['team'].shape
         h_tile = self.img_net(x)
+        # xcxc
         #h_pre_act = self.prev_act_embed(x)
         #h_item = self.item_net(x)
         h_self = torch.cat([
             h_tile,
-            #x['team'],
+            x['team'],
+            # xcxc
             #h_item,
             #h_pre_act,
             #*x['legal'].values(),
@@ -396,10 +399,10 @@ class NMMONet(nn.Module):
 
     @staticmethod
     def _preprocess(x):
-        bs, na = x['tile'].shape[:2]
+        batch_size, num_agents = x['tile'].shape[:2]
         team_mask_self = x['team_mask'][:, :, None]
         team_mask_ally = x['team_mask'].repeat(1, 2) \
-            .unfold(dimension=1, size=na-1, step=1)[:, 1:-1]
+            .unfold(dimension=1, size=num_agents-1, step=1)[:, 1:-1]
         x['team_mask'] = torch.cat([team_mask_self, team_mask_ally], dim=-1)
         return x
 

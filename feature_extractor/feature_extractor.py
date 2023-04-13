@@ -10,18 +10,29 @@ from feature_extractor.map_helper import MapHelper
 from feature_extractor.stats import Stats
 from feature_extractor.target_tracker import TargetTracker
 
+from team_helper import TeamHelper
 
 class FeatureExtractor(pufferlib.emulation.Featurizer):
   def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):
     super().__init__(teams, team_id)
-    self.config = config
+    self._config = config
 
-    self.game_state = GameState(config, self.team_size)
-    self.map_helper = MapHelper(config, self.teams[team_id])
+    self._team_id = team_id
+    self._team_helper = TeamHelper(teams)
+    team_size = self._team_helper.team_size[team_id]
+
+    self.game_state = GameState(config, team_size)
+    self.map_helper = MapHelper(config, team_id, self._team_helper)
     self.target_tracker = TargetTracker(self.team_size)
     self.stats = Stats(config, self.team_size, self.target_tracker)
+
     self.entity_helper = EntityHelper(
-      config, teams, team_id, self.target_tracker, self.map_helper)
+      config,
+      self._team_helper, team_id,
+      self.target_tracker,
+      self.map_helper
+    )
+
     # self.inventory = Inventory(config)
     # self.market = Market(config)
 
