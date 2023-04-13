@@ -124,9 +124,7 @@ class MapHelper:
   def extract_tile_feature(self, obs, entity_helper: EntityHelper):
     imgs = []
     for member_pos in range(self.TEAM_SIZE):
-      agent_id = self._team_helper.agent_id(self._team_id, member_pos)
-
-      if agent_id not in entity_helper.member_location:
+      if member_pos not in entity_helper.member_location:
         imgs.append(DUMMY_IMG_FEAT)
         continue
 
