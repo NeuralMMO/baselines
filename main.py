@@ -10,12 +10,16 @@ from feature_extractor.feature_extractor import FeatureExtractor
 
 
 if __name__ == "__main__":
-  num_cores = 4
+  num_cores = 20
 
-  config = nmmo.config.MediumConfig()
+  config = nmmo.config.Medium()
 
   def make_env():
     return nmmo.Env(config)
+
+  config = nmmo.Env().config
+  config.MAP_N = num_cores*4
+  config.MAP_FORCE_GENERATION = False
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
@@ -23,6 +27,7 @@ if __name__ == "__main__":
     teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
     featurizer_cls=FeatureExtractor,
     featurizer_args=[config],
+    suppress_env_prints=True,
   )
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
