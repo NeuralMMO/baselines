@@ -88,13 +88,13 @@ def train(
 
     buffers = []
     for i in range(num_buffers):
-        vec = pufferlib.vectorization.RayVecEnv(
-            binding,
-            num_workers=num_cores,
-            envs_per_worker=int(envs_per_worker),
+        buffers.append(
+                pufferlib.vectorization.RayVecEnv(
+                    binding,
+                    num_workers=num_cores,
+                    envs_per_worker=int(envs_per_worker),
+                )
         )
-        vec.seed(seed + int(i*num_cores*envs_per_worker*num_agents))
-        buffers.append(vec)
 
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
@@ -110,8 +110,8 @@ def train(
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     next_obs, next_done, next_lstm_state = [], [], []
-    for envs in buffers:
-        envs.async_reset()
+    for i, envs in enumerate(buffers):
+        envs.async_reset(seed=seed + int(i*num_cores*envs_per_worker*num_agents))
         o, _, _, info = envs.recv()
         next_obs.append(torch.Tensor(o).to(device))
         next_done.append(torch.zeros((num_envs * num_agents,)).to(device))
