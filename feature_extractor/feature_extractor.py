@@ -2,15 +2,15 @@
 import nmmo
 import numpy as np
 
+import pufferlib.emulation
+
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
 from feature_extractor.stats import Stats
 from feature_extractor.target_tracker import TargetTracker
+
 from team_helper import TeamHelper
-
-import pufferlib.emulation
-
 
 class FeatureExtractor(pufferlib.emulation.Featurizer):
   def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):
@@ -49,7 +49,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.game_state.update(obs)
     self.entity_helper.update(obs)
     self.stats.update(obs)
-    self.map_helper.update(obs, self.game_state, self.entity_helper)
+    self.map_helper.update(obs, self.game_state)
 
     # use & sell
     # self.inventory.update(obs)
