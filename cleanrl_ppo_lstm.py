@@ -106,6 +106,12 @@ def train(
     rewards = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     dones = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     values = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
+    print("obs.shape", obs.shape)
+    print("actions.shape", actions.shape)
+    print("logprobs.shape", logprobs.shape)
+    print("rewards.shape", rewards.shape)
+    print("dones.shape", dones.shape)
+    print("values.shape", values.shape)
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
@@ -115,7 +121,7 @@ def train(
         o, _, _, info = envs.recv()
         next_obs.append(torch.Tensor(o).to(device))
         next_done.append(torch.zeros((num_envs * num_agents,)).to(device))
-        
+
         next_lstm_state.append((
             torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
             torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
@@ -354,7 +360,7 @@ if __name__ == '__main__':
     track = True # WandB tracking
 
     # Note: the dependencies for these demos are not currently compatible
-    # Run pip install -e .[atari] or .[nethack] to install the dependencies for a specific demo 
+    # Run pip install -e .[atari] or .[nethack] to install the dependencies for a specific demo
     # This will be resolved in a future update
     # Neural MMO requires the CarperAI fork of the nmmo-environment repo
     import pufferlib.registry.nmmo
