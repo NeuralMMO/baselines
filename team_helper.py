@@ -20,3 +20,6 @@ class TeamHelper():
 
   def agent_id(self, team_id: int, position: int) -> int:
     return self.agent_for_team_and_position[team_id, position]
+
+  def is_agent_in_team(self, agent_id:int , team_id: int) -> bool:
+    return agent_id in self.teams[team_id]
