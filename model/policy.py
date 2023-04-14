@@ -54,21 +54,21 @@ class Policy(pufferlib.models.Policy):
         batch_size = x['tile'].shape[0]
         num_agents = x['tile'].shape[1]
 
-        x = self._preprocess(x)
+        # x = self._preprocess(x)
 
-        h_self = self.self_net(x) # (batch_size, num_agents, 512)
+        # h_self = self.self_net(x) # (batch_size, num_agents, 512)
 
-        h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self) # (batch_size, num_agent, 256)
-        h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
-        h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
+        # h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self) # (batch_size, num_agent, 256)
+        # h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
+        # h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
 
-        h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
+        # h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
 
-        self.recurrent_policy.h_self = h_self
-        self.recurrent_policy.h_inter = h_inter
+        # self.recurrent_policy.h_self = h_self
+        # self.recurrent_policy.h_inter = h_inter
 
-        num_features = h_inter.shape[2]
-        h_inter = h_inter.view(batch_size, num_agents*num_features)
+        # num_features = h_inter.shape[2]
+        # h_inter = h_inter.view(batch_size, num_agents*num_features)
 
         return torch.zeros((batch_size, num_agents*num_features), dtype=torch.float32, device=self.device), None
         # return h_inter, None # (batch_size, num_agents * num_feature), None
