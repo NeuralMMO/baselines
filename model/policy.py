@@ -54,7 +54,7 @@ class Policy(pufferlib.models.Policy):
         batch_size = x['tile'].shape[0]
         num_agents = x['tile'].shape[1]
 
-        h_inter = torch.zeros((batch_size, num_agents*self.n_attn_hidden), dtype=torch.float32, device=self.device)
+        h_inter = torch.zeros((batch_size, num_agents, self.n_attn_hidden), dtype=torch.float32, device=self.device)
         h_self = torch.zeros((batch_size, num_agents, self.n_lstm_hidden), dtype=torch.float32, device=self.device)
 
         # x = self._preprocess(x)
@@ -70,7 +70,7 @@ class Policy(pufferlib.models.Policy):
         self.recurrent_policy.h_self = h_self
         self.recurrent_policy.h_inter = h_inter
 
-        num_features = h_inter.shape[2]
+        batch_size, num_agents, num_features = h_inter.shape
         h_inter = h_inter.view(batch_size, num_agents*num_features)
 
         return h_inter, None # (batch_size, num_agents * num_feature)
