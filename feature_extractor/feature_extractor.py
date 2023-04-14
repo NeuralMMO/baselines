@@ -57,7 +57,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     # buy
     # self.market.update(obs)
 
-    tile = self.map_helper.extract_tile_feature(obs, self.entity_helper)
+    tile = self.map_helper.extract_tile_feature(self.entity_helper)
     # item_type, item = self.inventory.extract_item_features(obs)
     team, team_mask = self.entity_helper.team_features_and_mask(obs)
     npc, npc_mask = self.entity_helper.npcs_features_and_mask(obs)

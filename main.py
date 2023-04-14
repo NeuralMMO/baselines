@@ -27,7 +27,7 @@ if __name__ == "__main__":
     teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
     featurizer_cls=FeatureExtractor,
     featurizer_args=[config],
-    suppress_env_prints=True,
+    suppress_env_prints=False,
   )
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
