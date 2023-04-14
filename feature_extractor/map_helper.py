@@ -22,10 +22,6 @@ TileAttr = TileState.State.attr_name_to_col
 DEFOGGING_VALUE = 16
 VISITATION_MEMORY = 100
 
-N_CH = ModelArchitecture.n_img_ch
-IMG_SIZE = ModelArchitecture.img_size[0]
-DUMMY_IMG_FEAT = np.zeros((N_CH, IMG_SIZE, IMG_SIZE))
-
 NEARBY_DIST = 9
 
 TEAMMATE_REPR = 1 / 5.
@@ -144,16 +140,17 @@ class MapHelper:
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self, entity_helper: EntityHelper):
-    # obs for this team, key: ent_id
+    img_size = ModelArchitecture.img_size[0]
+    dummy_img_feat = np.zeros((ModelArchitecture.n_img_ch, img_size, img_size))
     imgs = []
     for member_pos in range(self.team_size):
       if member_pos not in entity_helper.member_location:
-        imgs.append(DUMMY_IMG_FEAT)
+        imgs.append(dummy_img_feat)
         continue
 
       curr_pos = entity_helper.member_location[member_pos]
-      l, r = int(curr_pos[0] - IMG_SIZE // 2), int(curr_pos[0] + IMG_SIZE // 2 + 1)
-      u, d = int(curr_pos[1] - IMG_SIZE // 2), int(curr_pos[1] + IMG_SIZE // 2 + 1)
+      l, r = int(curr_pos[0] - img_size // 2), int(curr_pos[0] + img_size // 2 + 1)
+      u, d = int(curr_pos[1] - img_size // 2), int(curr_pos[1] + img_size // 2 + 1)
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
       entity_img = self.entity_map[l:r, u:d]
 

@@ -14,9 +14,6 @@ from model.model import ModelArchitecture
 
 EntityAttr = EntityState.State.attr_name_to_col
 
-PER_ENTITY_FEATURE = ModelArchitecture.n_ent_feat
-N_NPC_CONSIDERED = ModelArchitecture.n_npc_considered
-N_ENEMY_CONSIDERED = ModelArchitecture.n_enemy_considered
 AWARE_RANGE = 15
 ATK_RANGE = 3
 
@@ -116,22 +113,26 @@ class EntityHelper:
     return np.array(team_members_features), team_mask
 
   def npcs_features_and_mask(self):
-    npc_features = np.zeros((self.team_size, N_NPC_CONSIDERED, PER_ENTITY_FEATURE))
-    npc_mask = np.ones((self.team_size, N_NPC_CONSIDERED))
+    n_npc_considered = ModelArchitecture.n_npc_considered
+    npc_features = np.zeros((self.team_size, n_npc_considered,
+                             ModelArchitecture.n_ent_feat))
+    npc_mask = np.ones((self.team_size, n_npc_considered))
     for idx in range(self.team_size):
       npc_features[idx], npc_mask[idx] = self._nearby_entity_features(
-        idx, N_NPC_CONSIDERED,
+        idx, n_npc_considered,
         lambda id: id < 0
       )
     return npc_features, npc_mask
 
   def enemies_features_and_mask(self):
-    enemy_features = np.zeros((self.team_size, N_ENEMY_CONSIDERED, PER_ENTITY_FEATURE))
-    enemy_mask = np.ones((self.team_size, N_ENEMY_CONSIDERED))
+    n_enemy_considered = ModelArchitecture.n_enemy_considered
+    enemy_features = np.zeros((self.team_size, n_enemy_considered,
+                               ModelArchitecture.n_ent_feat))
+    enemy_mask = np.ones((self.team_size, n_enemy_considered))
 
     for idx in range(self.team_size):
       enemy_features[idx], enemy_mask[idx] = self._nearby_entity_features(
-        idx, N_ENEMY_CONSIDERED,
+        idx, n_enemy_considered,
         lambda id: id not in self._team_agent_ids
       )
     return enemy_features, enemy_mask
@@ -140,7 +141,7 @@ class EntityHelper:
   def _nearby_entity_features(self, member_pos,
                               max_entities: int,
                               filter_func: Callable)-> Tuple[np.ndarray, np.ndarray]:
-    features = np.zeros((max_entities, PER_ENTITY_FEATURE))
+    features = np.zeros((max_entities, ModelArchitecture.n_ent_feat))
     mask = np.ones(max_entities)
 
     if member_pos not in self.member_location:
