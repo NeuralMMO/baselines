@@ -1,8 +1,46 @@
+# TODO: remove the below line, eventually...
+# pylint: disable=all
+from types import SimpleNamespace
+
 import numpy as np
 import torch
 import torch.nn as nn
 
 from .util import single_as_batch
+
+# Gather the moodel-related constants here
+ModelArchitecture = SimpleNamespace(
+  # map_helper.extract_tile_feature()
+  n_img_ch = 7,
+  img_size = [25, 25],
+
+  # break down player features
+  n_ent_feat = 30, # entity_helper._extract_entity_features()
+  n_team = 16, # entity_helper._team_feature
+  n_player_per_team = 8, # entity_helper._team_position_feature
+  n_atk_type = 3, # entity_helper._professions_feature
+  n_nearby_feat = 205, # map_helper.nearby_features()
+
+  n_player_feat = 30 + 16 + 8 + 3 + 205, # = 262
+
+  # taken from NMMONet.__init__()
+  n_game_feat = 26,
+  n_legal = {
+    'move': 4 + 1, # 4 dirs + 1 for no move
+    'target': 9 + 9 + 1, # 9 npcs, 9 enemies + 1 for no target
+    'use': 3,
+    'sell': 3,
+  },
+
+  # taken from ItemEncoder
+  n_item_type = 17 + 1, # 17 items + 1 for no item
+  n_item_feat = 11,
+
+  # taken from entity_helper
+  # where in the model these are used?
+  n_npc_considered = 9,
+  n_enemy_considered = 9,
+)
 
 
 def same_padding(in_size, filter_size, stride_size):
@@ -164,8 +202,8 @@ class ItemEncoder(nn.Module):
     def __init__(self, n_item_hidden):
         super().__init__()
 
-        n_item_type = 17 + 1  # the additional one stands for no item
-        n_item_feature = 11
+        n_item_type = ModelArchitecture.n_item_type
+        n_item_feature = ModelArchitecture.n_item_feat
         n_type_hidden = 32
         n_fc_in = n_item_feature + n_type_hidden
         self.type_embedding = nn.Embedding(n_item_type, n_type_hidden)
@@ -350,18 +388,13 @@ class NMMONet(nn.Module):
     def __init__(self):
         super().__init__()
 
-        in_ch = 7
-        in_size = [25, 25]
-        n_player_feat = 262
-        n_game_feat = 26
-        n_legal = {
-            'move': 5,
-            'target': 19,
-            'use': 3,
-            'sell': 3,
-        }
+        in_ch = ModelArchitecture.n_img_ch
+        in_size = ModelArchitecture.img_size
+        n_player_feat = ModelArchitecture.n_player_feat
+        n_game_feat = ModelArchitecture.n_game_feat
+        n_legal = ModelArchitecture.n_legal
         n_self_feat = n_player_feat + n_game_feat + sum(n_legal.values())
-        n_npc_feat = n_enemy_feat = 30
+        n_npc_feat = n_enemy_feat = ModelArchitecture.n_ent_feat
 
         self.n_attn_hidden = n_attn_hidden = n_ally_hidden = 256
         self.n_lstm_hidden = n_lstm_hidden = n_self_hidden = 512

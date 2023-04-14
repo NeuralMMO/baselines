@@ -9,6 +9,7 @@ from team_env import TeamEnv
 from team_helper import TeamHelper
 
 class TestEnv(ParallelEnv):
+  # pylint: disable=abstract-method,unused-argument
   def __init__(self):
     self.action_space_map = {
       0: gym.spaces.Discrete(2),
@@ -48,7 +49,7 @@ class TestEnv(ParallelEnv):
 class TestTeamEnv(unittest.TestCase):
   def test_team_env(self):
     simple_env = TestEnv()
-    teams = [[0, 1], [2, 3]]
+    teams = {0: [0, 1], 1: [2, 3]}
     team_env = TeamEnv(simple_env, TeamHelper(teams))
 
     # Test reset
