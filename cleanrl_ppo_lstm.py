@@ -106,12 +106,6 @@ def train(
     rewards = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     dones = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     values = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
-    print("obs.shape", obs.shape)
-    print("actions.shape", actions.shape)
-    print("logprobs.shape", logprobs.shape)
-    print("rewards.shape", rewards.shape)
-    print("dones.shape", dones.shape)
-    print("values.shape", values.shape)
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
@@ -126,6 +120,13 @@ def train(
             torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
             torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
         ))  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
+
+    print("obs.shape", obs.shape)
+    print("actions.shape", actions.shape)
+    print("logprobs.shape", logprobs.shape)
+    print("rewards.shape", rewards.shape)
+    print("dones.shape", dones.shape)
+    print("values.shape", values.shape)
 
     num_updates = total_timesteps // batch_size
 

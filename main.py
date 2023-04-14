@@ -70,8 +70,7 @@ if __name__ == "__main__":
   )
 
   assert binding is not None
-  with torch.cuda.device(args.gpu_id):
-    cleanrl_ppo_lstm.train(
+  train = lambda: cleanrl_ppo_lstm.train(
       binding,
       agent,
       cuda=torch.cuda.is_available(),
@@ -85,3 +84,9 @@ if __name__ == "__main__":
       wandb_project_name="nmmo",
       wandb_entity="daveey",
     )
+
+  if torch.cuda.is_available():
+    with torch.cuda.device(args.gpu_id):
+      train()
+  else:
+    train()
