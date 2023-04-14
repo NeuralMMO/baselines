@@ -4,13 +4,15 @@ import nmmo
 from scripted import baselines
 
 # pylint: disable=import-error
-from feature_extractor.map_helper import MapHelper, N_CH, IMG_SIZE
+from feature_extractor.map_helper import MapHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.target_tracker import TargetTracker
 from feature_extractor.feature_extractor import FeatureExtractor
 
 from team_helper import TeamHelper
+
+from model.model import ModelArchitecture
 
 TEST_HORIZON = 5
 RANDOM_SEED = 0 # random.randint(0, 10000)
@@ -88,21 +90,22 @@ class TestMapHelper(unittest.TestCase):
 
     # check extract_tile_feature() output shape
     tile_img = map_helper.extract_tile_feature(entity_helper)
-    self.assertEqual(tile_img.shape,
-                     (self.team_helper.team_size[team_id], N_CH, IMG_SIZE, IMG_SIZE))
+    self.assertEqual(tile_img.shape, (self.team_helper.team_size[team_id],
+                                      ModelArchitecture.n_img_ch,
+                                      ModelArchitecture.img_size[0],
+                                      ModelArchitecture.img_size[1]))
 
     # check nearyby_features() output shape
     for member_pos in range(self.team_helper.team_size[team_id]):
-      # CHECK ME: should entity_helper._member_loc be public?
-      # pylint: disable=protected-access
       nearby_feats = map_helper.nearby_features(*entity_helper.member_location[member_pos])
-      self.assertTrue(len(nearby_feats) == 206)
+      self.assertTrue(len(nearby_feats) == ModelArchitecture.n_nearby_feat)
 
     # check legal_moves() output shape
-    legal_moves = map_helper.legal_moves(team_obs)
-    self.assertEqual(legal_moves.shape, # 4 dirs + 1 for no move
-                     (self.team_helper.team_size[team_id], 5))
+    legal_moves = map_helper.legal_moves(team_obs) # 4 dirs + 1 for no move
+    self.assertEqual(legal_moves.shape, (self.team_helper.team_size[team_id],
+                                         ModelArchitecture.n_legal['move']))
 
+  # TODO: add correctness testing with actual values
 
 if __name__ == '__main__':
   unittest.main()
