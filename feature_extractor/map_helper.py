@@ -13,16 +13,14 @@ from feature_extractor.game_state import GameState
 
 from team_helper import TeamHelper
 
+from model.model import ModelArchitecture
+
 EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
 TileAttr = TileState.State.attr_name_to_col
 
 DEFOGGING_VALUE = 16
 VISITATION_MEMORY = 100
-
-N_CH = 7
-IMG_SIZE = 25
-DUMMY_IMG_FEAT = np.zeros((N_CH, IMG_SIZE, IMG_SIZE))
 
 NEARBY_DIST = 9
 
@@ -142,16 +140,17 @@ class MapHelper:
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self, entity_helper: EntityHelper):
-    # obs for this team, key: ent_id
+    img_size = ModelArchitecture.img_size[0]
+    dummy_img_feat = np.zeros((ModelArchitecture.n_img_ch, img_size, img_size))
     imgs = []
     for member_pos in range(self.team_size):
       if member_pos not in entity_helper.member_location:
-        imgs.append(DUMMY_IMG_FEAT)
+        imgs.append(dummy_img_feat)
         continue
 
       curr_pos = entity_helper.member_location[member_pos]
-      l, r = int(curr_pos[0] - IMG_SIZE // 2), int(curr_pos[0] + IMG_SIZE // 2 + 1)
-      u, d = int(curr_pos[1] - IMG_SIZE // 2), int(curr_pos[1] + IMG_SIZE // 2 + 1)
+      l, r = int(curr_pos[0] - img_size // 2), int(curr_pos[0] + img_size // 2 + 1)
+      u, d = int(curr_pos[1] - img_size // 2), int(curr_pos[1] + img_size // 2 + 1)
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
       entity_img = self.entity_map[l:r, u:d]
 
@@ -187,17 +186,14 @@ class MapHelper:
           feat_arr.append(near_tile_map[i, j] == material.Fish.index) # fish_arr
           feat_arr.append(near_tile_map[i, j] in material.Impassible.indices) # obstacle_arr
 
-        # adding poison map, which hadh comment: "patch after getting trained"
-        # CHECK ME: the below was set to <= 0, to make the output len 206
-        #   having wider poison map (like above) may help.
-        #   Changing it will require changing model.py, n_player_feat
-        if abs(i-nearby_dist//2) + abs(j-nearby_dist//2) <= 0: # 1:
+        # TODO: add poison map and modify ModelArchitecture.n_nearby_feat accordingly
+        #if abs(i-nearby_dist//2) + abs(j-nearby_dist//2) <= 0: # 1:
           # CHECK ME: poison_map values can go over 1, unlike the above values
-          feat_arr.append(max(0, self.poison_map[row+i, col+j]) / POISON_CLIP)
+          #feat_arr.append(max(0, self.poison_map[row+i, col+j]) / POISON_CLIP)
 
     # CHECK ME: the below lines had the comment: "patch after getting trained"
-    #   This looks hacky (and create a blind spot), so I added the poison map feature above
-    #   However, this will a different-sized array.
+    #   It looks like they added poison map after training the model,
+    #   and they did so to NOT change the dimension
     # food_arr[-1] = max(0, self.poison_map[row, col]) / POISON_CLIP
     # water_arr[-1] = max(0, self.poison_map[row+1, col]) / POISON_CLIP
     # herb_arr[-1] = max(0, self.poison_map[row, col+1]) / POISON_CLIP
@@ -207,7 +203,7 @@ class MapHelper:
     return np.array(feat_arr)
 
   def dummy_nearby_features(self):
-    return np.zeros(206)
+    return np.zeros(ModelArchitecture.n_nearby_feat)
 
   def legal_moves(self, obs: Dict[int, Any]):
     # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
