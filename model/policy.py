@@ -70,7 +70,7 @@ class Policy(pufferlib.models.Policy):
         # num_features = h_inter.shape[2]
         # h_inter = h_inter.view(batch_size, num_agents*num_features)
 
-        return torch.zeros((batch_size, num_agents*num_features), dtype=torch.float32, device=self.device), None
+        return torch.zeros((batch_size, num_agents*2048), dtype=torch.float32, device=self.device), None
         # return h_inter, None # (batch_size, num_agents * num_feature), None
 
     def decode_actions(self, hidden, lookup, concat=True):
