@@ -7,10 +7,45 @@ import nmmo
 from model.policy import Policy
 from model.model import MemoryBlock
 from feature_extractor.feature_extractor import FeatureExtractor
+import argparse
+import os
+import subprocess
 
+def get_gpu_memory():
+  result = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE, text=True)
+  return [int(x) for x in result.stdout.strip().split('\n')]
+
+def get_least_utilized_gpu():
+  gpu_memory = get_gpu_memory()
+  return gpu_memory.index(min(gpu_memory))
 
 if __name__ == "__main__":
-  num_cores = 20
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--gpu_id", type=int, default=None,
+      help="GPU ID to use for training (default: None)")
+  parser.add_argument("--num_cores", type=int, default=1,
+      help="number of cores to use for training (default: 1)")
+  parser.add_argument("--num_envs", type=int, default=1,
+      help="number of environments to use for training (default: 1)")
+  parser.add_argument("--num_buffers", type=int, default=4,
+      help="number of buffers to use for training (default: 4)")
+  parser.add_argument("--num_minibatches", type=int, default=4,
+      help="number of minibatches to use for training (default: 4)")
+  parser.add_argument("--num_agents", type=int, default=16,
+      help="number of agents to use for training (default: 16)")
+
+
+  args = parser.parse_args()
+
+  if torch.cuda.is_available():
+    if args.gpu_id is None:
+      args.gpu_id = get_least_utilized_gpu()
+      print(f"Selected GPU with least memory utilization: {args.gpu_id}")
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  print(f"Using device: {device}")
 
   config = nmmo.config.Medium()
 
@@ -18,7 +53,7 @@ if __name__ == "__main__":
     return nmmo.Env(config)
 
   config = nmmo.Env().config
-  config.MAP_N = num_cores*4
+  config.MAP_N = args.num_cores*4
   config.MAP_FORCE_GENERATION = False
 
   binding = pufferlib.emulation.Binding(
@@ -46,8 +81,8 @@ if __name__ == "__main__":
     cuda=torch.cuda.is_available(),
     total_timesteps=10_000_000,
     track=True,
-    num_envs=num_cores,
-    num_cores=num_cores,
+    num_envs=args.num_envs,
+    num_cores=args.num_cores,
     num_buffers=4,
     num_minibatches=4,
     num_agents=16,
