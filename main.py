@@ -42,7 +42,7 @@ if __name__ == "__main__":
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+        device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
 
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Using device: {device}")
@@ -75,17 +75,18 @@ if __name__ == "__main__":
   )
 
   assert binding is not None
-  cleanrl_ppo_lstm.train(
-    binding,
-    agent,
-    cuda=torch.cuda.is_available(),
-    total_timesteps=10_000_000,
-    track=True,
-    num_envs=args.num_envs,
-    num_cores=args.num_cores,
-    num_buffers=4,
-    num_minibatches=4,
-    num_agents=16,
-    wandb_project_name="nmmo",
-    wandb_entity="daveey",
-  )
+  with torch.cuda.device(args.gpu_id):
+    cleanrl_ppo_lstm.train(
+      binding,
+      agent,
+      cuda=torch.cuda.is_available(),
+      total_timesteps=10_000_000,
+      track=True,
+      num_envs=args.num_envs,
+      num_cores=args.num_cores,
+      num_buffers=4,
+      num_minibatches=4,
+      num_agents=16,
+      wandb_project_name="nmmo",
+      wandb_entity="daveey",
+    )
