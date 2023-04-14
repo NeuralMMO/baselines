@@ -42,11 +42,6 @@ if __name__ == "__main__":
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
-        device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
-
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  print(f"Using device: {device}")
-
   config = nmmo.config.Medium()
 
   def make_env():
