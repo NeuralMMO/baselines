@@ -90,8 +90,10 @@ N_PROF = 8
 PER_ITEM_FEATURE = 11 # xcxc
 
 class Item:
-  def __init__(self, config) -> None:
+  def __init__(self, config: nmmo.config.Config, TEAM_SIZE: int) -> None:
     self.config = config
+
+    self.TEAM_SIZE = TEAM_SIZE
 
     self.prof = None
     self.best_hats = None
@@ -116,7 +118,7 @@ class Item:
 
     items_arrs = []
     items_types = []
-    for i in range(self.team_size):
+    for i in range(self.TEAM_SIZE):
       # replace with dummy feature if dead
       if i not in obs:
         items_types.append(self.DUMMY_ITEM_TYPES)

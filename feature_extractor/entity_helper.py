@@ -204,5 +204,8 @@ class EntityHelper:
     self._professions_feature = [
       one_hot_generator(N_ATK_TYPE, ATK_TYPE.index(prof)) for prof in profs
     ]
+  
+  def entity_by_id(self, id):
+    return self._entities[id]
 
 

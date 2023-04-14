@@ -209,13 +209,14 @@ class MapHelper:
   def dummy_nearby_features(self):
     return np.zeros(206)
 
-  def legal_moves(self, obs: Dict[int, Any]):
-    # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
-    moves = np.zeros((self.team_size, len(action.Direction.edges) + 1))
-    for member_pos in range(self.team_size):
-      ent_id = self._team_helper.agent_id(self._team_id, member_pos)
-      if ent_id in obs:
-        moves[member_pos,:-1] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
+  def legal_moves(self, obs):
+    moves = np.zeros((self.TEAM_SIZE, len(action.Direction.edges) + 1))
+    for i in range(self.TEAM_SIZE):
+      if i in obs:
+        moves[i,:-1] = obs[i]["ActionTargets"][action.Move][action.Direction]
+      if sum(moves[i]) == 0:
+        moves[i][-1] = 1
+    return moves
 
       if sum(moves[member_pos]) == 0:
         moves[member_pos][-1] = 1
