@@ -54,6 +54,9 @@ class Policy(pufferlib.models.Policy):
         batch_size = x['tile'].shape[0]
         num_agents = x['tile'].shape[1]
 
+        h_inter = torch.zeros((batch_size, num_agents*self.n_attn_hidden), dtype=torch.float32, device=self.device)
+        h_self = torch.zeros((batch_size, num_agents, self.n_lstm_hidden), dtype=torch.float32, device=self.device)
+
         # x = self._preprocess(x)
 
         # h_self = self.self_net(x) # (batch_size, num_agents, 512)
@@ -64,14 +67,13 @@ class Policy(pufferlib.models.Policy):
 
         # h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
 
-        # self.recurrent_policy.h_self = h_self
-        # self.recurrent_policy.h_inter = h_inter
+        self.recurrent_policy.h_self = h_self
+        self.recurrent_policy.h_inter = h_inter
 
-        # num_features = h_inter.shape[2]
-        # h_inter = h_inter.view(batch_size, num_agents*num_features)
+        num_features = h_inter.shape[2]
+        h_inter = h_inter.view(batch_size, num_agents*num_features)
 
-        return torch.zeros((batch_size, num_agents*self.n_attn_hidden), dtype=torch.float32, device=self.device), None
-        # return h_inter, None # (batch_size, num_agents * num_feature), None
+        return h_inter, None # (batch_size, num_agents * num_feature)
 
     def decode_actions(self, hidden, lookup, concat=True):
         hidden = hidden.view(-1, 8, 512)
