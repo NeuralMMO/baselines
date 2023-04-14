@@ -1,19 +1,17 @@
-# TODO: remove the below line
-# pylint: disable=all
-
 import unittest
-from unittest.mock import MagicMock
 import numpy as np
-from feature_extractor.entity_helper import EntityHelper, ATK_TYPE
 
-from feature_extractor.map_helper import MapHelper
-from feature_extractor.target_tracker import TargetTracker
-from team_helper import TeamHelper
 import nmmo
 from nmmo.entity.entity import EntityState
 from nmmo.core.tile import TileState
 from nmmo.datastore.numpy_datastore import NumpyDatastore
-from nmmo.core.observation import Observation
+
+# pylint: disable=import-error
+from feature_extractor.entity_helper import EntityHelper, ATK_TYPE
+from feature_extractor.map_helper import MapHelper
+from feature_extractor.target_tracker import TargetTracker
+
+from team_helper import TeamHelper
 
 from model.model import ModelArchitecture
 
@@ -21,6 +19,7 @@ EntityAttr = EntityState.State.attr_name_to_col
 
 
 class MockMapHelper(MapHelper):
+  # pylint: disable=unused-argument
   def nearby_features(self, row: int, col: int):
     # TODO: gather all model-related consts in one place
     return np.zeros(ModelArchitecture.n_nearby_feat)
@@ -52,9 +51,10 @@ class TestEntityHelper(unittest.TestCase):
         self.map_helper
     )
 
-  def _make_entity(self, id, row=0, col=0):
+  def _make_entity(self, ent_id, row=0, col=0):
+    # pylint: disable=no-member
     e = EntityState(self.datastore, EntityState.Limits(self.config))
-    e.id.update(id)
+    e.id.update(ent_id)
     e.row.update(row)
     e.col.update(col)
     return e
@@ -90,6 +90,7 @@ class TestEntityHelper(unittest.TestCase):
 
     num_ent = self.num_team * self.team_size + self.num_npcs
 
+    # pylint: disable=protected-access
     self.assertEqual(len(self.entity_helper._entities), num_ent)
     self.assertEqual(len(self.entity_helper.member_location), self.team_size)
     self.assertEqual(len(self.entity_helper._entity_features), num_ent)
@@ -99,10 +100,10 @@ class TestEntityHelper(unittest.TestCase):
   def test_team_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    
+
     team_features, team_mask = self.entity_helper.team_features_and_mask()
 
-    # n_player_feat = n_ent_feat + n_team + n_player_per_team 
+    # n_player_feat = n_ent_feat + n_team + n_player_per_team
     #                   + n_atk_type + n_nearby_feat
     n_feat = ModelArchitecture.n_ent_feat + \
              self.num_team + self.team_size + \
