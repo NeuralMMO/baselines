@@ -121,13 +121,6 @@ def train(
             torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
         ))  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
 
-    print("obs.shape", obs.shape)
-    print("actions.shape", actions.shape)
-    print("logprobs.shape", logprobs.shape)
-    print("rewards.shape", rewards.shape)
-    print("dones.shape", dones.shape)
-    print("values.shape", values.shape)
-
     num_updates = total_timesteps // batch_size
 
     for update in range(1, num_updates + 1):
