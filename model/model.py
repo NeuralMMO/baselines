@@ -304,19 +304,16 @@ class MemoryBlock(nn.Module):
         hxs = hxs.view(-1, teams*8, 512)
         cxs = cxs.view(-1, teams*8, 512)
 
-        #bs, na, nf = x.shape # batch_size * num_agent, num_feature
-        #x = x.view(-1, 8, nf)
-
         h = torch.cat([h_self[:, :, self.n_attn_hidden:], h_inter], dim=-1)
         bs, na, nf = h.shape  # batch_size, num_agent, num_feature
         nt = bs // seq_len  # num of truncation
-        #resets = x['reset'].repeat(1, na)
+        resets = self.reset.repeat(1, na)
         h = h.view(nt, seq_len, na, -1).transpose(1, 0).reshape(seq_len, nt * na, -1)
         hys = [hxs[::seq_len].reshape(-1, nf)]  # [nt * na, nf]
         cys = [cxs[::seq_len].reshape(-1, nf)]
         for i in range(seq_len):
-            #hys[i] = hys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
-            #cys[i] = cys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
+            hys[i] = hys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
+            cys[i] = cys[i] * (1 - resets[i::seq_len]).reshape(nt * na, 1)
             hy, cy = self.lstm(h[i], (hys[i], cys[i]))
             hys.append(hy)
             cys.append(cy)

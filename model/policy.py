@@ -66,6 +66,7 @@ class Policy(pufferlib.models.Policy):
 
         self.recurrent_policy.h_self = h_self
         self.recurrent_policy.h_inter = h_inter
+        self.recurrent_policy.reset = x["reset"]
 
         batch_size, num_agents, num_features = h_inter.shape
         h_inter = h_inter.view(batch_size, num_agents*num_features)

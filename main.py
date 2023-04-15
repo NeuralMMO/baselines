@@ -22,7 +22,7 @@ def get_least_utilized_gpu():
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--gpu_id", type=int, default=None,
-      help="GPU ID to use for training (default: None)")
+      help="GPU ID to use for training, or -1 to pick the least utilized (default: None)")
   parser.add_argument("--num_cores", type=int, default=1,
       help="number of cores to use for training (default: 1)")
   parser.add_argument("--num_envs", type=int, default=1,
@@ -33,12 +33,16 @@ if __name__ == "__main__":
       help="number of minibatches to use for training (default: 4)")
   parser.add_argument("--num_agents", type=int, default=16,
       help="number of agents to use for training (default: 16)")
+  parser.add_argument("--wandb_project", type=str, default=None,
+      help="wandb project name (default: None)")
+  parser.add_argument("--wandb_entity", type=str, default=None,
+      help="wandb entity name (default: None)")
 
 
   args = parser.parse_args()
 
   if torch.cuda.is_available():
-    if args.gpu_id is None:
+    if args.gpu_id == -1:
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
@@ -75,17 +79,17 @@ if __name__ == "__main__":
       agent,
       cuda=torch.cuda.is_available(),
       total_timesteps=10_000_000,
-      track=True,
+      track=(args.wandb_project is not None),
       num_envs=args.num_envs,
       num_cores=args.num_cores,
       num_buffers=4,
       num_minibatches=4,
       num_agents=16,
-      wandb_project_name="nmmo",
-      wandb_entity="daveey",
+      wandb_project_name=args.wandb_project,
+      wandb_entity=args.wandb_entity,
     )
 
-  if torch.cuda.is_available():
+  if torch.cuda.is_available() and args.gpu_id is not None:
     with torch.cuda.device(args.gpu_id):
       train()
   else:
