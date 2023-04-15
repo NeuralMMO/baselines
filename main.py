@@ -77,7 +77,7 @@ if __name__ == "__main__":
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
       agent,
-      cuda=torch.cuda.is_available(),
+      cuda=torch.cuda.is_available() and args.gpu_id is not None,
       total_timesteps=10_000_000,
       track=(args.wandb_project is not None),
       num_envs=args.num_envs,
