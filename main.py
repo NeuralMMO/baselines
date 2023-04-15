@@ -25,6 +25,9 @@ if __name__ == "__main__":
       help="GPU ID to use for training, or -1 to pick the least utilized (default: None)")
   parser.add_argument("--num_cores", type=int, default=1,
       help="number of cores to use for training (default: 1)")
+  parser.add_argument("--num_steps", type=int, default=16,
+      help="number of steps to use for training (default: 16)")
+
   parser.add_argument("--num_envs", type=int, default=1,
       help="number of environments to use for training (default: 1)")
   parser.add_argument("--num_buffers", type=int, default=4,
@@ -77,7 +80,7 @@ if __name__ == "__main__":
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
       agent,
-      cuda=torch.cuda.is_available() and args.gpu_id is not None,
+      cuda=torch.cuda.is_available(),
       total_timesteps=10_000_000,
       track=(args.wandb_project is not None),
       num_envs=args.num_envs,
@@ -85,11 +88,12 @@ if __name__ == "__main__":
       num_buffers=4,
       num_minibatches=4,
       num_agents=16,
+      num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
     )
 
-  if torch.cuda.is_available() and args.gpu_id is not None:
+  if torch.cuda.is_available():
     with torch.cuda.device(args.gpu_id):
       train()
   else:
