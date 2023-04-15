@@ -91,6 +91,14 @@ if __name__ == "__main__":
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
+
+      # PPO
+      learning_rate=0.00001,
+      clip_coef=0.2, # ratio_clip
+      # dual_clip_c=3.,
+      ent_coef=0.001 # entropy_loss_weight,
+      # grad_clip=1.0,
+      # bptt_trunc_len=16,
     )
 
   if torch.cuda.is_available():
@@ -98,3 +106,12 @@ if __name__ == "__main__":
       train()
   else:
     train()
+
+# lr: 0.0001 -> 0.00001
+# ratio_clip: 0.2
+# dual_clip_c: 3.
+# pi_loss_weight: 1.0
+# v_loss_weight: 0.5
+# entropy_loss_weight: 0.03 -> 0.001
+# grad_clip: 1.0
+# bptt_trunc_len: 16
