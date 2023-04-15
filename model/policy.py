@@ -51,24 +51,28 @@ class Policy(pufferlib.models.Policy):
         x = pufferlib.emulation.unpack_batched_obs(
             self.featurized_single_observation_space, env_outputs
         )
+        batch_size = x['tile'].shape[0]
+        num_agents = x['tile'].shape[1]
 
         x = self._preprocess(x)
 
-        h_self = self.self_net(x)
+        h_self = self.self_net(x) # (batch_size, num_agents, 512)
+        # h_self = torch.zeros((batch_size, num_agents, 512), dtype=torch.float, device=self.device)
 
-        h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
-        h_npc = self.npc_net(x, h_self)
-        h_enemy = self.enemy_net(x, h_self)
+        h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self) # (batch_size, num_agent, 256)
+        h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
+        h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
 
-        h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy)
+        h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
 
         self.recurrent_policy.h_self = h_self
         self.recurrent_policy.h_inter = h_inter
+        self.recurrent_policy.reset = x["reset"]
 
-        bs, na, nf = h_inter.shape # batch_size, num_agent, num_feature
-        h_inter = h_inter.view(bs, na*nf)
+        batch_size, num_agents, num_features = h_inter.shape
+        h_inter = h_inter.view(batch_size, num_agents*num_features)
 
-        return h_inter, None
+        return h_inter, None # (batch_size, num_agents * num_feature)
 
     def decode_actions(self, hidden, lookup, concat=True):
         hidden = hidden.view(-1, 8, 512)
