@@ -57,6 +57,7 @@ class Policy(pufferlib.models.Policy):
         x = self._preprocess(x)
 
         h_self = self.self_net(x) # (batch_size, num_agents, 512)
+        # h_self = torch.zeros((batch_size, num_agents, 512), dtype=torch.float, device=self.device)
 
         h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self) # (batch_size, num_agent, 256)
         h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
