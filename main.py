@@ -34,8 +34,10 @@ if __name__ == "__main__":
       help="number of buffers to use for training (default: 4)")
   parser.add_argument("--num_minibatches", type=int, default=4,
       help="number of minibatches to use for training (default: 4)")
+
   parser.add_argument("--num_agents", type=int, default=16,
       help="number of agents to use for training (default: 16)")
+
   parser.add_argument("--wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
   parser.add_argument("--wandb_entity", type=str, default=None,
