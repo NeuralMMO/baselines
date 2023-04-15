@@ -296,13 +296,13 @@ class MemoryBlock(nn.Module):
 
     def forward(self, x, state):
         # @daveey - Any idea on where seq_len comes from?
-        seq_len = x.shape[0]
+        seq_len, teams, _ = x.shape
         hxs, cxs = state
         h_self = self.h_self
         h_inter = self.h_inter
 
-        hxs = hxs.view(-1, 128, 512)
-        cxs = cxs.view(-1, 128, 512)
+        hxs = hxs.view(-1, teams*8, 512)
+        cxs = cxs.view(-1, teams*8, 512)
 
         #bs, na, nf = x.shape # batch_size * num_agent, num_feature
         #x = x.view(-1, 8, nf)
