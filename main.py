@@ -52,13 +52,12 @@ if __name__ == "__main__":
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
   config = nmmo.config.Medium()
+  config.PROVIDE_ACTION_TARGETS = True
+  config.MAP_N = args.num_cores*4
+  config.MAP_FORCE_GENERATION = False
 
   def make_env():
     return nmmo.Env(config)
-
-  config = nmmo.Env().config
-  config.MAP_N = args.num_cores*4
-  config.MAP_FORCE_GENERATION = False
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,

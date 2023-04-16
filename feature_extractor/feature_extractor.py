@@ -3,12 +3,14 @@ import nmmo
 import numpy as np
 
 import pufferlib.emulation
+from feature_extractor import map_helper
 
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
 from feature_extractor.stats import Stats
 from feature_extractor.target_tracker import TargetTracker
+from model.model import ModelArchitecture
 
 from team_helper import TeamHelper
 
@@ -58,30 +60,40 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     # self.market.update(obs)
 
     tile = self.map_helper.extract_tile_feature(self.entity_helper)
+
     # item_type, item = self.inventory.extract_item_features(obs)
+    item_type = np.zeros((self.team_size, 1), dtype=np.float32)
+    item = np.zeros((self.team_size, 1, ModelArchitecture.n_item_feat), dtype=np.float32)
+
     team, team_mask = self.entity_helper.team_features_and_mask()
     npc, npc_mask = self.entity_helper.npcs_features_and_mask()
     enemy, enemy_mask = self.entity_helper.enemies_features_and_mask()
-    # game = self.extract_game_feature(obs)
+
+    game = self.game_state.extract_game_feature(obs)
 
     state = {
       'tile': tile,
-      # 'item_type': item_type,
-      # 'item': item,
+      'item_type': item_type,
+      'item': item,
       'team': team,
       'npc': npc,
       'enemy': enemy,
       'team_mask': team_mask,
       'npc_mask': npc_mask,
       'enemy_mask': enemy_mask,
-      # 'game': game,
+      'game': game,
       'legal': {
-        # 'move': map.legal_move(obs),
+        'move': self.map_helper.legal_moves(obs),
+        'target': np.zeros((self.team_size, 19), dtype=np.float32),
+        'use': np.zeros((self.team_size, 3), dtype=np.float32),
+        'sell': np.zeros((self.team_size, 3), dtype=np.float32),
+
+        # xcxc
         # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),
         # 'use': inventory.legal_use(),
         # 'sell': inventory.legal_sell(),
       },
-      # 'prev_act': self.game_state.prev_actions,
+      'prev_act': self.game_state.previous_actions(),
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
     return state

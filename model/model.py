@@ -1,6 +1,7 @@
 # TODO: remove the below line, eventually...
 # pylint: disable=all
 from types import SimpleNamespace
+from attr import dataclass
 
 import numpy as np
 import torch
@@ -9,38 +10,45 @@ import torch.nn as nn
 from .util import single_as_batch
 
 # Gather the moodel-related constants here
-ModelArchitecture = SimpleNamespace(
+@dataclass
+class ModelArchitecture:
+  n_team = 16 # entity_helper._team_feature
+  n_player_per_team = 8 # entity_helper._team_position_feature
+
   # map_helper.extract_tile_feature()
-  n_img_ch = 7,
-  img_size = [25, 25],
+  n_img_ch = 7
+  img_size = [25, 25]
 
   # break down player features
-  n_ent_feat = 30, # entity_helper._extract_entity_features()
-  n_team = 16, # entity_helper._team_feature
-  n_player_per_team = 8, # entity_helper._team_position_feature
-  n_atk_type = 3, # entity_helper._professions_feature
-  n_nearby_feat = 205, # map_helper.nearby_features()
+  n_ent_feat = 30 # entity_helper._extract_entity_features()
 
-  n_player_feat = 30 + 16 + 8 + 3 + 205, # = 262
+  n_atk_type = 3 # entity_helper._professions_feature
+  n_nearby_feat = 205 # map_helper.nearby_features()
+
+  n_player_feat = (
+    n_ent_feat + n_team + n_player_per_team + n_atk_type + n_nearby_feat
+  ) # = 262
 
   # taken from NMMONet.__init__()
-  n_game_feat = 26,
+  n_game_feat = 26
+
   n_legal = {
     'move': 4 + 1, # 4 dirs + 1 for no move
-    'target': 9 + 9 + 1, # 9 npcs, 9 enemies + 1 for no target
+    'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
     'use': 3,
-    'sell': 3,
-  },
+    'sell': 3
+  }
 
   # taken from ItemEncoder
-  n_item_type = 17 + 1, # 17 items + 1 for no item
-  n_item_feat = 11,
+  n_item_type = 17 + 1 # 17 items + 1 for no item
+  n_item_feat = 11
 
   # taken from entity_helper
   # where in the model these are used?
-  n_npc_considered = 9,
-  n_enemy_considered = 9,
-)
+  n_npc_considered = 9
+  n_enemy_considered = 9
+
+  n_self_feat = n_player_feat + n_game_feat + sum(n_legal.values())
 
 
 def same_padding(in_size, filter_size, stride_size):
@@ -251,26 +259,28 @@ class SelfEncoder(nn.Module):
         self.prev_act_embed = PrevActionEncoder(n_legal, prev_act_embed_size)
         self.item_net = ItemEncoder(item_hidden_size)
         self.img_net = TileEncoder(in_img_ch, in_img_size)
-        # xcxc
-        #mlp_input_size = n_self_feat + self.img_net.h_size + \
-        #    prev_act_hidden_size + item_hidden_size
-        mlp_input_size = self.img_net.h_size + 262 # x["team"]
+        mlp_input_size = (
+            self.img_net.h_size +        # 1024
+                n_self_feat +            # 318
+                prev_act_hidden_size +   # 64
+                item_hidden_size         # 128
+
+            )
+
         self.mlp_net = MLPEncoder(mlp_input_size, n_hiddens=[n_self_hidden])
 
     def forward(self, x):
         batch_size, num_agents, _ = x['team'].shape
         h_tile = self.img_net(x)
-        # xcxc
-        #h_pre_act = self.prev_act_embed(x)
-        #h_item = self.item_net(x)
+        h_pre_act = self.prev_act_embed(x)
+        h_item = self.item_net(x)
         h_self = torch.cat([
-            h_tile,
-            x['team'],
-            # xcxc
-            #h_item,
-            #h_pre_act,
-            #*x['legal'].values(),
-            #x['game'].unsqueeze(1).expand(-1, na, -1),
+            h_tile,    # 1024
+            x['team'], # 262
+            h_item,    # 128
+            h_pre_act, # 64
+            *x['legal'].values(),
+            x['game'].unsqueeze(1).expand(-1, num_agents, -1), # 26
         ], dim=-1)
         h_self = self.mlp_net(h_self)
         return h_self

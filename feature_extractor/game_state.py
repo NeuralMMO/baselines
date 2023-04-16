@@ -36,3 +36,7 @@ class GameState:
       *multi_hot_generator(n_feature=self.TEAM_SIZE, index=n_alive),
     ])
     return arr
+
+  def previous_actions(self):
+    # xcxc
+    return np.zeros((self.TEAM_SIZE, 4), dtype=np.float32)

@@ -1,7 +1,7 @@
 import torch
 import pufferlib
 
-from model.model import EntityEncoder, InteractionBlock, MemoryBlock, NMMONet, PolicyHead, SelfEncoder
+from model.model import EntityEncoder, InteractionBlock, MemoryBlock, ModelArchitecture, NMMONet, PolicyHead, SelfEncoder
 
 class Policy(pufferlib.models.Policy):
     def __init__(self, binding, input_size=2048, hidden_size=4096):
@@ -10,27 +10,24 @@ class Policy(pufferlib.models.Policy):
         self.state_handler_dict = {}
         torch.set_num_threads(1)
 
-        in_ch = 7
-        in_size = [25, 25]
-        n_player_feat = 262
-        n_game_feat = 26
-        n_legal = {
-            'move': 5,
-            'target': 19,
-            'use': 3,
-            'sell': 3,
-        }
-        n_self_feat = n_player_feat + n_game_feat + sum(n_legal.values())
-        n_npc_feat = n_enemy_feat = 29
-
         self.n_attn_hidden = n_attn_hidden = n_ally_hidden = 256
         self.n_lstm_hidden = n_lstm_hidden = n_self_hidden = 512
 
-        self.self_net = SelfEncoder(in_ch, in_size, n_self_feat,
-                                    n_legal, n_self_hidden)
+        self.self_net = SelfEncoder(
+            ModelArchitecture.n_img_ch,
+            ModelArchitecture.img_size,
+            ModelArchitecture.n_self_feat,
+            ModelArchitecture.n_legal,
+            n_self_hidden
+        )
+
         self.ally_net = EntityEncoder('ally', n_ally_hidden, n_attn_hidden)
-        self.npc_net = EntityEncoder('npc', n_npc_feat, n_attn_hidden)
-        self.enemy_net = EntityEncoder('enemy', n_enemy_feat, n_attn_hidden)
+
+        self.npc_net = EntityEncoder(
+            'npc', ModelArchitecture.n_ent_feat, n_attn_hidden)
+
+        self.enemy_net = EntityEncoder(
+            'enemy', ModelArchitecture.n_ent_feat, n_attn_hidden)
 
         self.interact_net = InteractionBlock(n_attn_hidden)
 
@@ -38,13 +35,13 @@ class Policy(pufferlib.models.Policy):
 
         self.featurized_single_observation_space = binding.featurized_single_observation_space
 
-        self.policy_head = PolicyHead(n_lstm_hidden, n_legal)
+        self.policy_head = PolicyHead(n_lstm_hidden, ModelArchitecture.n_legal)
         self.decoders = torch.nn.ModuleList(
             [torch.nn.Linear(512, n) for n in binding.single_action_space.nvec[:13]]
         )
 
     def critic(self, hidden):
-        hidden = hidden.view(-1, 8, 512)
+        hidden = hidden.view(-1, ModelArchitecture.n_player_per_team, 512)
         return self.value_head(hidden.mean(dim=1))
 
     def encode_observations(self, env_outputs):
@@ -75,7 +72,7 @@ class Policy(pufferlib.models.Policy):
         return h_inter, None # (batch_size, num_agents * num_feature)
 
     def decode_actions(self, hidden, lookup, concat=True):
-        hidden = hidden.view(-1, 8, 512)
+        hidden = hidden.view(-1, ModelArchitecture.n_player_per_team, 512)
 
         actions = [0 * dec(hidden) for dec in self.decoders]
 
@@ -83,9 +80,6 @@ class Policy(pufferlib.models.Policy):
         for team_id in range(8):
             action_list += [a[:, team_id] for a in actions]
         actions = action_list
-
-        # TODO: Remove this after eliminating NaNs
-        actions = [torch.zeros_like(e) for e in actions]
 
         if concat:
             return torch.cat(actions, dim=-1)
