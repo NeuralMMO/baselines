@@ -84,9 +84,9 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'game': game,
       'legal': {
         'move': self.map_helper.legal_moves(obs),
-        'target': np.zeros((self.team_size, 19), dtype=np.float32),
-        'use': np.zeros((self.team_size, 3), dtype=np.float32),
-        'sell': np.zeros((self.team_size, 3), dtype=np.float32),
+        # 'target': np.zeros((self.team_size, 19), dtype=np.float32),
+        # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
+        # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),
 
         # xcxc
         # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),

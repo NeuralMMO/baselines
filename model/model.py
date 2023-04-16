@@ -34,9 +34,9 @@ class ModelArchitecture:
 
   n_legal = {
     'move': 4 + 1, # 4 dirs + 1 for no move
-    'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
-    'use': 3,
-    'sell': 3
+    # 'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
+    # 'use': 3,
+    # 'sell': 3
   }
   n_actions = 1
 
@@ -382,14 +382,12 @@ class PolicyHead(nn.Module):
     def __init__(self, n_hidden, n_legal):
         super().__init__()
 
-        self.heads = nn.ModuleDict({
-            name: nn.Linear(n_hidden, n_output)
-            for name, n_output in n_legal.items()
-        })
+        self.heads = nn.ModuleList([
+            nn.Linear(n_hidden, n_output) for n_output in n_legal.values()
+        ])
 
     def forward(self, h):
-        logits = {name: self.heads[name](h) for name in self.heads}
-        return logits
+        return [head(h) for head in self.heads]
 
 
 class NMMONet(nn.Module):

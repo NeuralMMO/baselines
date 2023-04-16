@@ -36,11 +36,6 @@ class Policy(pufferlib.models.Policy):
         self.featurized_single_observation_space = binding.featurized_single_observation_space
 
         self.policy_head = PolicyHead(n_lstm_hidden, ModelArchitecture.n_legal)
-        self.decoders = torch.nn.ModuleList([
-            torch.nn.Linear(512, 4)
-              for n in range(ModelArchitecture.n_actions)
-            ]
-        )
 
     def critic(self, hidden):
         hidden = hidden.view(-1, ModelArchitecture.n_player_per_team, 512)
@@ -56,7 +51,6 @@ class Policy(pufferlib.models.Policy):
         x = self._preprocess(x)
 
         h_self = self.self_net(x) # (batch_size, num_agents, 512)
-        # h_self = torch.zeros((batch_size, num_agents, 512), dtype=torch.float, device=self.device)
 
         h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self) # (batch_size, num_agent, 256)
         h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
@@ -74,15 +68,13 @@ class Policy(pufferlib.models.Policy):
         return h_inter, None # (batch_size, num_agents * num_feature)
 
     def decode_actions(self, hidden, lookup, concat=True):
-        hidden = hidden.view(-1, ModelArchitecture.n_player_per_team, 512)
         batch_size = hidden.shape[0]
-
-        actions = [dec(hidden).view(batch_size, -1) for dec in self.decoders]
-
+        # reshape the batch so that we compute actions per-agent
+        hidden = hidden.view(-1, 512)
+        actions = self.policy_head(hidden)
         if concat:
-            return torch.cat(actions, dim=-1)
-
-        return actions
+            actions = torch.cat(actions, dim=-1)
+        return [a.view(batch_size, -1) for a in actions]
 
     @staticmethod
     def _preprocess(x):
