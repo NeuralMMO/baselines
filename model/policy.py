@@ -36,8 +36,10 @@ class Policy(pufferlib.models.Policy):
         self.featurized_single_observation_space = binding.featurized_single_observation_space
 
         self.policy_head = PolicyHead(n_lstm_hidden, ModelArchitecture.n_legal)
-        self.decoders = torch.nn.ModuleList(
-            [torch.nn.Linear(512, n) for n in binding.single_action_space.nvec[:13]]
+        self.decoders = torch.nn.ModuleList([
+            torch.nn.Linear(512, 4)
+              for n in range(ModelArchitecture.n_actions)
+            ]
         )
 
     def critic(self, hidden):
@@ -73,13 +75,9 @@ class Policy(pufferlib.models.Policy):
 
     def decode_actions(self, hidden, lookup, concat=True):
         hidden = hidden.view(-1, ModelArchitecture.n_player_per_team, 512)
+        batch_size = hidden.shape[0]
 
-        actions = [0 * dec(hidden) for dec in self.decoders]
-
-        action_list = []
-        for team_id in range(8):
-            action_list += [a[:, team_id] for a in actions]
-        actions = action_list
+        actions = [dec(hidden).view(batch_size, -1) for dec in self.decoders]
 
         if concat:
             return torch.cat(actions, dim=-1)

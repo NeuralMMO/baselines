@@ -38,6 +38,7 @@ class ModelArchitecture:
     'use': 3,
     'sell': 3
   }
+  n_actions = 1
 
   # taken from ItemEncoder
   n_item_type = 17 + 1 # 17 items + 1 for no item
