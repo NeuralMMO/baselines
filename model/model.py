@@ -16,8 +16,9 @@ class ModelArchitecture:
 
   # Actions
   ACTION_NUM_DIM = {
+    'style' : 3,
+    'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
     'move': 5, # 4 dirs + 1 for no move
-    # 'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
     # 'use': 3,
     # 'sell': 3
   }

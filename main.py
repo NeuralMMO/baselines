@@ -51,11 +51,12 @@ if __name__ == "__main__":
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
-  config = nmmo.config.Medium()
-  # config = nmmo.config.Default()
-  config.PROVIDE_ACTION_TARGETS = True
-  config.MAP_N = args.num_cores*4
-  config.MAP_FORCE_GENERATION = False
+  class TrainConfig(nmmo.config.Medium, nmmo.config.Combat):
+    PROVIDE_ACTION_TARGETS = True
+    MAP_N = args.num_cores*4
+    MAP_FORCE_GENERATION = False
+
+  config = TrainConfig()
 
   def make_env():
     return nmmo.Env(config)

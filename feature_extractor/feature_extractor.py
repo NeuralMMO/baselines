@@ -71,15 +71,11 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     game = self.game_state.extract_game_feature(obs)
 
-    legal_moves = {}
+    legal_moves = {
+      action: np.zeros((self.team_size, dim)) for action, dim in ModelArchitecture.ACTION_NUM_DIM.items()
+    }
     if "move" in ModelArchitecture.ACTION_NUM_DIM:
       legal_moves["move"] = self.map_helper.legal_moves(obs)
-    if "target" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["target"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["target"]), dtype=np.float32)
-    if "use" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["use"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["use"]), dtype=np.float32)
-    if "sell" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["sell"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["sell"]), dtype=np.float32)
 
     state = {
       'tile': tile,

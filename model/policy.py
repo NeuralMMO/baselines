@@ -82,11 +82,14 @@ class Policy(pufferlib.models.Policy):
     if concat:
       actions = torch.cat(actions, dim=-1)
 
+    actions = [a.view(batch_size, ModelArchitecture.NUM_PLAYERS_PER_TEAM, -1)
+               for a in actions]
+
     team_actions = []
-    for a in actions:
-      # @daveey: Make sure this reshape is correctly getting 1 move per team
-      a = a.view(batch_size, ModelArchitecture.NUM_PLAYERS_PER_TEAM, -1)
-      team_actions += [a[:, i, :] for i in range(ModelArchitecture.NUM_PLAYERS_PER_TEAM)]
+    for player in range(ModelArchitecture.NUM_PLAYERS_PER_TEAM):
+      for action in actions:
+        team_actions.append(action[:, player, :])
+
     return team_actions
 
   @staticmethod
