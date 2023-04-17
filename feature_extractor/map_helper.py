@@ -206,15 +206,11 @@ class MapHelper:
     return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
 
   def legal_moves(self, obs: Dict[int, Any]):
-    # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
-    moves = np.zeros((self.team_size, len(action.Direction.edges) + 1))
+    moves = np.zeros((self.team_size, len(action.Direction.edges)))
     for member_pos in range(self.team_size):
       ent_id = self._team_helper.agent_id(self._team_id, member_pos)
       if ent_id in obs:
-        moves[member_pos,:-1] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
-
-      if sum(moves[member_pos]) == 0:
-        moves[member_pos][-1] = 1
+        moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
 
     return moves
 

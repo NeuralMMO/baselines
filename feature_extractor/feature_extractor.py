@@ -71,6 +71,16 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     game = self.game_state.extract_game_feature(obs)
 
+    legal_moves = {}
+    if "move" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["move"] = self.map_helper.legal_moves(obs)
+    if "target" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["target"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["target"]), dtype=np.float32)
+    if "use" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["use"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["use"]), dtype=np.float32)
+    if "sell" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["sell"] = np.zeros((self.team_size, ModelArchitecture.ACTION_NUM_DIM["sell"]), dtype=np.float32)
+
     state = {
       'tile': tile,
       'item_type': item_type,
@@ -82,17 +92,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'npc_mask': npc_mask,
       'enemy_mask': enemy_mask,
       'game': game,
-      'legal': {
-        'move': self.map_helper.legal_moves(obs)[:,0:4],
-        # 'target': np.zeros((self.team_size, 19), dtype=np.float32),
-        # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
-        # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),
-
-        # xcxc
-        # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),
-        # 'use': inventory.legal_use(),
-        # 'sell': inventory.legal_sell(),
-      },
+      'legal': legal_moves,
       'prev_act': self.game_state.previous_actions(),
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
