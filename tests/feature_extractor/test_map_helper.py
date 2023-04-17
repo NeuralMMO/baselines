@@ -91,19 +91,19 @@ class TestMapHelper(unittest.TestCase):
     # check extract_tile_feature() output shape
     tile_img = map_helper.extract_tile_feature(entity_helper)
     self.assertEqual(tile_img.shape, (self.team_helper.team_size[team_id],
-                                      ModelArchitecture.n_img_ch,
-                                      ModelArchitecture.img_size[0],
-                                      ModelArchitecture.img_size[1]))
+                                      ModelArchitecture.TILE_NUM_CHANNELS,
+                                      ModelArchitecture.TILE_IMG_SIZE[0],
+                                      ModelArchitecture.TILE_IMG_SIZE[1]))
 
     # check nearyby_features() output shape
     for member_pos in range(self.team_helper.team_size[team_id]):
       nearby_feats = map_helper.nearby_features(*entity_helper.member_location[member_pos])
-      self.assertTrue(len(nearby_feats) == ModelArchitecture.n_nearby_feat)
+      self.assertTrue(len(nearby_feats) == ModelArchitecture.NEARBY_NUM_FEATURES)
 
     # check legal_moves() output shape
     legal_moves = map_helper.legal_moves(team_obs) # 4 dirs + 1 for no move
     self.assertEqual(legal_moves.shape, (self.team_helper.team_size[team_id],
-                                         ModelArchitecture.n_legal['move']))
+                                         ModelArchitecture.ACTION_NUM_DIM['move']))
 
   # TODO: add correctness testing with actual values
 

@@ -140,8 +140,8 @@ class MapHelper:
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self, entity_helper: EntityHelper):
-    img_size = ModelArchitecture.img_size[0]
-    dummy_img_feat = np.zeros((ModelArchitecture.n_img_ch, img_size, img_size))
+    img_size = ModelArchitecture.TILE_IMG_SIZE[0]
+    dummy_img_feat = np.zeros((ModelArchitecture.TILE_NUM_CHANNELS, img_size, img_size))
     imgs = []
     for member_pos in range(self.team_size):
       if member_pos not in entity_helper.member_location:
@@ -203,7 +203,7 @@ class MapHelper:
     return np.array(feat_arr)
 
   def dummy_nearby_features(self):
-    return np.zeros(ModelArchitecture.n_nearby_feat)
+    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
 
   def legal_moves(self, obs: Dict[int, Any]):
     # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts

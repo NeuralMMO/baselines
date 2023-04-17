@@ -22,7 +22,7 @@ class MockMapHelper(MapHelper):
   # pylint: disable=unused-argument
   def nearby_features(self, row: int, col: int):
     # TODO: gather all model-related consts in one place
-    return np.zeros(ModelArchitecture.n_nearby_feat)
+    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
 
 class TestEntityHelper(unittest.TestCase):
   def setUp(self):
@@ -95,7 +95,7 @@ class TestEntityHelper(unittest.TestCase):
     self.assertEqual(len(self.entity_helper.member_location), self.team_size)
     self.assertEqual(len(self.entity_helper._entity_features), num_ent)
     self.assertEqual(len(self.entity_helper._entity_features[1]),
-                     ModelArchitecture.n_ent_feat)
+                     ModelArchitecture.ENTITY_NUM_FEATURES)
 
   def test_team_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
@@ -103,12 +103,10 @@ class TestEntityHelper(unittest.TestCase):
 
     team_features, team_mask = self.entity_helper.team_features_and_mask()
 
-    # n_player_feat = n_ent_feat + n_team + n_player_per_team
-    #                   + n_atk_type + n_nearby_feat
-    n_feat = ModelArchitecture.n_ent_feat + \
+    n_feat = ModelArchitecture.ENTITY_NUM_FEATURES + \
              self.num_team + self.team_size + \
-             ModelArchitecture.n_atk_type + \
-             ModelArchitecture.n_nearby_feat
+             ModelArchitecture.NUM_PROFESSIONS + \
+             ModelArchitecture.NEARBY_NUM_FEATURES
 
     self.assertEqual(team_features.shape, (self.team_size, n_feat))
     self.assertEqual(team_mask.shape, (self.team_size,))
@@ -119,10 +117,10 @@ class TestEntityHelper(unittest.TestCase):
     npc_features, npc_mask = self.entity_helper.npcs_features_and_mask()
 
     self.assertEqual(npc_features.shape, (self.team_size,
-                                          ModelArchitecture.n_npc_considered,
-                                          ModelArchitecture.n_ent_feat))
+                                          ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED,
+                                          ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(npc_mask.shape, (self.team_size,
-                                      ModelArchitecture.n_npc_considered))
+                                      ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
 
   def test_enemies_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
@@ -130,10 +128,10 @@ class TestEntityHelper(unittest.TestCase):
     enemy_features, enemy_mask = self.entity_helper.enemies_features_and_mask()
 
     self.assertEqual(enemy_features.shape, (self.team_size,
-                                            ModelArchitecture.n_enemy_considered,
-                                            ModelArchitecture.n_ent_feat))
+                                            ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
+                                            ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(enemy_mask.shape, (self.team_size,
-                                        ModelArchitecture.n_enemy_considered))
+                                        ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
 
   def test_choose_professions(self):
     # pylint: disable=protected-access

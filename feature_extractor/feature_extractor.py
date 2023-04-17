@@ -63,7 +63,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     # item_type, item = self.inventory.extract_item_features(obs)
     item_type = np.zeros((self.team_size, 1), dtype=np.float32)
-    item = np.zeros((self.team_size, 1, ModelArchitecture.n_item_feat), dtype=np.float32)
+    item = np.zeros((self.team_size, 1, ModelArchitecture.ITEM_NUM_FEATURES), dtype=np.float32)
 
     team, team_mask = self.entity_helper.team_features_and_mask()
     npc, npc_mask = self.entity_helper.npcs_features_and_mask()
