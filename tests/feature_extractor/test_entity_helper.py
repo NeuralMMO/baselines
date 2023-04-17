@@ -9,7 +9,6 @@ from nmmo.datastore.numpy_datastore import NumpyDatastore
 # pylint: disable=import-error
 from feature_extractor.entity_helper import EntityHelper, ATK_TYPE
 from feature_extractor.map_helper import MapHelper
-from feature_extractor.target_tracker import TargetTracker
 
 from team_helper import TeamHelper
 
@@ -39,17 +38,8 @@ class TestEntityHelper(unittest.TestCase):
 
     self.team_id = 0
     self.team_helper = TeamHelper(teams)
-    self.target_tracker = TargetTracker(self.team_size)
-    self.target_tracker.reset({})
-    self.map_helper = MockMapHelper(self.config, self.team_id, self.team_helper)
-
-    self.entity_helper = EntityHelper(
-        self.config,
-        self.team_helper,
-        self.team_id,
-        self.target_tracker,
-        self.map_helper
-    )
+    self.entity_helper = EntityHelper(self.config, self.team_helper, self.team_id)
+    self.map_helper = MockMapHelper(self.config, self.entity_helper)
 
   def _make_entity(self, ent_id, row=0, col=0):
     # pylint: disable=no-member
@@ -61,7 +51,7 @@ class TestEntityHelper(unittest.TestCase):
 
   def create_sample_obs(self, team_id, num_npcs):
     entities = []
-    for i in self.team_helper.team_and_position_for_agent.keys():
+    for i in self.team_helper.team_and_position_for_agent:
       entities.append(self._make_entity(i, row=2*i, col=3*i))
 
     for i in range(1, num_npcs+1):
@@ -101,7 +91,8 @@ class TestEntityHelper(unittest.TestCase):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
 
-    team_features, team_mask = self.entity_helper.team_features_and_mask()
+    team_features, team_mask = \
+      self.entity_helper.team_features_and_mask(self.map_helper)
 
     # n_player_feat = n_ent_feat + n_team + n_player_per_team
     #                   + n_atk_type + n_nearby_feat

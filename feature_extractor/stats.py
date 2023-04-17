@@ -1,3 +1,5 @@
+# TODO: remove the below line
+# pylint: disable=all
 
 from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
@@ -11,13 +13,13 @@ TileAttr = TileState.State.attr_name_to_col
 
 
 class Stats:
-  def __init__(self, config, team_size, target_tracker: TargetTracker):
+  def __init__(self, config, team_size):
     self.config = config
     self.player_kill_num = None  # for comparing with playerDefeat stat only
     self.npc_kill_num = None  # statistics for reward only
     self.step_onto_herb_cnt = None  # statistics for reward only
     self.team_size = team_size
-    self.target_tracker = target_tracker
+    #self.target_tracker = target_tracker
 
   def reset(self):
     self.player_kill_num = [0] * self.team_size

@@ -1,3 +1,6 @@
+# TODO: remove the below line
+# pylint: disable=all
+
 import copy
 
 import nmmo
@@ -37,11 +40,15 @@ class Market:
     self.will_die_gold = None
     self.team_n_poultice = [None] * self.TEAM_SIZE
 
+    # CHECK ME: does NMMO has this restriction? or heuristic?
+    self.rescue_cooldown = None  # cooldown rounds of sell poultice to teammates
 
   def reset(self):
-    pass
+    self.rescue_cooldown = 0
 
   def update(self, obs):
+    self.rescue_cooldown = max(0, self.rescue_cooldown - 1)
+
     self.item.force_buy_idx = [None] * self.TEAM_SIZE
     alive_ids = np.array([i for i in range(self.TEAM_SIZE) if i in obs])
     self.raw_market_obs = obs[alive_ids[0]]['Market']

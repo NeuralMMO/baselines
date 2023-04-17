@@ -1,3 +1,6 @@
+# TODO: remove the below line
+# pylint: disable=all
+
 import collections
 
 import nmmo.io.action as nmmo_act
@@ -18,7 +21,7 @@ USE_RATION = 1
 SELL_POULTICE = 0
 SELL_RATION = 1
 N_MOVE = 4
-N_ATK_TARGET = N_NPC_CONSIDERED + N_ENEMY_CONSIDERED
+#N_ATK_TARGET = N_NPC_CONSIDERED + N_ENEMY_CONSIDERED
 N_ATK_TYPE = 3
 N_USE = 2
 N_SELL = 2

@@ -5,8 +5,6 @@ import numpy as np
 import nmmo
 from nmmo.entity.entity import EntityState
 
-from feature_extractor.target_tracker import TargetTracker
-
 from team_helper import TeamHelper
 
 from model.util import one_hot_generator
@@ -26,12 +24,8 @@ N_ATK_TYPE = len(ATK_TYPE)
 
 class EntityHelper:
   def __init__(self, config: nmmo.config.Config,
-               team_helper: TeamHelper, team_id: int,
-               target_tracker: TargetTracker, map_helper) -> None:
-
+               team_helper: TeamHelper, team_id: int) -> None:
     self._config = config
-    self._target_tracker = target_tracker
-    self._map_helper = map_helper
     self._team_helper = team_helper
 
     self._team_id = team_id
@@ -44,6 +38,11 @@ class EntityHelper:
     self._entities = {}
     self.member_location = {}
     self._entity_features = {}
+
+    # CHECK ME: merging target_tracker to entity_helper
+    # NOTE: target_entity_id is updated in _trans_attack()
+    self.target_entity_id = None
+    self.target_entity_pop = None
 
     self._team_feature = one_hot_generator(
       self._team_helper.num_teams, int(self._team_id))
@@ -61,6 +60,8 @@ class EntityHelper:
                        ModelArchitecture.n_nearby_feat
 
   def reset(self, init_obs: Dict) -> None:
+    self.target_entity_id = [None] * self.team_size
+    self.target_entity_pop = [None] * self.team_size
     self._choose_professions()
     self.update(init_obs)
 
@@ -72,7 +73,7 @@ class EntityHelper:
     self._entity_features = {} # id -> entity_features
 
     for agent_id, agent_obs in obs.items():
-      entity_rows = agent_obs['Entity'][:,EntityAttr["id"]] != 0
+      entity_rows = agent_obs['Entity'][:, EntityAttr["id"]] != 0
       for entity_ob in agent_obs['Entity'][entity_rows]:
         ent_id = int(entity_ob[EntityAttr["id"]])
         if ent_id in self._entity_features:
@@ -81,16 +82,16 @@ class EntityHelper:
         self._entity_features[ent_id] = self._extract_entity_features(entity_ob)
 
       # update the location of each team member
-      agent_pos = self._team_helper.agent_position(agent_id)
+      agent_pos = self.agent_id_to_pos(agent_id)
       if agent_id in self._entities:
         row, col = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
         self.member_location[agent_pos] = (int(row), int(col))
 
-  def team_features_and_mask(self):
+  def team_features_and_mask(self, map_helper):
     team_members_features = np.zeros((self.team_size, self.n_self_feat))
     team_mask = np.zeros(self.team_size)
     for idx in range(self.team_size):
-      agent_id = self._team_helper.agent_id(self._team_id, idx)
+      agent_id = self.pos_to_agent_id(idx)
 
       if agent_id not in self._entity_features:
         team_mask[idx] = 1
@@ -98,9 +99,9 @@ class EntityHelper:
 
       if idx in self.member_location:
         (row, col) = self.member_location[idx]
-        nearby_features = self._map_helper.nearby_features(row, col)
+        nearby_features = map_helper.nearby_features(row, col)
       else:
-        nearby_features = self._map_helper.dummy_nearby_features()
+        nearby_features = map_helper.dummy_nearby_features()
 
       team_members_features[idx] = np.concatenate([
         self._entity_features[agent_id],
@@ -181,9 +182,11 @@ class EntityHelper:
     o = entity_observation
     attack_level = max(o[[EntityAttr["melee_level"], EntityAttr["range_level"],
                           EntityAttr["mage_level"]]])
+
+    # CHECK ME: revisit entity feature scalers
     return np.array([
       1.,  # alive mark
-      o[EntityAttr["id"]] in self._target_tracker.target_entity_id,  # attacked by my team
+      o[EntityAttr["id"]] in self.target_entity_id,  # attacked by my team
       o[EntityAttr["attacker_id"]] < 0,  # attacked by npc
       o[EntityAttr["attacker_id"]] > 0,  # attacked by player
       attack_level / 10., # added the missing feature: o[IDX_ENT_LVL] / 10.
@@ -215,6 +218,8 @@ class EntityHelper:
     ])
 
   def _choose_professions(self):
+    # NOTE: realikun treats only melee, range, mage as professions
+    #   harvesting ammos don't seem to considered seriously
     seed = np.random.randint(N_ATK_TYPE)
     profs = [ATK_TYPE[(seed + i) % N_ATK_TYPE]
               for i in range(self.team_size)]
@@ -226,6 +231,27 @@ class EntityHelper:
       one_hot_generator(N_ATK_TYPE, ATK_TYPE.index(prof)) for prof in profs
     ]
 
-  # check if this is necessary
-  # def entity_by_id(self, ent_id):
-  #   return self._entities[id]
+  def pos_to_agent_id(self, member_pos):
+    return self._team_helper.agent_id(self._team_id, member_pos)
+
+  def is_pos_alive(self, member_pos):
+    return member_pos in self.member_location
+
+  def is_agent_in_team(self, agent_id):
+    return agent_id in self._team_agent_ids
+
+  def agent_id_to_pos(self, agent_id):
+    return self._team_helper.agent_position(agent_id)
+
+  def agent(self, agent_id):
+    if agent_id not in self._entities:
+      return None
+
+    values = self._entities[agent_id]
+    info = EntityState.parse_array(values[values[:, EntityAttr['id']] == agent_id])
+
+    # add level for using armors
+    info.level = max(getattr(info, skill + '_level')
+                     for skill in ['melee', 'range', 'mage', 'fishing', 'herbalism',
+                                   'prospecting', 'carving', 'alchemy'])
+    return info

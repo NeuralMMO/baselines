@@ -23,8 +23,13 @@ ModelArchitecture = SimpleNamespace(
 
   n_player_feat = 30 + 16 + 8 + 3 + 205, # = 262
 
+  # break down game features
+  # the game progress is encoded with multi-hot-generator
+  n_progress_feat = 16, # index=int(1+16*curr_step/config.HORIZON)
+  # game_progress (1), n_alive/team_size (1), n_progress_feat, team_size
+  n_game_feat = 1 + 1 + 16 + 8, # = 26
+
   # taken from NMMONet.__init__()
-  n_game_feat = 26,
   n_legal = {
     'move': 4 + 1, # 4 dirs + 1 for no move
     'target': 9 + 9 + 1, # 9 npcs, 9 enemies + 1 for no target
