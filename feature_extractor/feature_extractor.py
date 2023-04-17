@@ -83,7 +83,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'enemy_mask': enemy_mask,
       'game': game,
       'legal': {
-        'move': self.map_helper.legal_moves(obs),
+        'move': self.map_helper.legal_moves(obs)[:,0:4],
         # 'target': np.zeros((self.team_size, 19), dtype=np.float32),
         # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
         # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),

@@ -33,7 +33,7 @@ class ModelArchitecture:
   n_game_feat = 26
 
   n_legal = {
-    'move': 4 + 1, # 4 dirs + 1 for no move
+    'move': 4, # 4 dirs + 1 for no move
     # 'target': 9 + 9 + 1, # 9 npcs 9 enemies + 1 for no target
     # 'use': 3,
     # 'sell': 3
