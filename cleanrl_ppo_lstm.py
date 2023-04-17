@@ -1,6 +1,7 @@
 # PufferLib's customized CleanRL PPO + LSTM implementation
 # Adapted from https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_atari_envpoolpy
 
+from collections import defaultdict
 from pdb import set_trace as T
 import os
 import psutil
@@ -98,6 +99,7 @@ def train(
 
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
+    env_profile = defaultdict(float)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((num_steps, num_buffers, num_envs * num_agents) + binding.single_observation_space.shape).to(device)
@@ -336,6 +338,16 @@ def train(
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
+
+        profile = envs.profile()
+        prof_means = {}
+        for k in profile[0].keys():
+            prof_means[k] = np.mean([p[k].elapsed for p in profile]) - env_profile[k]
+        print("Envs Profile:")
+        for k, v in prof_means.items():
+            writer.add_scalar(f'performance/env/{k}', v, global_step)
+            print(f'\t{k}: {v:.3f}s')
+        env_profile = prof_means
 
     envs.close()
     writer.close()
