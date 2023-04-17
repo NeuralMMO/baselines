@@ -67,7 +67,7 @@ class MapHelper:
 
   def update(self, obs: Dict[int, Any], game_state: GameState):
     # obs for this team, key: ent_id
-    if game_state.curr_step % ModelArchitecture.n_progress_feat == 15:
+    if game_state.curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
       self.poison_map += 1  # poison shrinking
 
     self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
@@ -138,8 +138,8 @@ class MapHelper:
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self):
-    img_size = ModelArchitecture.img_size[0]
-    dummy_img_feat = np.zeros((ModelArchitecture.n_img_ch, img_size, img_size))
+    img_size = ModelArchitecture.TILE_IMG_SIZE[0]
+    dummy_img_feat = np.zeros((ModelArchitecture.TILE_NUM_CHANNELS, img_size, img_size))
     imgs = []
     for member_pos in range(self._team_size):
       if not self._entity_helper.is_pos_alive(member_pos):
@@ -201,18 +201,20 @@ class MapHelper:
     return np.array(feat_arr)
 
   def dummy_nearby_features(self):
-    return np.zeros(ModelArchitecture.n_nearby_feat)
+    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
 
   def legal_moves(self, obs):
     # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
-    moves = np.zeros((self._team_size, len(action.Direction.edges) + 1))
+    # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
+    moves = np.zeros((self._team_size, len(action.Direction.edges)))
     for member_pos in range(self._team_size):
       ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
-        moves[member_pos,:-1] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
+        moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
 
-      if sum(moves[member_pos]) == 0:
-        moves[member_pos][-1] = 1
+      # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
+      # if sum(moves[member_pos]) == 0:
+      #   moves[member_pos][-1] = 1
 
     return moves
 

@@ -27,7 +27,7 @@ class GameState:
     self.prev_obs = self.curr_obs
 
   def extract_game_feature(self, obs):
-    n_progress_feat = ModelArchitecture.n_progress_feat
+    n_progress_feat = ModelArchitecture.PROGRESS_NUM_FEATURES
     game_progress = self.curr_step / self.max_step
     n_alive = len(obs.keys())
     arr = np.array([
@@ -38,3 +38,7 @@ class GameState:
       *multi_hot_generator(n_feature=self.team_size, index=n_alive),
     ])
     return arr
+
+  def previous_actions(self):
+    # xcxc
+    return np.zeros((self.team_size, 4), dtype=np.float32)

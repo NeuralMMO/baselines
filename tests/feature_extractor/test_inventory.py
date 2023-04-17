@@ -53,7 +53,7 @@ class TestInventory(FeaturizerTestTemplate):
                                         self.config.ITEM_INVENTORY_CAPACITY))
     self.assertEqual(item_arrs.shape, (self.team_size,
                                        self.config.ITEM_INVENTORY_CAPACITY,
-                                       ModelArchitecture.n_item_feat))
+                                       ModelArchitecture.ITEM_NUM_FEATURES))
 
     # item_types: check the values
     for member_pos in range(self.team_size):

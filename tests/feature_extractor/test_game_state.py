@@ -54,7 +54,7 @@ class TestGameState(unittest.TestCase):
     self.assertEqual(game_features[1], expected_n_alive / self.team_size)
 
     # check the feature dim
-    expected_feat_n = 1 + 1 + ModelArchitecture.n_progress_feat + self.team_size
+    expected_feat_n = 1 + 1 + ModelArchitecture.PROGRESS_NUM_FEATURES + self.team_size
     self.assertEqual(expected_feat_n, len(game_features))
 
 if __name__ == '__main__':

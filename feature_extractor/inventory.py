@@ -361,7 +361,7 @@ class Inventory:
   def extract_item_feature(self, obs):
     inv_capacity = self._config.ITEM_INVENTORY_CAPACITY
     dummy_item_types = np.zeros(inv_capacity)
-    dummy_item_arrs = np.zeros((inv_capacity, ModelArchitecture.n_item_feat))
+    dummy_item_arrs = np.zeros((inv_capacity, ModelArchitecture.ITEM_NUM_FEATURES))
 
     team_itm_types =[]
     team_itm_arrs = []
@@ -405,5 +405,5 @@ class Inventory:
         o[ItemAttr["equipped"]],
       ])
     else:
-      arr = np.zeros(ModelArchitecture.n_item_feat)
+      arr = np.zeros(ModelArchitecture.ITEM_NUM_FEATURES)
     return arr
