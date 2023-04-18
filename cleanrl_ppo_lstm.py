@@ -99,7 +99,6 @@ def train(
 
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
-    env_profile = defaultdict(float)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((num_steps, num_buffers, num_envs * num_agents) + binding.single_observation_space.shape).to(device)
@@ -108,6 +107,7 @@ def train(
     rewards = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     dones = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     values = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
+    env_profiles = [defaultdict(float) for e in range(num_buffers*num_envs)]
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
@@ -339,15 +339,16 @@ def train(
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
 
-        profile = envs.profile()
-        prof_means = {}
-        for k in profile[0].keys():
-            prof_means[k] = np.mean([p[k].elapsed for p in profile]) - env_profile[k]
-        print("Envs Profile:")
-        for k, v in prof_means.items():
-            writer.add_scalar(f'performance/env/{k}', v, global_step)
-            print(f'\t{k}: {v:.3f}s')
-        env_profile = prof_means
+        profiles = envs.profile()
+        prof_deltas = defaultdict(list)
+        for env_idx, profile in enumerate(profiles):
+            for k, v in profile.items():
+                prof_deltas[k].append(v.elapsed - env_profiles[env_idx][k])
+                env_profiles[env_idx][k] = v.elapsed
+
+        for k, v in prof_deltas.items():
+            writer.add_scalar(f'performance/env/{k}', np.mean(v), global_step)
+            print(f'\t{k}: {np.mean(v):.3f}s')
 
     envs.close()
     writer.close()

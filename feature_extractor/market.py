@@ -131,7 +131,6 @@ class Market:
           if my_obs[EntityAttr["health"]] > 35:  # not emergent
               continue
           # if my_obs[EntityAttr["food"]] >= 50 and my_obs[EntityAttr["water"]] >= 50:
-          #     my_pop = my_obs[EntityAttr["population_id"]]
           #     entity_obs = obs[i]['Entity']
           #     n_ent_observed = obs[i]['Entity']['N'][0]
           #     other_entities = entity_obs[1:n_ent_observed]

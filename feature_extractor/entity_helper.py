@@ -195,9 +195,9 @@ class EntityHelper:
       (o[EntityAttr["col"]] - self._config.MAP_BORDER) / play_area,
       o[EntityAttr["id"]] >= 0,  # player
       o[EntityAttr["id"]] in self._team_agent_ids,  # my team
-      o[EntityAttr["population_id"]] == -1,  # passive npc
-      o[EntityAttr["population_id"]] == -2,  # neutral npc
-      o[EntityAttr["population_id"]] == -3,  # hostile npc
+      o[EntityAttr["npc_type"]] == 1,  # passive npc
+      o[EntityAttr["npc_type"]] == 2,  # neutral npc
+      o[EntityAttr["npc_type"]] == 3,  # hostile npc
       o[EntityAttr["damage"]] / 10.,
       o[EntityAttr["time_alive"]] / self._config.HORIZON,
       o[EntityAttr["gold"]] / 100.,
