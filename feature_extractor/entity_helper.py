@@ -181,6 +181,7 @@ class EntityHelper:
     o = entity_observation
     attack_level = max(o[[EntityAttr["melee_level"], EntityAttr["range_level"],
                           EntityAttr["mage_level"]]])
+    half_map = self._config.MAP_SIZE // 2
     return np.array([
       1.,  # alive mark
       o[EntityAttr["id"]] in self._target_tracker.target_entity_id,  # attacked by my team
@@ -188,8 +189,8 @@ class EntityHelper:
       o[EntityAttr["attacker_id"]] > 0,  # attacked by player
       attack_level / 10., # added the missing feature: o[IDX_ENT_LVL] / 10.
       o[EntityAttr["item_level"]] / 20.,
-      (o[EntityAttr["row"]] - self._config.MAP_SIZE // 2) / self._config.MAP_SIZE // 2,
-      (o[EntityAttr["col"]] - self._config.MAP_SIZE // 2) / self._config.MAP_SIZE // 2,
+      (o[EntityAttr["row"]] - half_map // 2) / half_map,
+      (o[EntityAttr["col"]] - half_map // 2) / half_map,
       o[EntityAttr["time_alive"]] / self._config.HORIZON,
       (o[EntityAttr["row"]] - self._config.MAP_BORDER) / play_area,
       (o[EntityAttr["col"]] - self._config.MAP_BORDER) / play_area,

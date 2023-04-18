@@ -55,6 +55,7 @@ class Policy(pufferlib.models.Policy):
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]
 
+
     x = self._preprocess(x)
 
     h_self = self.self_net(x) # (batch_size, num_agents, SELF_EMBED)

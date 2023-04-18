@@ -45,6 +45,11 @@ if __name__ == "__main__":
   parser.add_argument("--wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
 
+  parser.add_argument("--model_path", type=str, default=None,
+      help="path to model to load (default: None)")
+
+  parser.add_argument("--checkpoint_dir", type=str, default=None,
+      help="path to save models (default: None)")
 
   args = parser.parse_args()
 
@@ -86,6 +91,9 @@ if __name__ == "__main__":
     binding
   )
 
+  if args.model_path is not None:
+    agent.load_state_dict(torch.load(args.model_path))
+
   assert binding is not None
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
@@ -105,6 +113,8 @@ if __name__ == "__main__":
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
+
+      checkpoint_dir=args.checkpoint_dir,
 
       # PPO
       learning_rate=0.00001,

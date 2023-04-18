@@ -49,6 +49,7 @@ def train(
         vf_coef=0.5,
         max_grad_norm=0.5,
         target_kl=None,
+        checkpoint_dir=None,
     ):
     program_start = time.time()
     env_id = binding.env_name
@@ -304,7 +305,7 @@ def train(
         env_sps = int(epoch_step / env_step_time)
         inference_sps = int(epoch_step / inference_time)
         train_sps = int(epoch_step / train_time)
-        epoch_sps = int(epoch_step / epoch_time)
+        epoch_sps = max(1, int(epoch_step / epoch_time))
 
         remaining = timedelta(seconds=int((total_timesteps - global_step) / epoch_sps))
         uptime = timedelta(seconds=int(time.time() - program_start))
@@ -348,6 +349,11 @@ def train(
 
         for k, v in prof_deltas.items():
             writer.add_scalar(f'performance/env/{k}', np.mean(v), global_step)
+
+        if checkpoint_dir is not None:
+            save_path = os.path.join(checkpoint_dir, f'{update}.pt')
+            print(f'Saving checkpoint to {save_path}')
+            torch.save(agent.state_dict(), save_path)
 
     envs.close()
     writer.close()
