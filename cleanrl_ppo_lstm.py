@@ -348,7 +348,6 @@ def train(
 
         for k, v in prof_deltas.items():
             writer.add_scalar(f'performance/env/{k}', np.mean(v), global_step)
-            print(f'\t{k}: {np.mean(v):.3f}s')
 
     envs.close()
     writer.close()

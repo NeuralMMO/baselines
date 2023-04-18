@@ -34,6 +34,8 @@ if __name__ == "__main__":
       help="number of buffers to use for training (default: 4)")
   parser.add_argument("--num_minibatches", type=int, default=4,
       help="number of minibatches to use for training (default: 4)")
+  parser.add_argument("--update_epochs", type=int, default=4,
+      help="number of update epochs to use for training (default: 4)")
 
   parser.add_argument("--num_agents", type=int, default=16,
       help="number of agents to use for training (default: 16)")
@@ -91,10 +93,14 @@ if __name__ == "__main__":
       cuda=torch.cuda.is_available(),
       total_timesteps=10_000_000,
       track=(args.wandb_project is not None),
+
       num_envs=args.num_envs,
       num_cores=args.num_cores,
       num_buffers=args.num_buffers,
+
       num_minibatches=args.num_minibatches,
+      update_epochs=args.update_epochs,
+
       num_agents=16,
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
