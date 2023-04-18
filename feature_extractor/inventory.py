@@ -135,7 +135,7 @@ class Inventory:
   def reset(self):
     pass
 
-  def update(self, obs: Dict[int, Any]):
+  def _reset_best_force(self):
     self._best_hats = [None] * self._team_size
     self._best_tops = [None] * self._team_size
     self._best_bottoms = [None] * self._team_size
@@ -145,6 +145,9 @@ class Inventory:
     self._force_sell_idx = [None] * self._team_size
     self._force_sell_price = [None] * self._team_size
     self._force_buy_idx = [None] * self._team_size
+
+  def update(self, obs: Dict[int, Any]):
+    self._reset_best_force()
 
     for agent_id, agent_obs in obs.items():
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
@@ -164,6 +167,8 @@ class Inventory:
           break
 
   def _equip_weapons_armors(self, member_pos, agent, obs_inv) -> None:
+    # NOTE: if there are level-3 Hat and level-4 Top, this results in using level-3 Hat
+    #   due to the below priority
     usable_types = [  # reflect priority
       ATK_TO_WEAPON[self._entity_helper.member_professions[member_pos]],
       Item.Hat.ITEM_TYPE_ID,
@@ -196,22 +201,20 @@ class Inventory:
           break # stop here to force use the item
 
   def _equip_tools(self, member_pos, agent, obs_inv) -> None:
-    # if there is no weapon and armor to equip
-    if self._force_use_idx[member_pos] is None:
-      tools = []
-      for tool_type in TOOLS:
-        tools_ = obs_inv[obs_inv[:, ItemAttr["type_id"]] == tool_type]
-        max_equipable_lvl = getattr(agent, ITEM_TO_PROF_LEVEL[tool_type])
-        tools_ = tools_[tools_[:, ItemAttr["level"]] <= max_equipable_lvl]
-        tools.append(tools_)
-      tools = np.concatenate(tools)
+    tools = []
+    for tool_type in TOOLS:
+      tools_ = obs_inv[obs_inv[:, ItemAttr["type_id"]] == tool_type]
+      max_equipable_lvl = getattr(agent, ITEM_TO_PROF_LEVEL[tool_type])
+      tools_ = tools_[tools_[:, ItemAttr["level"]] <= max_equipable_lvl]
+      tools.append(tools_)
+    tools = np.concatenate(tools)
 
-      if len(tools) > 0:
-        inv_idx = self._get_idx_max_type(tools, obs_inv)
-        self._best_tools[member_pos] = obs_inv[inv_idx]
-        if not obs_inv[inv_idx][ItemAttr["equipped"]] \
-           and self._force_use_idx[member_pos] is None:
-          self._force_use_idx[member_pos] = inv_idx  # save for later translation
+    if len(tools) > 0:
+      inv_idx = self._get_idx_max_type(tools, obs_inv)
+      self._best_tools[member_pos] = obs_inv[inv_idx]
+      if not obs_inv[inv_idx][ItemAttr["equipped"]] \
+          and self._force_use_idx[member_pos] is None:
+        self._force_use_idx[member_pos] = inv_idx  # save for later translation
 
   def _sell_weapons_armors_profession(self, member_pos, obs_inv) -> None:
     # sell armors and weapons of my profession
@@ -227,10 +230,10 @@ class Inventory:
       self._best_bottoms,
       self._best_weapons]
 
+    items = self._concat_types(obs_inv, sell_not_best_types)
+    # filter out the best & reserves
     for item_type, saver in zip(sell_not_best_types, best_savers):
-      items = obs_inv[obs_inv[:, ItemAttr["type_id"]] == item_type]
       if saver[member_pos] is not None:
-        # filter out the best
         items = items[items[:, ItemAttr["id"]] != saver[member_pos][ItemAttr["id"]]]
         # reserve items no more than level 6 for future use
         reserves = items[items[:, ItemAttr["level"]] <= MAX_SELL_LEVEL]
@@ -240,13 +243,14 @@ class Inventory:
           # filter out the reserved
           items = items[items[:, ItemAttr["id"]] != reserve[ItemAttr["id"]]]
 
-      if len(items) > 0:
-        # sell worst first
-        sorted_items = sorted(items, key=lambda x: x[ItemAttr["level"]])
-        self._mark_sell_idx(id, sorted_items[0], obs_inv,
-                            calc_weapon_price if item_type in WEAPONS
-                            else calc_armor_price)
-        break # stop here
+    n_items = len(items)
+    if n_items > 0:
+      # sell worst first
+      sorted_items = sorted(items, key=lambda x: x[ItemAttr["level"]])
+      self._mark_sell_idx(member_pos, sorted_items[0], obs_inv,
+                          calc_weapon_price if item_type in WEAPONS
+                          else calc_armor_price)
+    return n_items
 
   def _mark_sell_idx(self, member_pos, item, obs_inv, calc_price):
     # what to sell is already determined
@@ -288,26 +292,31 @@ class Inventory:
     n_items = self._sell_type(member_pos, obs_inv, AMMOS, calc_ammo_price)
     return n_items
 
+  def _get_inv_idx(self, item_id, obs_inv) -> int:
+    return np.argwhere(obs_inv[:, ItemAttr["id"]] == item_id).item()
+
   def _get_idx_max_type(self, items, inventory_obs):
     max_item_lvl = max(items[:, ItemAttr["level"]])
     tools = items[items[:, ItemAttr["level"]] == max_item_lvl]  # those with highest level
     min_id = min(tools[:, ItemAttr["id"]])  # if level is same, choose the item with min id
-    idx = np.argwhere(inventory_obs[:, ItemAttr["id"]] == min_id).item()
-    return idx
+    return self._get_inv_idx(min_id, inventory_obs)
 
-  def _concat_types(self, inventory_obs, types):
-    flt_idx = np.in1d(inventory_obs[:, ItemAttr["type_id"]], types) & \
-              (inventory_obs[:, ItemAttr["equipped"]] == 0) # cannot sell the equipped items
+  def _concat_types(self, obs_inv, types):
+    flt_idx = np.in1d(obs_inv[:, ItemAttr["type_id"]], list(types)) & \
+              (obs_inv[:, ItemAttr["equipped"]] == 0) # cannot sell the equipped items
     # sort according to the level
-    items = inventory_obs[flt_idx]
-    sorted_items = sorted(items, key=lambda x: x[ItemAttr["level"]])[0]
-    return sorted_items
+    items = obs_inv[flt_idx]
+    if len(items):
+      sorted_items = sorted(items, key=lambda x: x[ItemAttr["level"]])
+      return np.stack(sorted_items)
+    
+    return []
 
   def legal_use_consumables(self, obs):
     # NOTE: this function only considers ration and poultice,
     #   so it's definitely different from the ActionTargets
     # CHECK ME: how the network actually combines this and _force_use_idx???
-    _legal_use = np.zeros((self._team_size, N_USE + 1))
+    _legal_use = np.zeros((self._team_size, N_USE + 1), dtype=np.float32)
     _legal_use[:, -1] = 1
 
     for agent_id, agent_obs in obs.items():
@@ -335,7 +344,7 @@ class Inventory:
     # NOTE: this function only considers ration and poultice,
     #   so it's definitely different from the ActionTargets
     # CHECK ME: how the network actually combines this and _force_use_idx???
-    _legal_sell = np.zeros((self._team_size, N_SELL + 1))
+    _legal_sell = np.zeros((self._team_size, N_SELL + 1), dtype=np.float32)
     _legal_sell[:, -1] = 1
 
     for agent_id, agent_obs in obs.items():
@@ -384,7 +393,8 @@ class Inventory:
       team_itm_types.append(np.array(agent_itm_types))
       team_itm_arrs.append(np.stack(agent_itm_arrs))
 
-    return np.stack(team_itm_types), np.stack(team_itm_arrs)
+    return np.stack(team_itm_types).astype(np.float32), \
+           np.stack(team_itm_arrs).astype(np.float32)
 
   @staticmethod
   def _extract_per_item_feature(o):

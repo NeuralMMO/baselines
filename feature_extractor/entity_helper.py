@@ -89,7 +89,7 @@ class EntityHelper:
 
   def team_features_and_mask(self, map_helper):
     team_members_features = np.zeros((self.team_size, self.n_self_feat))
-    team_mask = np.zeros(self.team_size)
+    team_mask = np.zeros(self.team_size, dtype=np.float32)
     for idx in range(self.team_size):
       agent_id = self.pos_to_agent_id(idx)
 
@@ -111,13 +111,14 @@ class EntityHelper:
         nearby_features
       ])
 
-    return np.array(team_members_features), team_mask
+    return np.array(team_members_features, dtype=np.float32), team_mask
 
   def npcs_features_and_mask(self):
     n_npc_considered = ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED
     npc_features = np.zeros((self.team_size, n_npc_considered,
-                             ModelArchitecture.ENTITY_NUM_FEATURES))
-    npc_mask = np.ones((self.team_size, n_npc_considered))
+                             ModelArchitecture.ENTITY_NUM_FEATURES),
+                             dtype=np.float32)
+    npc_mask = np.ones((self.team_size, n_npc_considered), dtype=np.float32)
     for idx in range(self.team_size):
       npc_features[idx], npc_mask[idx] = self._nearby_entity_features(
         idx, n_npc_considered,
@@ -128,8 +129,9 @@ class EntityHelper:
   def enemies_features_and_mask(self):
     n_enemy_considered = ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED
     enemy_features = np.zeros((self.team_size, n_enemy_considered,
-                               ModelArchitecture.ENTITY_NUM_FEATURES))
-    enemy_mask = np.ones((self.team_size, n_enemy_considered))
+                               ModelArchitecture.ENTITY_NUM_FEATURES),
+                               dtype=np.float32)
+    enemy_mask = np.ones((self.team_size, n_enemy_considered), dtype=np.float32)
 
     for idx in range(self.team_size):
       enemy_features[idx], enemy_mask[idx] = self._nearby_entity_features(
@@ -142,8 +144,9 @@ class EntityHelper:
   def _nearby_entity_features(self, member_pos,
                               max_entities: int,
                               filter_func: Callable)-> Tuple[np.ndarray, np.ndarray]:
-    features = np.zeros((max_entities, ModelArchitecture.ENTITY_NUM_FEATURES))
-    mask = np.ones(max_entities)
+    features = np.zeros((max_entities, ModelArchitecture.ENTITY_NUM_FEATURES),
+                        dtype=np.float32)
+    mask = np.ones(max_entities, dtype=np.float32)
 
     if member_pos not in self.member_location:
       return features, mask
@@ -247,8 +250,7 @@ class EntityHelper:
     if agent_id not in self._entities:
       return None
 
-    values = self._entities[agent_id]
-    info = EntityState.parse_array(values[values[:, EntityAttr['id']] == agent_id])
+    info = EntityState.parse_array(self._entities[agent_id].astype(np.int32))
 
     # add level for using armors
     info.level = max(getattr(info, skill + '_level')

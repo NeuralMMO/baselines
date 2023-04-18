@@ -164,7 +164,7 @@ class MapHelper:
       img = np.stack([tile_img, entity_img, poison_img, fog_img, visit_img, *coord_imgs])
       imgs.append(img)
 
-    return np.stack(imgs)
+    return np.stack(imgs).astype(np.float32)
 
   def nearby_features(self, row: int, col: int, nearby_dist=NEARBY_DIST):
     # CHECK ME(kywch): my understanding of this function is to provide
@@ -198,15 +198,15 @@ class MapHelper:
     # fish_arr[-1] = max(0, self.poison_map[row-1, col]) / POISON_CLIP
     # obstacle_arr[-1] = max(0, self.poison_map[row, col-1]) / POISON_CLIP
 
-    return np.array(feat_arr)
+    return np.array(feat_arr, dtype=np.float32)
 
   def dummy_nearby_features(self):
-    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
+    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES, dtype=np.float32)
 
   def legal_moves(self, obs):
     # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
     # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
-    moves = np.zeros((self._team_size, len(action.Direction.edges)))
+    moves = np.zeros((self._team_size, len(action.Direction.edges)), dtype=np.float32)
     for member_pos in range(self._team_size):
       ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
