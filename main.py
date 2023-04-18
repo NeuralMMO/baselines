@@ -51,7 +51,12 @@ if __name__ == "__main__":
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
-  class TrainConfig(nmmo.config.Medium, nmmo.config.Combat):
+  class TrainConfig(
+    nmmo.config.Medium,
+    nmmo.config.Terrain,
+    nmmo.config.Resource,
+    nmmo.config.Combat):
+
     PROVIDE_ACTION_TARGETS = True
     MAP_N = args.num_cores*4
     MAP_FORCE_GENERATION = False
@@ -88,8 +93,8 @@ if __name__ == "__main__":
       track=(args.wandb_project is not None),
       num_envs=args.num_envs,
       num_cores=args.num_cores,
-      num_buffers=4,
-      num_minibatches=4,
+      num_buffers=args.num_buffers,
+      num_minibatches=args.num_minibatches,
       num_agents=16,
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
