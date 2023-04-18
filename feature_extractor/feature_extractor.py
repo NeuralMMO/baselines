@@ -80,7 +80,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     tag = -np.ones((self.team_size, 1), dtype=np.float32)
     for i,id in enumerate(self._team_helper.teams[self.team_id]):
       if id in obs:
-        tag[i] = obs[id]["_tag"]
+        tag[i] = obs[id].get("_tag", -1)
 
     state = {
       'tile': tile,
