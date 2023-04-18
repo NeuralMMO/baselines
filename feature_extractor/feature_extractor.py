@@ -7,10 +7,8 @@ import pufferlib.emulation
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
-from feature_extractor.inventory import Inventory
+from feature_extractor.item_helper import ItemHelper
 from feature_extractor.stats import Stats
-
-from model.model import ModelArchitecture
 
 from team_helper import TeamHelper
 
@@ -30,7 +28,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.stats = Stats(config, team_size)
 
     self.map_helper = MapHelper(config, self.entity_helper)
-    self.inventory = Inventory(config, self.entity_helper)
+    self.item_helper = ItemHelper(config, self.entity_helper)
     # self.market = Market(config)
 
   def reset(self, init_obs):
@@ -38,18 +36,18 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.map_helper.reset()
     self.stats.reset()
     self.entity_helper.reset(init_obs)
-    self.inventory.reset()
+    self.item_helper.reset()
     # self.market.reset()
 
-  def __call__(self, obs, step):
+  def __call__(self, obs):
     # NOTE: these updates needs to be in precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
-    self.stats.update(obs)
+    #self.stats.update(obs)
     self.map_helper.update(obs, self.game_state)
 
     # use & sell
-    self.inventory.update(obs)
+    self.item_helper.update(obs)
 
     # buy
     # self.market.update(obs)
@@ -60,12 +58,12 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     # item_type dim: (team_size, config.ITEM_INVENTORY_CAPACITY)
     # item dim: (team_size, config.ITEM_INVENTORY_CAPACITY, ITEM_NUM_FEATURES)
-    item_type, item = self.inventory.extract_item_feature(obs)
+    item_type, item = self.item_helper.extract_item_feature()
 
     # team does NOT include legal actions
     # team dim: (team_size, SELF_NUM_FEATURES - sum(ACTION_NUM_DIM.values())
     # team_mask dim: (team_size)
-    team, team_mask = self.entity_helper.team_features_and_mask()
+    team, team_mask = self.entity_helper.team_features_and_mask(self.map_helper)
 
     # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
     # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
@@ -95,10 +93,10 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
         # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
         # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),
 
-        # xcxc: dim: 
+        # xcxc: check dimensions
         # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),
-        'use': self.inventory.legal_use_consumables(obs), # dim: (team_size, 3)
-        'sell': self.inventory.legal_sell_consumables(obs), # dim: (team_size, 3)
+        'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
+        'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
       },
       'prev_act': self.game_state.previous_actions(), # dim (self.team_size, 4) for now
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,

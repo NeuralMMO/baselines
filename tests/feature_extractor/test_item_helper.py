@@ -5,7 +5,7 @@ from nmmo.systems import item as Item
 from nmmo.systems.item import ItemState
 
 # pylint: disable=import-error
-from feature_extractor.inventory import Inventory
+from feature_extractor.item_helper import ItemHelper
 from feature_extractor.entity_helper import EntityHelper
 
 from model.model import ModelArchitecture
@@ -16,13 +16,13 @@ ItemAttr = ItemState.State.attr_name_to_col
 
 RANDOM_SEED = 0 # random.randint(0, 10000)
 
-
-class TestInventory(FeaturizerTestTemplate):
+# pylint: disable=protected-access
+class TestItemHelper(FeaturizerTestTemplate):
   def _create_test_env(self):
     # init map_helper for team 1
     team_id = 1
     entity_helper = EntityHelper(self.config, self.team_helper, team_id)
-    item_helper = Inventory(self.config, entity_helper)
+    item_helper = ItemHelper(self.config, entity_helper)
 
     # init the env
     env = nmmo.Env(self.config, RANDOM_SEED)
@@ -54,7 +54,8 @@ class TestInventory(FeaturizerTestTemplate):
 
     # check the item_extractor
     entity_helper.update(team_obs)
-    item_types, item_arrs = item_helper.extract_item_feature(team_obs)
+    item_helper.update(team_obs)
+    item_types, item_arrs = item_helper.extract_item_feature()
 
     # check the shapes
     self.assertEqual(item_types.shape, (self.team_size,
@@ -111,7 +112,7 @@ class TestInventory(FeaturizerTestTemplate):
       if member_pos == 7: # test _sell_ammos
         provide_item(env.realm, agent_id, Item.Scrap, 2)
         provide_item(env.realm, agent_id, Item.Shard, 3)
-    
+
     # set levels
     env.realm.players[entity_helper.pos_to_agent_id(0)].skills.melee.level.update(10)
     env.realm.players[entity_helper.pos_to_agent_id(1)].skills.melee.level.update(7)
@@ -178,7 +179,6 @@ class TestInventory(FeaturizerTestTemplate):
       else:
         self._assert_same_item(exp_items[pos], obs_inv[force_use_idx])
 
-    print()
     # DONE
 
   def test_update_equip_tools(self):
@@ -195,7 +195,7 @@ class TestInventory(FeaturizerTestTemplate):
       agent_id = entity_helper.pos_to_agent_id(member_pos)
       for itm in item_list:
         provide_item(env.realm, agent_id, itm, item_level)
-    
+
     # set levels
     sklvl = 7
     env.realm.players[entity_helper.pos_to_agent_id(0)].skills.melee.level.update(sklvl)
@@ -232,32 +232,47 @@ class TestInventory(FeaturizerTestTemplate):
         self._assert_same_item(exp_items[pos], bt)
         self.assertTrue(bw is None)
 
-    print()
     # DONE
 
-  def test_update_sell_tools_legal_sell_use(self):
+  def test_update_sell_tools_profession(self):
     env, team_id, entity_helper, item_helper = self._create_test_env()
 
     # set profession to melee
     entity_helper.member_professions = ['Melee', 'Range'] + ['Mage']*6
 
     # provide items: tools, rations, poultice
-    item_list = [(Item.Rod, 1), (Item.Gloves, 1), (Item.Pickaxe, 0),
-                 (Item.Ration, 0), (Item.Poultice, 0)]
-    arms_list = [(Item.Hat, 7), (Item.Top, 6), (Item.Bottom, 5), (Item.Wand, 4)]
+    item_list = [(Item.Rod, 1), (Item.Gloves, 1), (Item.Pickaxe, 0)]
+    arms_list = [(Item.Hat, 6), (Item.Wand, 3)]
+    consume_list = [(Item.Ration, 0), (Item.Poultice, 1)]
     for member_pos in range(self.team_size):
       agent_id = entity_helper.pos_to_agent_id(member_pos)
-      for itm, lvl in item_list:
-        provide_item(env.realm, agent_id, itm, lvl)
-      if member_pos > 1:
-        for itm, lvl in arms_list:
+      if member_pos < 2:
+        for itm, lvl in item_list:
           provide_item(env.realm, agent_id, itm, lvl)
+      elif 2 <= member_pos < 4:
+        # member_pos = 2 gets hat and wand, member_pos = 3 only gets wand
+        for i in range(member_pos-2, len(arms_list)):
+          provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1]+1)
+          provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1])
+          provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1]-1)
+      elif member_pos in [4, 5, 6]: # testing legal_use_consumables
+        for itm, lvl in consume_list:
+          provide_item(env.realm, agent_id, itm, lvl)
+      elif member_pos == 7: # testing legal_sell_consumables: ration
+        for _ in range(6):
+          provide_item(env.realm, agent_id, Item.Ration, 0)
+          provide_item(env.realm, agent_id, Item.Poultice, 0)
 
-
-    # set levels
+    # set agent attributes
     env.realm.players[entity_helper.pos_to_agent_id(0)].skills.fishing.level.update(5)
     env.realm.players[entity_helper.pos_to_agent_id(2)].skills.fishing.level.update(6)
-
+    env.realm.players[entity_helper.pos_to_agent_id(3)].skills.fishing.level.update(6)
+    # to force use poultice: 4 cannot use, 5 can
+    env.realm.players[entity_helper.pos_to_agent_id(4)].resources.health.update(40)
+    env.realm.players[entity_helper.pos_to_agent_id(5)].resources.health.update(40)
+    env.realm.players[entity_helper.pos_to_agent_id(5)].skills.carving.level.update(3)
+    # to force use ration
+    env.realm.players[entity_helper.pos_to_agent_id(6)].resources.food.update(40)
 
     # step, get team obs, update the entity helper
     obs, _, _, _ = env.step({})
@@ -267,9 +282,11 @@ class TestInventory(FeaturizerTestTemplate):
     # this scenario tests _sell_tools(), _sell_weapons_armors_profession()
     #   legal_use_consumables(), legal_sell_consumables()
     item_helper.update(team_obs)
+    legal_use = item_helper.legal_use_consumables()
+    legal_sell = item_helper.legal_sell_consumables()
 
-    for pos, (bw, bt) in enumerate(zip(item_helper._best_weapons,
-                                       item_helper._best_tools)):
+    for pos, (bt, bh) in enumerate(zip(item_helper._best_tools,
+                                       item_helper._best_hats)):
       agent_id = entity_helper.pos_to_agent_id(pos)
       obs_inv = team_obs[agent_id]['Inventory']
       force_use_idx = item_helper._force_use_idx[pos]
@@ -289,26 +306,32 @@ class TestInventory(FeaturizerTestTemplate):
         # lowest-level tool (lvl=1), min id Item.Rod is for sale
         self._assert_same_item(item_list[0], obs_inv[force_sell_idx])
 
-    print()
+      if pos == 2:
+        self._assert_same_item(arms_list[0], bh) # can wear level 6 hat, given skill
+        self._assert_same_item(arms_list[0], obs_inv[force_use_idx])
+        # _sell_weapons_armors_profession, hat, >= MAX_RESERVE_LEVEL
+        self._assert_same_item((Item.Hat, 7), obs_inv[force_sell_idx])
 
+      if pos == 3:
+        # _sell_weapons_armors_profession, wand, worst level weapon of my profession
+        self._assert_same_item((Item.Wand, 2), obs_inv[force_sell_idx])
 
+      # check legal_use
+      if pos == 5: # pos == 4 cannot use poultice due to low level
+        self.assertListEqual(list(legal_use[pos]), [1, 0, 0])
+      elif pos == 6:
+        self.assertListEqual(list(legal_use[pos]), [0, 1, 0])
+      else:
+        self.assertListEqual(list(legal_use[pos]), [0, 0, 1])
 
+      # check legal sell
+      if pos == 7:
+        self.assertListEqual(list(legal_sell[pos]), [1, 1, 0])
+      else:
+        self.assertListEqual(list(legal_sell[pos]), [0, 0, 1])
 
-  def test_sell_weapons(self):
-    pass
+    # DONE
 
-  def test_sell_tools(self):
-    pass
-
-  def test_sell_weapons_armors_profession(self):
-    pass
-
-  def test_legal_use_consumables(self):
-    pass
-
-  def test_legal_sell_consumables(self):
-    pass
 
 if __name__ == '__main__':
   unittest.main()
-

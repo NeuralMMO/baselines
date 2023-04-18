@@ -13,7 +13,7 @@ class TestFeatureExtractor(FeaturizerTestTemplate):
 
   feature_extractors = None
 
-  def test_init_and_reset(self):
+  def test_init_reset_call(self):
     self.feature_extractors = {
         team_id: FeatureExtractor(self.team_helper.teams, team_id, self.config)
         for team_id in self.team_helper.teams }
@@ -25,8 +25,11 @@ class TestFeatureExtractor(FeaturizerTestTemplate):
       team_obs = self._filter_obs(init_obs, team_id)
       feat_ext.reset(team_obs)
 
-  def test_call(self):
-    pass
+    # step, get team obs, update the feature extractor
+    obs, _, _, _ = env.step({})
+    for team_id, feat_ext in self.feature_extractors.items():
+      team_obs = self._filter_obs(obs, team_id)
+      feat_ext(team_obs)
 
   def test_trans_action(self):
     pass
