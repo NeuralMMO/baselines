@@ -47,9 +47,12 @@ if __name__ == "__main__":
 
   parser.add_argument("--model_path", type=str, default=None,
       help="path to model to load (default: None)")
-
   parser.add_argument("--checkpoint_dir", type=str, default=None,
       help="path to save models (default: None)")
+  parser.add_argument("--checkpoint_interval", type=int, default=10,
+                      help="interval to save models (default: 10)")
+  parser.add_argument("--resume_from", type=str, default=None,
+      help="path to resume from (default: None)")
 
   args = parser.parse_args()
 
@@ -92,7 +95,18 @@ if __name__ == "__main__":
   )
 
   if args.model_path is not None:
-    agent.load_state_dict(torch.load(args.model_path))
+    print(f"Loading model from {args.model_path}...")
+    agent.load_state_dict(torch.load(args.model_path)["agent_state_dict"])
+
+  if args.checkpoint_dir is not None:
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
+
+  if args.resume_from == "latest":
+    checkpoins = os.listdir(args.checkpoint_dir)
+    if len(checkpoins) > 0:
+      args.resume_from = os.path.join(args.checkpoint_dir, max(checkpoins))
+    else :
+      args.resume_from = None
 
   assert binding is not None
   train = lambda: cleanrl_ppo_lstm.train(
@@ -115,6 +129,8 @@ if __name__ == "__main__":
       wandb_entity=args.wandb_entity,
 
       checkpoint_dir=args.checkpoint_dir,
+      checkpoint_interval=args.checkpoint_interval,
+      resume_from_path=args.resume_from,
 
       # PPO
       learning_rate=0.00001,
