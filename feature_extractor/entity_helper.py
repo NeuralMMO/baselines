@@ -182,6 +182,7 @@ class EntityHelper:
     attack_level = max(o[[EntityAttr["melee_level"], EntityAttr["range_level"],
                           EntityAttr["mage_level"]]])
     half_map = self._config.MAP_SIZE // 2
+
     return np.array([
       1.,  # alive mark
       o[EntityAttr["id"]] in self._target_tracker.target_entity_id,  # attacked by my team
@@ -200,7 +201,7 @@ class EntityHelper:
       o[EntityAttr["npc_type"]] == 2,  # neutral npc
       o[EntityAttr["npc_type"]] == 3,  # hostile npc
       o[EntityAttr["damage"]] / 10.,
-      o[EntityAttr["time_alive"]] / self._config.HORIZON,
+      o[EntityAttr["id"]],
       o[EntityAttr["gold"]] / 100.,
       o[EntityAttr["health"]] / 100.,
       o[EntityAttr["food"]] / 100.,

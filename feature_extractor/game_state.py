@@ -18,13 +18,10 @@ class GameState:
     self.curr_step = 0
     self.prev_obs = init_obs
 
-
   def update(self, obs):
-    self.curr_obs = obs
-
-  def advance(self):
-    self.curr_step += 1
     self.prev_obs = self.curr_obs
+    self.curr_obs = obs
+    self.curr_step += 1
 
   def extract_game_feature(self, obs):
     game_progress = self.curr_step / self.MAX_GAME_LENGTH

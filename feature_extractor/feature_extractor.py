@@ -77,11 +77,6 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     if "move" in ModelArchitecture.ACTION_NUM_DIM:
       legal_moves["move"] = self.map_helper.legal_moves(obs)
 
-    tag = -np.ones((self.team_size, 1), dtype=np.float32)
-    for i,id in enumerate(self._team_helper.teams[self.team_id]):
-      if id in obs:
-        tag[i] = obs[id].get("_tag", -1)
-
     state = {
       'tile': tile,
       'item_type': item_type,
@@ -96,8 +91,6 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'legal': legal_moves,
       'prev_act': self.game_state.previous_actions(),
       'reset': np.array([self.game_state.curr_step == 0]),  # for resetting RNN hidden,
-
-      '_tag': tag
     }
 
 
