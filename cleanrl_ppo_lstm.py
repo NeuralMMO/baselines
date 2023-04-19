@@ -75,7 +75,7 @@ def train(
             name=run_name,
             monitor_gym=True,
             save_code=True,
-            resume=(update > 0),
+            resume=(resume_state is not None and resume_state["update"] > 0),
         )
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
