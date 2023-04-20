@@ -192,22 +192,22 @@ class ItemHelper:
   def _filter_inventory_obs(self, obs_inv, item_type,
                             max_equipable_lvl=np.inf,
                             to_sell=False) -> np.ndarray:
-    flt_opt = (obs_inv[:, ItemAttr["id"]] > 0)
+    flt_opt = (obs_inv[:,ItemAttr["id"]] > 0)
     if to_sell: # cannot sell equipped (and already listed) items
-      flt_opt = (obs_inv[:, ItemAttr["equipped"]] == 0)
+      flt_opt = (obs_inv[:,ItemAttr["equipped"]] == 0)
     if max_equipable_lvl < np.inf: # cannot equip too-high-level (and already listed) items
-      flt_opt = (obs_inv[:, ItemAttr["level"]] <= max_equipable_lvl)
-    flt_inv = (obs_inv[:, ItemAttr["type_id"]] == item_type) & \
-              (obs_inv[:, ItemAttr["listed_price"]] == 0)
+      flt_opt = (obs_inv[:,ItemAttr["level"]] <= max_equipable_lvl)
+    flt_inv = (obs_inv[:,ItemAttr["type_id"]] == item_type) & \
+              (obs_inv[:,ItemAttr["listed_price"]] == 0)
     return obs_inv[flt_inv & flt_opt]
 
   def _get_inv_idx(self, item_id, obs_inv) -> int:
-    return np.argwhere(obs_inv[:, ItemAttr["id"]] == item_id).item()
+    return np.argwhere(obs_inv[:,ItemAttr["id"]] == item_id).item()
 
   def _evaluate_best_item(self, obs):
     for agent_id, agent_obs in obs.items():
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
-      agent = self._entity_helper.agent(agent_id)
+      agent = self._entity_helper.agent_or_none(agent_id)
 
       eval_types = [*ARMORS, *TOOLS,
         ATK_TO_WEAPON[self._entity_helper.member_professions[member_pos]]]
@@ -217,7 +217,7 @@ class ItemHelper:
         items = self._filter_inventory_obs(agent_obs['Inventory'], item_type,
                                            max_equipable_lvl=agent_level)
         if len(items) > 0:
-          max_level = max(items[:, ItemAttr['level']])
+          max_level = max(items[:,ItemAttr['level']])
           curr_best = self.best_items[item_type][member_pos]
           if curr_best is None or \
              curr_best[ItemAttr['level']] < max_level:
@@ -259,15 +259,15 @@ class ItemHelper:
     # what to sell is already determined
     # CHECK ME: it should be the lowest level-item
     item_id = item[ItemAttr["id"]]
-    inv_idx = np.argwhere(obs_inv[:, ItemAttr["id"]] == item_id).item()
+    inv_idx = np.argwhere(obs_inv[:,ItemAttr["id"]] == item_id).item()
     self.force_sell_idx[member_pos] = inv_idx
     self.force_sell_price[member_pos] = calc_price_fn(item[ItemAttr["level"]])
 
   def _concat_types(self, obs_inv, types):
     # cannot use/sell the listed items, cannot sell the equipped items
-    flt_idx = np.in1d(obs_inv[:, ItemAttr["type_id"]], list(types)) & \
-              (obs_inv[:, ItemAttr["listed_price"]] == 0) & \
-              (obs_inv[:, ItemAttr["equipped"]] == 0)
+    flt_idx = np.in1d(obs_inv[:,ItemAttr["type_id"]], list(types)) & \
+              (obs_inv[:,ItemAttr["listed_price"]] == 0) & \
+              (obs_inv[:,ItemAttr["equipped"]] == 0)
     # sort according to the level, from lowest to highest
     items = obs_inv[flt_idx]
     if len(items):
@@ -297,7 +297,7 @@ class ItemHelper:
     if self.best_weapons[member_pos] is None \
        and self.best_tools[member_pos] is not None:
       best_tool_id = self.best_tools[member_pos][ItemAttr["id"]]
-      sorted_items = sorted_items[sorted_items[:, ItemAttr["id"]] != best_tool_id]
+      sorted_items = sorted_items[sorted_items[:,ItemAttr["id"]] != best_tool_id]
     if len(sorted_items):
       self._mark_sell_idx(member_pos, sorted_items[0], obs_inv, calc_tool_price)
 
@@ -316,16 +316,16 @@ class ItemHelper:
       # filter out the best items
       best_item = self.best_items[item_type][member_pos]
       if best_item is not None:
-        items = items[items[:, ItemAttr["id"]] != best_item[ItemAttr["id"]]]
+        items = items[items[:,ItemAttr["id"]] != best_item[ItemAttr["id"]]]
 
       # also reserve items (that are not equippable now but) for future use
       #   so the level doesn't have to be high
-      reserves = items[items[:, ItemAttr["level"]] <= MAX_RESERVE_LEVEL]
+      reserves = items[items[:,ItemAttr["level"]] <= MAX_RESERVE_LEVEL]
       if len(reserves):
         # the best one to reserve
         reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]
         # filter out the reserved
-        items = items[items[:, ItemAttr["id"]] != reserve[ItemAttr["id"]]]
+        items = items[items[:,ItemAttr["id"]] != reserve[ItemAttr["id"]]]
 
       if len(items):
         # sell worst first
@@ -345,18 +345,18 @@ class ItemHelper:
 
     for agent_id, obs_inv in self._obs_inv.items():
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
-      agent = self._entity_helper.agent(agent_id)
+      agent = self._entity_helper.agent_or_none(agent_id)
 
       if self.force_use_idx[member_pos] is None:
-        flt_poultice = (obs_inv[:, ItemAttr["level"]] <= agent.level) & \
-                       (obs_inv[:, ItemAttr["type_id"]] == Item.Poultice.ITEM_TYPE_ID)
+        flt_poultice = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
+                       (obs_inv[:,ItemAttr["type_id"]] == Item.Poultice.ITEM_TYPE_ID)
         if agent.health <= 60 and len(obs_inv[flt_poultice]) > 0:
           _legal_use[member_pos][LEGAL_POULTICE] = 1
           # CHECK ME: added the below line, is it right?
           _legal_use[member_pos][-1] = 0
 
-        flt_ration = (obs_inv[:, ItemAttr["level"]] <= agent.level) & \
-                     (obs_inv[:, ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
+        flt_ration = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
+                     (obs_inv[:,ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
         if (agent.food < 50 or agent.water < 50) and len(obs_inv[flt_ration]) > 0:
           _legal_use[member_pos][LEGAL_RATION] = 1
           # CHECK ME: added the below line, is it right?
@@ -375,7 +375,7 @@ class ItemHelper:
 
     for agent_id, obs_inv in self._obs_inv.items():
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
-      item_type = obs_inv[:, ItemAttr["type_id"]]
+      item_type = obs_inv[:,ItemAttr["type_id"]]
 
       # full inventory, so should get an item out
       if sum(item_type > 0) > N_ITEM_LIMIT and \

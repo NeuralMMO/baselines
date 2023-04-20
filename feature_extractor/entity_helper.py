@@ -71,7 +71,7 @@ class EntityHelper:
     self._entity_features = {} # id -> entity_features
 
     for agent_id, agent_obs in obs.items():
-      entity_rows = agent_obs['Entity'][:, EntityAttr["id"]] != 0
+      entity_rows = agent_obs['Entity'][:,EntityAttr["id"]] != 0
       for entity_ob in agent_obs['Entity'][entity_rows]:
         ent_id = int(entity_ob[EntityAttr["id"]])
         if ent_id in self._entity_features:
@@ -252,13 +252,14 @@ class EntityHelper:
   def agent_team(self, agent_id):
     return self._team_helper.team_and_position_for_agent[agent_id][0]
 
-  def agent(self, agent_id):
+  def agent_or_none(self, agent_id):
     if agent_id not in self._entities:
       return None
 
     info = EntityState.parse_array(self._entities[agent_id].astype(np.int32))
     # add level for using armors
-    info.level = max(getattr(info, skill + '_level')
-                     for skill in ['melee', 'range', 'mage', 'fishing', 'herbalism',
-                                   'prospecting', 'carving', 'alchemy'])
+    info.level = max(
+      getattr(info, skill + '_level')
+      for skill in ['melee', 'range', 'mage', 'fishing', 'herbalism',
+                    'prospecting', 'carving', 'alchemy'])
     return info

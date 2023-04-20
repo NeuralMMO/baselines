@@ -37,7 +37,7 @@ class StatHelper:
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
 
       # NOTE: entity_helper.attack_target records the target agent id
-      entity_in_sight = agent_obs['Entity'][:, EntityAttr["id"]]
+      entity_in_sight = agent_obs['Entity'][:,EntityAttr["id"]]
       target_agent = self._entity_helper.attack_target[member_pos]
       if target_agent is not None and target_agent not in entity_in_sight:
         # NOTE: the target may have been killed by the other agent

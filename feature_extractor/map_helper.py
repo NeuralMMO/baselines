@@ -92,7 +92,7 @@ class MapHelper:
 
       # mark team/enemy/npc
       entity_obs = player_obs['Entity']
-      valid_entity = entity_obs[:, EntityAttr["id"]] != 0
+      valid_entity = entity_obs[:,EntityAttr["id"]] != 0
       entities = entity_obs[valid_entity, EntityAttr["id"]]
       ent_in_team = [self._entity_helper.is_agent_in_team(agent_id)
                      for agent_id in entities]
