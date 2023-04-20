@@ -39,10 +39,9 @@ class EntityHelper:
     self.member_location = {}
     self._entity_features = {}
 
-    # CHECK ME: merging target_tracker to entity_helper
-    # NOTE: target_entity_id is updated in _trans_attack()
-    self.target_entity_id = None
-    self.target_entity_pop = None
+    # CHECK ME: target_tracker merged to entity_helper
+    # NOTE: attack_target is updated in _trans_attack()
+    self.attack_target = None
 
     self._team_feature = one_hot_generator(
       self._team_helper.num_teams, int(self._team_id))
@@ -60,8 +59,7 @@ class EntityHelper:
                        ModelArchitecture.NEARBY_NUM_FEATURES
 
   def reset(self, init_obs: Dict) -> None:
-    self.target_entity_id = [None] * self.team_size
-    self.target_entity_pop = [None] * self.team_size
+    self.attack_target = [None] * self.team_size
     self._choose_professions()
     self.update(init_obs)
 
@@ -189,7 +187,7 @@ class EntityHelper:
     # CHECK ME: revisit entity feature scalers
     return np.array([
       1.,  # alive mark
-      o[EntityAttr["id"]] in self.target_entity_id,  # attacked by my team
+      o[EntityAttr["id"]] in self.attack_target,  # attacked by my team
       o[EntityAttr["attacker_id"]] < 0,  # attacked by npc
       o[EntityAttr["attacker_id"]] > 0,  # attacked by player
       attack_level / 10., # added the missing feature: o[IDX_ENT_LVL] / 10.
@@ -234,6 +232,8 @@ class EntityHelper:
       one_hot_generator(N_ATK_TYPE, ATK_TYPE.index(prof)) for prof in profs
     ]
 
+  #####################################
+  # team-related helper functions
   def pos_to_agent_id(self, member_pos):
     return self._team_helper.agent_id(self._team_id, member_pos)
 
@@ -246,12 +246,14 @@ class EntityHelper:
   def agent_id_to_pos(self, agent_id):
     return self._team_helper.agent_position(agent_id)
 
+  def agent_team(self, agent_id):
+    return self._team_helper.team_and_position_for_agent[agent_id][0]
+
   def agent(self, agent_id):
     if agent_id not in self._entities:
       return None
 
     info = EntityState.parse_array(self._entities[agent_id].astype(np.int32))
-
     # add level for using armors
     info.level = max(getattr(info, skill + '_level')
                      for skill in ['melee', 'range', 'mage', 'fishing', 'herbalism',

@@ -1,4 +1,3 @@
-
 import nmmo
 import numpy as np
 
@@ -9,7 +8,7 @@ from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
-from feature_extractor.stats import Stats
+from feature_extractor.stat_helper import StatHelper
 
 from team_helper import TeamHelper
 
@@ -24,9 +23,9 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     self.game_state = GameState(config, team_size)
 
-    # xcxc: merging target_tracker to entity_helper
+    # NOTE: target_tracker merged to entity_helper
     self.entity_helper = EntityHelper(config, self._team_helper, team_id)
-    self.stats = Stats(config, team_size)
+    self.stat_helper = StatHelper(config, self.entity_helper)
 
     self.map_helper = MapHelper(config, self.entity_helper)
     self.item_helper = ItemHelper(config, self.entity_helper)
@@ -35,7 +34,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
   def reset(self, init_obs):
     self.game_state.reset(init_obs)
     self.map_helper.reset()
-    self.stats.reset()
+    self.stat_helper.reset()
     self.entity_helper.reset(init_obs)
     self.item_helper.reset()
     self.market_helper.reset()
@@ -44,10 +43,12 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
-    #self.stats.update(obs)
     self.map_helper.update(obs, self.game_state.curr_step)
     self.item_helper.update(obs) # use & sell
     self.market_helper.update(obs, self.game_state.curr_step) # buy
+
+    # CHECK ME: we can get better stat from the event log. Do we need stat_helper?
+    self.stat_helper.update(obs)
 
     """Update finished. Generating features"""
     # CHECK ME: how item force_use/sell/buy_idx are traslated into actions?

@@ -24,7 +24,7 @@ NEARBY_DIST = 9
 TEAMMATE_REPR = 1 / 5.
 ENEMY_REPR = 2 / 5.
 PASSIVE_REPR = 3 / 5.
-PASSAGR_REPR = 4 / 5.
+NEUTRAL_REPR = 4 / 5.
 HOSTILE_REPR = 1.
 
 POISON_CLIP = 20.
@@ -107,7 +107,7 @@ class MapHelper:
       self._mark_point(entity_map[1], ent_coords,
                        np.logical_and(np.logical_not(ent_in_team), entities > 0)) # enemy
       self._mark_point(entity_map[2], ent_coords, npc_type == -1)  # passive npcs
-      self._mark_point(entity_map[3], ent_coords, npc_type == -2)  # passive-aggressive npcs
+      self._mark_point(entity_map[3], ent_coords, npc_type == -2)  # neutral npcs
       self._mark_point(entity_map[4], ent_coords, npc_type == -3)  # hostile npcs
 
       # update visit map
@@ -133,7 +133,7 @@ class MapHelper:
 
     # update the entity map based on all team obs
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
-      entity_map[2] * PASSIVE_REPR + entity_map[3] * PASSAGR_REPR + entity_map[4] * HOSTILE_REPR
+      entity_map[2] * PASSIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
   def extract_tile_feature(self):
