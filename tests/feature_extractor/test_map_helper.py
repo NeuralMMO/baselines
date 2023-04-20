@@ -40,7 +40,7 @@ class TestMapHelper(FeaturizerTestTemplate):
     team_obs = self._filter_obs(obs, team_id)
     game_state.update(team_obs)
     entity_helper.update(team_obs)
-    map_helper.update(team_obs, game_state)
+    map_helper.update(team_obs, game_state.curr_step)
 
     # check extract_tile_feature() output shape
     tile_img = map_helper.extract_tile_feature()

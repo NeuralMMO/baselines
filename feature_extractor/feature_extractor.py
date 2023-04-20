@@ -8,6 +8,7 @@ from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
+from feature_extractor.market_helper import MarketHelper
 from feature_extractor.stats import Stats
 
 from team_helper import TeamHelper
@@ -29,7 +30,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     self.map_helper = MapHelper(config, self.entity_helper)
     self.item_helper = ItemHelper(config, self.entity_helper)
-    # self.market = Market(config)
+    self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
   def reset(self, init_obs):
     self.game_state.reset(init_obs)
@@ -37,22 +38,20 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.stats.reset()
     self.entity_helper.reset(init_obs)
     self.item_helper.reset()
-    # self.market.reset()
+    self.market_helper.reset()
 
   def __call__(self, obs):
-    # NOTE: these updates needs to be in precise order
+    # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
     #self.stats.update(obs)
-    self.map_helper.update(obs, self.game_state)
+    self.map_helper.update(obs, self.game_state.curr_step)
+    self.item_helper.update(obs) # use & sell
+    self.market_helper.update(obs, self.game_state.curr_step) # buy
 
-    # use & sell
-    self.item_helper.update(obs)
+    """Update finished. Generating features"""
+    # CHECK ME: how item force_use/sell/buy_idx are traslated into actions?
 
-    # buy
-    # self.market.update(obs)
-
-    # UPDATE IS DONE
     # tile dim: (team_size, TILE_NUM_CHANNELS, *TILE_IMG_SIZE)
     tile = self.map_helper.extract_tile_feature()
 

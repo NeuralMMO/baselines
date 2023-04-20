@@ -8,7 +8,6 @@ from nmmo.lib import material
 from nmmo.systems.item import ItemState
 from nmmo.io import action
 
-from feature_extractor.game_state import GameState
 from feature_extractor.entity_helper import EntityHelper
 
 from model.model import ModelArchitecture
@@ -65,9 +64,9 @@ class MapHelper:
     self.poison_map = self._get_init_poison_map()
     self.entity_map = None
 
-  def update(self, obs: Dict[int, Any], game_state: GameState):
+  def update(self, obs: Dict[int, Any], curr_step: int):
     # obs for this team, key: ent_id
-    if game_state.curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
+    if curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
       self.poison_map += 1  # poison shrinking
 
     self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay

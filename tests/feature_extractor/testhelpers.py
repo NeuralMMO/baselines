@@ -49,7 +49,11 @@ class FeaturizerTestTemplate(unittest.TestCase):
 
 
 def provide_item(realm: Realm, ent_id: int,
-                 item: Item, level: int, quantity: int=1):
+                 item: Item, level: int,
+                 quantity: int=1,
+                 list_price=0):
   for _ in range(quantity):
-    realm.players[ent_id].inventory.receive(
-      item(realm, level=level))
+    item_inst = item(realm, level=level)
+    realm.players[ent_id].inventory.receive(item_inst)
+    if list_price > 0:
+      item_inst.listed_price.update(list_price)
