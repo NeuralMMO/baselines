@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 
@@ -66,7 +66,7 @@ class EntityHelper:
   # merge all the member observations and denormalize them into
   # self._entities, self._member_location, self._entity_features
   def update(self, obs: Dict) -> None:
-    self._entities = {} # id -> entity_ob
+    self._entities = {} # id -> entity_ob (1 row)
     self.member_location = {} # id -> (row, col)
     self._entity_features = {} # id -> entity_features
 
@@ -88,24 +88,24 @@ class EntityHelper:
   def team_features_and_mask(self, map_helper):
     team_members_features = np.zeros((self.team_size, self.n_self_feat))
     team_mask = np.zeros(self.team_size, dtype=np.float32)
-    for idx in range(self.team_size):
-      agent_id = self.pos_to_agent_id(idx)
+    for member_pos in range(self.team_size):
+      agent_id = self.pos_to_agent_id(member_pos)
 
       if agent_id not in self._entity_features:
-        team_mask[idx] = 1
+        team_mask[member_pos] = 1
         continue
 
-      if idx in self.member_location:
-        (row, col) = self.member_location[idx]
+      if member_pos in self.member_location:
+        (row, col) = self.member_location[member_pos]
         nearby_features = map_helper.nearby_features(row, col)
       else:
         nearby_features = map_helper.dummy_nearby_features()
 
-      team_members_features[idx] = np.concatenate([
+      team_members_features[member_pos] = np.concatenate([
         self._entity_features[agent_id],
         self._team_feature,
-        self._team_position_feature[idx],
-        self._professions_feature[idx],
+        self._team_position_feature[member_pos],
+        self._professions_feature[member_pos],
         nearby_features
       ])
 
@@ -114,37 +114,44 @@ class EntityHelper:
   def npcs_features_and_mask(self):
     n_npc_considered = ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED
     npc_features = np.zeros((self.team_size, n_npc_considered,
-                             ModelArchitecture.ENTITY_NUM_FEATURES),
-                             dtype=np.float32)
-    npc_mask = np.ones((self.team_size, n_npc_considered), dtype=np.float32)
-    for idx in range(self.team_size):
-      npc_features[idx], npc_mask[idx] = self._nearby_entity_features(
-        idx, n_npc_considered,
-        lambda id: id < 0
-      )
-    return npc_features, npc_mask
+                            ModelArchitecture.ENTITY_NUM_FEATURES))
+    npc_mask = np.ones((self.team_size, n_npc_considered))
+    npc_target = np.zeros((self.team_size, n_npc_considered))
+
+    for member_pos in range(self.team_size):
+      # pylint: disable=unbalanced-tuple-unpacking
+      npc_features[member_pos], npc_mask[member_pos], npc_target[member_pos] = \
+        self._nearby_entity_features(member_pos, n_npc_considered, lambda id: id < 0)
+
+    return npc_features.astype(np.float32), \
+           npc_mask.astype(np.float32), \
+           npc_target.astype(np.float32)
 
   def enemies_features_and_mask(self):
     n_enemy_considered = ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED
     enemy_features = np.zeros((self.team_size, n_enemy_considered,
-                               ModelArchitecture.ENTITY_NUM_FEATURES),
-                               dtype=np.float32)
-    enemy_mask = np.ones((self.team_size, n_enemy_considered), dtype=np.float32)
+                              ModelArchitecture.ENTITY_NUM_FEATURES))
+    enemy_mask = np.ones((self.team_size, n_enemy_considered))
+    enemy_target = np.zeros((self.team_size, n_enemy_considered))
 
-    for idx in range(self.team_size):
-      enemy_features[idx], enemy_mask[idx] = self._nearby_entity_features(
-        idx, n_enemy_considered,
-        lambda id: id not in self._team_agent_ids
-      )
-    return enemy_features, enemy_mask
+    for member_pos in range(self.team_size):
+      # pylint: disable=unbalanced-tuple-unpacking
+      enemy_features[member_pos], enemy_mask[member_pos], enemy_target[member_pos] = \
+        self._nearby_entity_features(member_pos, n_enemy_considered,
+                lambda id: (id > 0) and (id not in self._team_agent_ids))
+
+    return enemy_features.astype(np.float32), \
+           enemy_mask.astype(np.float32), \
+           enemy_target.astype(np.float32)
 
   # find closest entities matching filter_func
   def _nearby_entity_features(self, member_pos,
                               max_entities: int,
-                              filter_func: Callable)-> Tuple[np.ndarray, np.ndarray]:
-    features = np.zeros((max_entities, ModelArchitecture.ENTITY_NUM_FEATURES),
-                        dtype=np.float32)
-    mask = np.ones(max_entities, dtype=np.float32)
+                              filter_func) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    features = np.zeros((max_entities, ModelArchitecture.ENTITY_NUM_FEATURES))
+    # NOTE: mask=1 indicates out-of-visual-range
+    mask = np.ones(max_entities)
+    attack_target = np.zeros(max_entities)
 
     if member_pos not in self.member_location:
       return features, mask
@@ -160,23 +167,19 @@ class EntityHelper:
 
     nearby_entities = sorted(nearby_entities)[:max_entities]
     for idx, (dist, ent_id) in enumerate(nearby_entities):
+      if dist <= ATK_RANGE: # NOTE: realikun did not attack neutral npcs
+        attack_target[idx] = ent_id
       if dist < AWARE_RANGE:
         features[idx] = self._entity_features[ent_id]
         mask[idx] = 0
 
-    return features, mask
+    return features, mask, attack_target
 
-  # CHECK ME: legal_target seems to be relevant to some code in action.py and/or target_tracker.py
-  #   Does this belong here?
-  #   N_NPC_CONSIDERED and N_EMENY_CONSIDERED also seem relevant
-  # def legal_target(self, obs):
-  #   pass
-  #   # 'target_t': {i: obs[i]["ActionTargets"][action.Attack][action.Target]
-  #                 for i in range(self.team_size)},
-  #   first npc, then enemy
-  #   target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)
-  #   no_target = np.sum(target_attackable, axis=-1, keepdims=True) == 0
-  #   return np.concatenate([target_attackable, no_target], axis=-1)
+  @staticmethod
+  def legal_target(npc_target, enemy_target):
+    target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)
+    no_target = np.sum(target_attackable, axis=-1, keepdims=True) == 0
+    return np.concatenate([target_attackable, no_target], axis=-1).astype(np.float32)
 
   def _extract_entity_features(self, entity_observation: np.ndarray) -> np.ndarray:
     play_area = self._config.MAP_SIZE - 2*self._config.MAP_BORDER

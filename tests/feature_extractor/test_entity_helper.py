@@ -105,24 +105,29 @@ class TestEntityHelper(unittest.TestCase):
   def test_npcs_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    npc_features, npc_mask = self.entity_helper.npcs_features_and_mask()
+    npc_features, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
 
     self.assertEqual(npc_features.shape, (self.team_size,
                                           ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED,
                                           ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(npc_mask.shape, (self.team_size,
                                       ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
+    self.assertEqual(npc_target.shape, (self.team_size,
+                                        ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
+
 
   def test_enemies_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    enemy_features, enemy_mask = self.entity_helper.enemies_features_and_mask()
+    enemy_features, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
 
     self.assertEqual(enemy_features.shape, (self.team_size,
                                             ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
                                             ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(enemy_mask.shape, (self.team_size,
                                         ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
+    self.assertEqual(enemy_target.shape, (self.team_size,
+                                          ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
 
   def test_choose_professions(self):
     # pylint: disable=protected-access

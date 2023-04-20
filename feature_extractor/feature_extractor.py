@@ -24,6 +24,9 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.game_state = GameState(config, team_size)
 
     # NOTE: target_tracker merged to entity_helper
+    # CHECK ME: if the featurizer is not used for action_translation,
+    #   target tracking won't work, as these were set at trans_action
+    #   where attack actions are issued
     self.entity_helper = EntityHelper(config, self._team_helper, team_id)
     self.stat_helper = StatHelper(config, self.entity_helper)
 
@@ -67,11 +70,13 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
 
     # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
     # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
-    npc, npc_mask = self.entity_helper.npcs_features_and_mask()
+    # npc_target_dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
+    npc, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
 
     # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
     # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
-    enemy, enemy_mask = self.entity_helper.enemies_features_and_mask()
+    # enemy_target dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
+    enemy, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
 
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
@@ -89,12 +94,8 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'game': game,
       'legal': {
         'move': self.map_helper.legal_moves(obs), # dim: (team_size, 4)
-        # 'target': np.zeros((self.team_size, 19), dtype=np.float32),
-        # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
-        # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),
-
-        # xcxc: check dimensions
-        # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),
+        # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
+        'target': self.entity_helper.legal_target(npc_target, enemy_target),
         'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
         'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
       },
@@ -103,5 +104,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     }
     return state
 
-def trans_action(self, actions):
-  return self.action.trans_actions(actions)
+  # trying to merge action.py to here
+  def trans_action(self, actions):
+    pass
+    #return self.action.trans_actions(actions)
