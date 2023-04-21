@@ -54,6 +54,9 @@ if __name__ == "__main__":
   parser.add_argument("--resume_from", type=str, default=None,
       help="path to resume from (default: None)")
 
+  parser.add_argument("--learning_rate", type=float, default=0.00001,
+      help="learning rate (default: 0.00001)")
+
   args = parser.parse_args()
 
   if torch.cuda.is_available():
@@ -133,7 +136,7 @@ if __name__ == "__main__":
       resume_from_path=args.resume_from,
 
       # PPO
-      learning_rate=0.00001,
+      learning_rate=args.learning_rate,
       clip_coef=0.2, # ratio_clip
       # dual_clip_c=3.,
       ent_coef=0.001 # entropy_loss_weight,
