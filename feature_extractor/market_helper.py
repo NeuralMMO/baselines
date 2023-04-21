@@ -41,6 +41,9 @@ class MarketHelper:
     pass
 
   def update(self, obs, curr_step: int):
+    if not self._config.EXCHANGE_SYSTEM_ENABLED:
+      return
+
     self.curr_step = curr_step
     self._item.force_buy_idx = [None] * self._team_size
 

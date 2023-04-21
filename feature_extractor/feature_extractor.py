@@ -32,6 +32,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.stat_helper = StatHelper(config, self.entity_helper)
 
     self.map_helper = MapHelper(config, self.entity_helper)
+
     self.item_helper = ItemHelper(config, self.entity_helper)
     self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
@@ -43,11 +44,12 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.item_helper.reset()
     self.market_helper.reset()
 
-  def __call__(self, obs):
+  def __call__(self, obs, current_tick):
     # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
     self.map_helper.update(obs, self.game_state.curr_step)
+
     self.item_helper.update(obs) # use & sell
     self.market_helper.update(obs, self.game_state.curr_step) # buy
 

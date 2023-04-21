@@ -119,7 +119,6 @@ class EntityHelper:
     npc_target = np.zeros((self.team_size, n_npc_considered))
 
     for member_pos in range(self.team_size):
-      # pylint: disable=unbalanced-tuple-unpacking
       npc_features[member_pos], npc_mask[member_pos], npc_target[member_pos] = \
         self._nearby_entity_features(member_pos, n_npc_considered, lambda id: id < 0)
 
@@ -135,7 +134,6 @@ class EntityHelper:
     enemy_target = np.zeros((self.team_size, n_enemy_considered))
 
     for member_pos in range(self.team_size):
-      # pylint: disable=unbalanced-tuple-unpacking
       enemy_features[member_pos], enemy_mask[member_pos], enemy_target[member_pos] = \
         self._nearby_entity_features(member_pos, n_enemy_considered,
                 lambda id: (id > 0) and (id not in self._team_agent_ids))
@@ -154,7 +152,7 @@ class EntityHelper:
     attack_target = np.zeros(max_entities)
 
     if member_pos not in self.member_location:
-      return features, mask
+      return features, mask, attack_target
 
     (row, col) = self.member_location[member_pos]
     nearby_entities = []

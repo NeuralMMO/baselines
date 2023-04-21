@@ -170,6 +170,9 @@ class ItemHelper:
     }
 
   def update(self, obs: Dict[int, Any]):
+    if not self._config.ITEM_SYSTEM_ENABLED:
+      return
+
     self._reset_obs_best_force()
     self._evaluate_best_item(obs)
     self._equip_best_item(obs)
@@ -393,6 +396,12 @@ class ItemHelper:
     return _legal_sell
 
   def extract_item_feature(self):
+    if not self._config.ITEM_SYSTEM_ENABLED:
+      return (
+        np.zeros((self._team_size, 1)),
+        np.zeros((self._team_size, 1, ModelArchitecture.ITEM_NUM_FEATURES)),
+      )
+
     inv_capacity = self._config.ITEM_INVENTORY_CAPACITY
     dummy_item_types = np.zeros(inv_capacity)
     dummy_item_arrs = np.zeros((inv_capacity, ModelArchitecture.ITEM_NUM_FEATURES))
