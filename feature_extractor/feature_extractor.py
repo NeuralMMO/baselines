@@ -1,16 +1,14 @@
-
 import nmmo
 import numpy as np
 
 import pufferlib.emulation
-from feature_extractor import map_helper
 
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
-from feature_extractor.stats import Stats
-from feature_extractor.target_tracker import TargetTracker
-from model.model import ModelArchitecture
+from feature_extractor.item_helper import ItemHelper
+from feature_extractor.market_helper import MarketHelper
+from feature_extractor.stat_helper import StatHelper
 
 from team_helper import TeamHelper
 
@@ -19,56 +17,68 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     super().__init__(teams, team_id)
     self._config = config
 
-    self._team_id = team_id
     self._team_helper = TeamHelper(teams)
+    self._team_id = team_id
     team_size = self._team_helper.team_size[team_id]
 
     self.game_state = GameState(config, team_size)
-    self.map_helper = MapHelper(config, team_id, self._team_helper)
-    self.target_tracker = TargetTracker(self.team_size)
-    self.stats = Stats(config, self.team_size, self.target_tracker)
 
-    self.entity_helper = EntityHelper(
-      config,
-      self._team_helper, team_id,
-      self.target_tracker,
-      self.map_helper
-    )
+    # NOTE: target_tracker merged to entity_helper
+    # CHECK ME: if the featurizer is not used for action_translation,
+    #   target tracking won't work, as these were set at trans_action
+    #   where attack actions are issued
+    self.entity_helper = EntityHelper(config, self._team_helper, team_id)
+    self.stat_helper = StatHelper(config, self.entity_helper)
 
-    # self.inventory = Inventory(config)
-    # self.market = Market(config)
+    self.map_helper = MapHelper(config, self.entity_helper)
+    self.item_helper = ItemHelper(config, self.entity_helper)
+    self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
   def reset(self, init_obs):
     self.game_state.reset(init_obs)
     self.map_helper.reset()
-    self.target_tracker.reset(init_obs)
-    self.stats.reset()
+    self.stat_helper.reset()
     self.entity_helper.reset(init_obs)
-    # self.inventory.reset()
-    # self.market.reset()
+    self.item_helper.reset()
+    self.market_helper.reset()
 
-  def __call__(self, obs, step):
+  def __call__(self, obs):
+    # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
-    self.stats.update(obs)
-    self.map_helper.update(obs, self.game_state)
+    self.map_helper.update(obs, self.game_state.curr_step)
+    self.item_helper.update(obs) # use & sell
+    self.market_helper.update(obs, self.game_state.curr_step) # buy
 
-    # use & sell
-    # self.inventory.update(obs)
+    # CHECK ME: we can get better stat from the event log. Do we need stat_helper?
+    self.stat_helper.update(obs)
 
-    # buy
-    # self.market.update(obs)
+    """Update finished. Generating features"""
+    # CHECK ME: how item force_use/sell/buy_idx are traslated into actions?
 
-    tile = self.map_helper.extract_tile_feature(self.entity_helper)
+    # tile dim: (team_size, TILE_NUM_CHANNELS, *TILE_IMG_SIZE)
+    tile = self.map_helper.extract_tile_feature()
 
-    # item_type, item = self.inventory.extract_item_features(obs)
-    item_type = np.zeros((self.team_size, 1), dtype=np.float32)
-    item = np.zeros((self.team_size, 1, ModelArchitecture.ITEM_NUM_FEATURES), dtype=np.float32)
+    # item_type dim: (team_size, config.ITEM_INVENTORY_CAPACITY)
+    # item dim: (team_size, config.ITEM_INVENTORY_CAPACITY, ITEM_NUM_FEATURES)
+    item_type, item = self.item_helper.extract_item_feature()
 
-    team, team_mask = self.entity_helper.team_features_and_mask()
-    npc, npc_mask = self.entity_helper.npcs_features_and_mask()
-    enemy, enemy_mask = self.entity_helper.enemies_features_and_mask()
+    # team does NOT include legal actions
+    # team dim: (team_size, SELF_NUM_FEATURES - sum(ACTION_NUM_DIM.values())
+    # team_mask dim: (team_size)
+    team, team_mask = self.entity_helper.team_features_and_mask(self.map_helper)
 
+    # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
+    # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
+    # npc_target_dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
+    npc, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
+
+    # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
+    # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
+    # enemy_target dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
+    enemy, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
+
+    # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
 
     state = {
@@ -83,17 +93,18 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'enemy_mask': enemy_mask,
       'game': game,
       'legal': {
-        'move': self.map_helper.legal_moves(obs)[:,0:4],
-        # 'target': np.zeros((self.team_size, 19), dtype=np.float32),
-        # 'use': np.zeros((self.team_size, 3), dtype=np.float32),
-        # 'sell': np.zeros((self.team_size, 3), dtype=np.float32),
-
-        # xcxc
-        # 'target': self.entity_helper.legal_target(obs, self.npc_tgt, self.enemy_tgt),
-        # 'use': inventory.legal_use(),
-        # 'sell': inventory.legal_sell(),
+        'move': self.map_helper.legal_moves(obs), # dim: (team_size, 4)
+        # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
+        'target': self.entity_helper.legal_target(npc_target, enemy_target),
+        'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
+        'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
       },
-      'prev_act': self.game_state.previous_actions(),
+      'prev_act': self.game_state.previous_actions(), # dim (self.team_size, 4) for now
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
     return state
+
+  # trying to merge action.py to here
+  def trans_action(self, actions):
+    pass
+    #return self.action.trans_actions(actions)

@@ -33,11 +33,14 @@ class ModelArchitecture:
   ENTITY_NUM_NPCS_CONSIDERED = 9
   ENTITY_NUM_ENEMIES_CONSIDERED = 9
 
-  GAME_NUM_FEATURES = 26
+  # the game progress is encoded with multi-hot-generator
+  PROGRESS_NUM_FEATURES = 16 # index=int(1+16*curr_step/config.HORIZON)
+  # game_progress (1), n_alive/team_size (1), n_progress_feat, team_size
+  GAME_NUM_FEATURES = 1 + 1 + PROGRESS_NUM_FEATURES + NUM_PLAYERS_PER_TEAM
 
   NEARBY_NUM_FEATURES = 205
 
-  # Melee, Ranged, Magic
+  # Melee, Ranged, Magic - only considering combat types
   NUM_PROFESSIONS = 3
 
   SELF_NUM_FEATURES = (

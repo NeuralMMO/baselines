@@ -1,11 +1,9 @@
-from typing import Callable, Dict, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 
 import nmmo
 from nmmo.entity.entity import EntityState
-
-from feature_extractor.target_tracker import TargetTracker
 
 from team_helper import TeamHelper
 
@@ -26,12 +24,8 @@ N_ATK_TYPE = len(ATK_TYPE)
 
 class EntityHelper:
   def __init__(self, config: nmmo.config.Config,
-               team_helper: TeamHelper, team_id: int,
-               target_tracker: TargetTracker, map_helper) -> None:
-
+               team_helper: TeamHelper, team_id: int) -> None:
     self._config = config
-    self._target_tracker = target_tracker
-    self._map_helper = map_helper
     self._team_helper = team_helper
 
     self._team_id = team_id
@@ -44,6 +38,10 @@ class EntityHelper:
     self._entities = {}
     self.member_location = {}
     self._entity_features = {}
+
+    # CHECK ME: target_tracker merged to entity_helper
+    # NOTE: attack_target is updated in _trans_attack()
+    self.attack_target = None
 
     self._team_feature = one_hot_generator(
       self._team_helper.num_teams, int(self._team_id))
@@ -61,13 +59,14 @@ class EntityHelper:
                        ModelArchitecture.NEARBY_NUM_FEATURES
 
   def reset(self, init_obs: Dict) -> None:
+    self.attack_target = [None] * self.team_size
     self._choose_professions()
     self.update(init_obs)
 
   # merge all the member observations and denormalize them into
   # self._entities, self._member_location, self._entity_features
   def update(self, obs: Dict) -> None:
-    self._entities = {} # id -> entity_ob
+    self._entities = {} # id -> entity_ob (1 row)
     self.member_location = {} # id -> (row, col)
     self._entity_features = {} # id -> entity_features
 
@@ -81,68 +80,78 @@ class EntityHelper:
         self._entity_features[ent_id] = self._extract_entity_features(entity_ob)
 
       # update the location of each team member
-      agent_pos = self._team_helper.agent_position(agent_id)
+      agent_pos = self.agent_id_to_pos(agent_id)
       if agent_id in self._entities:
         row, col = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
         self.member_location[agent_pos] = (int(row), int(col))
 
-  def team_features_and_mask(self):
+  def team_features_and_mask(self, map_helper):
     team_members_features = np.zeros((self.team_size, self.n_self_feat))
-    team_mask = np.zeros(self.team_size)
-    for idx in range(self.team_size):
-      agent_id = self._team_helper.agent_id(self._team_id, idx)
+    team_mask = np.zeros(self.team_size, dtype=np.float32)
+    for member_pos in range(self.team_size):
+      agent_id = self.pos_to_agent_id(member_pos)
 
       if agent_id not in self._entity_features:
-        team_mask[idx] = 1
+        team_mask[member_pos] = 1
         continue
 
-      if idx in self.member_location:
-        (row, col) = self.member_location[idx]
-        nearby_features = self._map_helper.nearby_features(row, col)
+      if member_pos in self.member_location:
+        (row, col) = self.member_location[member_pos]
+        nearby_features = map_helper.nearby_features(row, col)
       else:
-        nearby_features = self._map_helper.dummy_nearby_features()
+        nearby_features = map_helper.dummy_nearby_features()
 
-      team_members_features[idx] = np.concatenate([
+      team_members_features[member_pos] = np.concatenate([
         self._entity_features[agent_id],
         self._team_feature,
-        self._team_position_feature[idx],
-        self._professions_feature[idx],
+        self._team_position_feature[member_pos],
+        self._professions_feature[member_pos],
         nearby_features
       ])
 
-    return np.array(team_members_features), team_mask
+    return np.array(team_members_features, dtype=np.float32), team_mask
 
   def npcs_features_and_mask(self):
     n_npc_considered = ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED
     npc_features = np.zeros((self.team_size, n_npc_considered,
-                             ModelArchitecture.ENTITY_NUM_FEATURES))
+                            ModelArchitecture.ENTITY_NUM_FEATURES))
     npc_mask = np.ones((self.team_size, n_npc_considered))
-    for idx in range(self.team_size):
-      npc_features[idx], npc_mask[idx] = self._nearby_entity_features(
-        idx, n_npc_considered,
-        lambda id: id < 0
-      )
-    return npc_features, npc_mask
+    npc_target = np.zeros((self.team_size, n_npc_considered))
+
+    for member_pos in range(self.team_size):
+      # pylint: disable=unbalanced-tuple-unpacking
+      npc_features[member_pos], npc_mask[member_pos], npc_target[member_pos] = \
+        self._nearby_entity_features(member_pos, n_npc_considered, lambda id: id < 0)
+
+    return npc_features.astype(np.float32), \
+           npc_mask.astype(np.float32), \
+           npc_target.astype(np.float32)
 
   def enemies_features_and_mask(self):
     n_enemy_considered = ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED
     enemy_features = np.zeros((self.team_size, n_enemy_considered,
-                               ModelArchitecture.ENTITY_NUM_FEATURES))
+                              ModelArchitecture.ENTITY_NUM_FEATURES))
     enemy_mask = np.ones((self.team_size, n_enemy_considered))
+    enemy_target = np.zeros((self.team_size, n_enemy_considered))
 
-    for idx in range(self.team_size):
-      enemy_features[idx], enemy_mask[idx] = self._nearby_entity_features(
-        idx, n_enemy_considered,
-        lambda id: id not in self._team_agent_ids
-      )
-    return enemy_features, enemy_mask
+    for member_pos in range(self.team_size):
+      # pylint: disable=unbalanced-tuple-unpacking
+      enemy_features[member_pos], enemy_mask[member_pos], enemy_target[member_pos] = \
+        self._nearby_entity_features(member_pos, n_enemy_considered,
+                lambda id: (id > 0) and (id not in self._team_agent_ids))
+
+    return enemy_features.astype(np.float32), \
+           enemy_mask.astype(np.float32), \
+           enemy_target.astype(np.float32)
 
   # find closest entities matching filter_func
   def _nearby_entity_features(self, member_pos,
                               max_entities: int,
-                              filter_func: Callable)-> Tuple[np.ndarray, np.ndarray]:
+                              filter_func) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     features = np.zeros((max_entities, ModelArchitecture.ENTITY_NUM_FEATURES))
+    # NOTE: mask=1 indicates out-of-visual-range
     mask = np.ones(max_entities)
+    attack_target = np.zeros(max_entities)
 
     if member_pos not in self.member_location:
       return features, mask
@@ -158,32 +167,30 @@ class EntityHelper:
 
     nearby_entities = sorted(nearby_entities)[:max_entities]
     for idx, (dist, ent_id) in enumerate(nearby_entities):
+      if dist <= ATK_RANGE: # NOTE: realikun did not attack neutral npcs
+        attack_target[idx] = ent_id
       if dist < AWARE_RANGE:
         features[idx] = self._entity_features[ent_id]
         mask[idx] = 0
 
-    return features, mask
+    return features, mask, attack_target
 
-  # CHECK ME: legal_target seems to be relevant to some code in action.py and/or target_tracker.py
-  #   Does this belong here?
-  #   N_NPC_CONSIDERED and N_EMENY_CONSIDERED also seem relevant
-  # def legal_target(self, obs):
-  #   pass
-  #   # 'target_t': {i: obs[i]["ActionTargets"][action.Attack][action.Target]
-  #                 for i in range(self.team_size)},
-  #   first npc, then enemy
-  #   target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)
-  #   no_target = np.sum(target_attackable, axis=-1, keepdims=True) == 0
-  #   return np.concatenate([target_attackable, no_target], axis=-1)
+  @staticmethod
+  def legal_target(npc_target, enemy_target):
+    target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)
+    no_target = np.sum(target_attackable, axis=-1, keepdims=True) == 0
+    return np.concatenate([target_attackable, no_target], axis=-1).astype(np.float32)
 
   def _extract_entity_features(self, entity_observation: np.ndarray) -> np.ndarray:
     play_area = self._config.MAP_SIZE - 2*self._config.MAP_BORDER
     o = entity_observation
     attack_level = max(o[[EntityAttr["melee_level"], EntityAttr["range_level"],
                           EntityAttr["mage_level"]]])
+
+    # CHECK ME: revisit entity feature scalers
     return np.array([
       1.,  # alive mark
-      o[EntityAttr["id"]] in self._target_tracker.target_entity_id,  # attacked by my team
+      o[EntityAttr["id"]] in self.attack_target,  # attacked by my team
       o[EntityAttr["attacker_id"]] < 0,  # attacked by npc
       o[EntityAttr["attacker_id"]] > 0,  # attacked by player
       attack_level / 10., # added the missing feature: o[IDX_ENT_LVL] / 10.
@@ -215,6 +222,8 @@ class EntityHelper:
     ])
 
   def _choose_professions(self):
+    # NOTE: realikun treats only melee, range, mage as professions
+    #   harvesting ammos don't seem to considered seriously
     seed = np.random.randint(N_ATK_TYPE)
     profs = [ATK_TYPE[(seed + i) % N_ATK_TYPE]
               for i in range(self.team_size)]
@@ -225,3 +234,32 @@ class EntityHelper:
     self._professions_feature = [
       one_hot_generator(N_ATK_TYPE, ATK_TYPE.index(prof)) for prof in profs
     ]
+
+  #####################################
+  # team-related helper functions
+  def pos_to_agent_id(self, member_pos):
+    return self._team_helper.agent_id(self._team_id, member_pos)
+
+  def is_pos_alive(self, member_pos):
+    return member_pos in self.member_location
+
+  def is_agent_in_team(self, agent_id):
+    return agent_id in self._team_agent_ids
+
+  def agent_id_to_pos(self, agent_id):
+    return self._team_helper.agent_position(agent_id)
+
+  def agent_team(self, agent_id):
+    return self._team_helper.team_and_position_for_agent[agent_id][0]
+
+  def agent_or_none(self, agent_id):
+    if agent_id not in self._entities:
+      return None
+
+    info = EntityState.parse_array(self._entities[agent_id].astype(np.int32))
+    # add level for using armors
+    info.level = max(
+      getattr(info, skill + '_level')
+      for skill in ['melee', 'range', 'mage', 'fishing', 'herbalism',
+                    'prospecting', 'carving', 'alchemy'])
+    return info

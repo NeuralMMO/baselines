@@ -9,7 +9,6 @@ from nmmo.datastore.numpy_datastore import NumpyDatastore
 # pylint: disable=import-error
 from feature_extractor.entity_helper import EntityHelper, ATK_TYPE
 from feature_extractor.map_helper import MapHelper
-from feature_extractor.target_tracker import TargetTracker
 
 from team_helper import TeamHelper
 
@@ -39,17 +38,8 @@ class TestEntityHelper(unittest.TestCase):
 
     self.team_id = 0
     self.team_helper = TeamHelper(teams)
-    self.target_tracker = TargetTracker(self.team_size)
-    self.target_tracker.reset({})
-    self.map_helper = MockMapHelper(self.config, self.team_id, self.team_helper)
-
-    self.entity_helper = EntityHelper(
-        self.config,
-        self.team_helper,
-        self.team_id,
-        self.target_tracker,
-        self.map_helper
-    )
+    self.entity_helper = EntityHelper(self.config, self.team_helper, self.team_id)
+    self.map_helper = MockMapHelper(self.config, self.entity_helper)
 
   def _make_entity(self, ent_id, row=0, col=0):
     # pylint: disable=no-member
@@ -61,7 +51,7 @@ class TestEntityHelper(unittest.TestCase):
 
   def create_sample_obs(self, team_id, num_npcs):
     entities = []
-    for i in self.team_helper.team_and_position_for_agent.keys():
+    for i in self.team_helper.team_and_position_for_agent:
       entities.append(self._make_entity(i, row=2*i, col=3*i))
 
     for i in range(1, num_npcs+1):
@@ -101,7 +91,8 @@ class TestEntityHelper(unittest.TestCase):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
 
-    team_features, team_mask = self.entity_helper.team_features_and_mask()
+    team_features, team_mask = \
+      self.entity_helper.team_features_and_mask(self.map_helper)
 
     n_feat = ModelArchitecture.ENTITY_NUM_FEATURES + \
              self.num_team + self.team_size + \
@@ -114,24 +105,29 @@ class TestEntityHelper(unittest.TestCase):
   def test_npcs_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    npc_features, npc_mask = self.entity_helper.npcs_features_and_mask()
+    npc_features, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
 
     self.assertEqual(npc_features.shape, (self.team_size,
                                           ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED,
                                           ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(npc_mask.shape, (self.team_size,
                                       ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
+    self.assertEqual(npc_target.shape, (self.team_size,
+                                        ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
+
 
   def test_enemies_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    enemy_features, enemy_mask = self.entity_helper.enemies_features_and_mask()
+    enemy_features, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
 
     self.assertEqual(enemy_features.shape, (self.team_size,
                                             ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
                                             ModelArchitecture.ENTITY_NUM_FEATURES))
     self.assertEqual(enemy_mask.shape, (self.team_size,
                                         ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
+    self.assertEqual(enemy_target.shape, (self.team_size,
+                                          ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
 
   def test_choose_professions(self):
     # pylint: disable=protected-access
