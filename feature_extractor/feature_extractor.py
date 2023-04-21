@@ -9,6 +9,7 @@ from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
 from feature_extractor.stat_helper import StatHelper
+from model.model import ModelArchitecture
 
 from team_helper import TeamHelper
 
@@ -31,6 +32,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.stat_helper = StatHelper(config, self.entity_helper)
 
     self.map_helper = MapHelper(config, self.entity_helper)
+
     self.item_helper = ItemHelper(config, self.entity_helper)
     self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
@@ -42,11 +44,12 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.item_helper.reset()
     self.market_helper.reset()
 
-  def __call__(self, obs):
+  def __call__(self, obs, current_tick):
     # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
     self.map_helper.update(obs, self.game_state.curr_step)
+
     self.item_helper.update(obs) # use & sell
     self.market_helper.update(obs, self.game_state.curr_step) # buy
 
@@ -81,6 +84,18 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
 
+    legal_moves = {
+      action: np.zeros((self.team_size, dim)) for action, dim in ModelArchitecture.ACTION_NUM_DIM.items()
+    }
+    if "move" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["move"] = self.map_helper.legal_moves(obs)
+
+    # if "style" in ModelArchitecture.ACTION_NUM_DIM:
+    # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
+    # 'target': self.entity_helper.legal_target(npc_target, enemy_target),
+    # 'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
+    # 'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
+
     state = {
       'tile': tile,
       'item_type': item_type,
@@ -92,16 +107,15 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'npc_mask': npc_mask,
       'enemy_mask': enemy_mask,
       'game': game,
-      'legal': {
-        'move': self.map_helper.legal_moves(obs), # dim: (team_size, 4)
-        # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
-        'target': self.entity_helper.legal_target(npc_target, enemy_target),
-        'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
-        'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
-      },
+      'legal': legal_moves,
+      'prev_act': self.game_state.previous_actions(),
+      'reset': np.array([self.game_state.curr_step == 0]),  # for resetting RNN hidden,
+
       'prev_act': self.game_state.previous_actions(), # dim (self.team_size, 4) for now
       'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
+
+
     return state
 
   # trying to merge action.py to here

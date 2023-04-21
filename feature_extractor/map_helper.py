@@ -97,10 +97,7 @@ class MapHelper:
       ent_in_team = [self._entity_helper.is_agent_in_team(agent_id)
                      for agent_id in entities]
       ent_coords = entity_obs[valid_entity, EntityAttr["row"]:EntityAttr["col"]+1].astype(int)
-
-      # CHECK ME: this is for npcs only
-      # NOTE: if we are to remove population_id, we may want to other ways to flag npcs types
-      npc_type = entity_obs[valid_entity, EntityAttr["population_id"]].astype(int)
+      npc_type = entity_obs[valid_entity, EntityAttr["npc_type"]].astype(int)
 
       # merging all team obs into one entity map
       self._mark_point(entity_map[0], ent_coords, ent_in_team) # teammates
@@ -211,9 +208,6 @@ class MapHelper:
       if ent_id in obs:
         moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
 
-      # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
-      # if sum(moves[member_pos]) == 0:
-      #   moves[member_pos][-1] = 1
 
     return moves
 

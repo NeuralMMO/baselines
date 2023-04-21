@@ -34,6 +34,8 @@ if __name__ == "__main__":
       help="number of buffers to use for training (default: 4)")
   parser.add_argument("--num_minibatches", type=int, default=4,
       help="number of minibatches to use for training (default: 4)")
+  parser.add_argument("--update_epochs", type=int, default=4,
+      help="number of update epochs to use for training (default: 4)")
 
   parser.add_argument("--num_agents", type=int, default=16,
       help="number of agents to use for training (default: 16)")
@@ -43,6 +45,14 @@ if __name__ == "__main__":
   parser.add_argument("--wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
 
+  parser.add_argument("--model_path", type=str, default=None,
+      help="path to model to load (default: None)")
+  parser.add_argument("--checkpoint_dir", type=str, default=None,
+      help="path to save models (default: None)")
+  parser.add_argument("--checkpoint_interval", type=int, default=10,
+                      help="interval to save models (default: 10)")
+  parser.add_argument("--resume_from", type=str, default=None,
+      help="path to resume from (default: None)")
 
   args = parser.parse_args()
 
@@ -51,10 +61,17 @@ if __name__ == "__main__":
       args.gpu_id = get_least_utilized_gpu()
       print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
-  config = nmmo.config.Medium()
-  config.PROVIDE_ACTION_TARGETS = True
-  config.MAP_N = args.num_cores*4
-  config.MAP_FORCE_GENERATION = False
+  class TrainConfig(
+    nmmo.config.Medium,
+    nmmo.config.Terrain,
+    nmmo.config.Resource,
+    nmmo.config.Combat):
+
+    PROVIDE_ACTION_TARGETS = True
+    MAP_N = args.num_cores*4
+    MAP_FORCE_GENERATION = False
+
+  config = TrainConfig()
 
   def make_env():
     return nmmo.Env(config)
@@ -77,6 +94,20 @@ if __name__ == "__main__":
     binding
   )
 
+  if args.model_path is not None:
+    print(f"Loading model from {args.model_path}...")
+    agent.load_state_dict(torch.load(args.model_path)["agent_state_dict"])
+
+  if args.checkpoint_dir is not None:
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
+
+  if args.resume_from == "latest":
+    checkpoins = os.listdir(args.checkpoint_dir)
+    if len(checkpoins) > 0:
+      args.resume_from = os.path.join(args.checkpoint_dir, max(checkpoins))
+    else :
+      args.resume_from = None
+
   assert binding is not None
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
@@ -84,14 +115,22 @@ if __name__ == "__main__":
       cuda=torch.cuda.is_available(),
       total_timesteps=10_000_000,
       track=(args.wandb_project is not None),
+
       num_envs=args.num_envs,
       num_cores=args.num_cores,
-      num_buffers=4,
-      num_minibatches=4,
+      num_buffers=args.num_buffers,
+
+      num_minibatches=args.num_minibatches,
+      update_epochs=args.update_epochs,
+
       num_agents=16,
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
+
+      checkpoint_dir=args.checkpoint_dir,
+      checkpoint_interval=args.checkpoint_interval,
+      resume_from_path=args.resume_from,
 
       # PPO
       learning_rate=0.00001,

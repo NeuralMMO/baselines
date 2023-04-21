@@ -1,6 +1,7 @@
 # PufferLib's customized CleanRL PPO + LSTM implementation
 # Adapted from https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_atari_envpoolpy
 
+from collections import defaultdict
 from pdb import set_trace as T
 import os
 import psutil
@@ -48,11 +49,19 @@ def train(
         vf_coef=0.5,
         max_grad_norm=0.5,
         target_kl=None,
+        checkpoint_dir=None,
+        checkpoint_interval=1,
+        resume_from_path=None,
     ):
     program_start = time.time()
     env_id = binding.env_name
     args = pufferlib.utils.dotdict(locals())
     batch_size = int(num_envs * num_agents * num_buffers * num_steps)
+
+    resume_state = None
+    if resume_from_path is not None:
+        print(f"Resuming from from {resume_from_path}...")
+        resume_state = torch.load(resume_from_path)
 
     run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
     if track:
@@ -66,6 +75,7 @@ def train(
             name=run_name,
             monitor_gym=True,
             save_code=True,
+            resume=(resume_state is not None and resume_state["update"] > 0),
         )
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -98,6 +108,9 @@ def train(
 
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
+    if resume_state is not None:
+        agent.load_state_dict(resume_state['agent_state_dict'])
+        optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((num_steps, num_buffers, num_envs * num_agents) + binding.single_observation_space.shape).to(device)
@@ -106,9 +119,13 @@ def train(
     rewards = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     dones = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
     values = torch.zeros((num_steps, num_buffers, num_envs * num_agents)).to(device)
+    env_profiles = [defaultdict(float) for e in range(num_buffers*num_envs)]
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
+    if resume_state is not None:
+        global_step = resume_state['global_step']
+
     next_obs, next_done, next_lstm_state = [], [], []
     for i, envs in enumerate(buffers):
         envs.async_reset(seed=seed + int(i*num_cores*envs_per_worker*num_agents))
@@ -122,8 +139,11 @@ def train(
         ))  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
 
     num_updates = total_timesteps // batch_size
+    update_from = 0
+    if resume_state is not None:
+        update_from = resume_state['update']
 
-    for update in range(1, num_updates + 1):
+    for update in range(update_from+1, num_updates + 1):
         epoch_lengths = []
         epoch_returns = []
         epoch_time = time.time()
@@ -302,7 +322,7 @@ def train(
         env_sps = int(epoch_step / env_step_time)
         inference_sps = int(epoch_step / inference_time)
         train_sps = int(epoch_step / train_time)
-        epoch_sps = int(epoch_step / epoch_time)
+        epoch_sps = max(1, int(epoch_step / epoch_time))
 
         remaining = timedelta(seconds=int((total_timesteps - global_step) / epoch_sps))
         uptime = timedelta(seconds=int(time.time() - program_start))
@@ -336,6 +356,27 @@ def train(
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
+
+        profiles = envs.profile()
+        prof_deltas = defaultdict(list)
+        for env_idx, profile in enumerate(profiles):
+            for k, v in profile.items():
+                prof_deltas[k].append(v.elapsed - env_profiles[env_idx][k])
+                env_profiles[env_idx][k] = v.elapsed
+
+        for k, v in prof_deltas.items():
+            writer.add_scalar(f'performance/env/{k}', np.mean(v), global_step)
+
+        if checkpoint_dir is not None and update % checkpoint_interval == 0:
+            save_path = os.path.join(checkpoint_dir, f'{update:06d}.pt')
+            print(f'Saving checkpoint to {save_path}')
+            state = {
+                'update': update,
+                'global_step': global_step,
+                'optimizer_state_dict': optimizer.state_dict(),
+                'agent_state_dict': agent.state_dict(),
+            }
+            torch.save(state, save_path)
 
     envs.close()
     writer.close()

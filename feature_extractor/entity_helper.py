@@ -119,7 +119,6 @@ class EntityHelper:
     npc_target = np.zeros((self.team_size, n_npc_considered))
 
     for member_pos in range(self.team_size):
-      # pylint: disable=unbalanced-tuple-unpacking
       npc_features[member_pos], npc_mask[member_pos], npc_target[member_pos] = \
         self._nearby_entity_features(member_pos, n_npc_considered, lambda id: id < 0)
 
@@ -135,7 +134,6 @@ class EntityHelper:
     enemy_target = np.zeros((self.team_size, n_enemy_considered))
 
     for member_pos in range(self.team_size):
-      # pylint: disable=unbalanced-tuple-unpacking
       enemy_features[member_pos], enemy_mask[member_pos], enemy_target[member_pos] = \
         self._nearby_entity_features(member_pos, n_enemy_considered,
                 lambda id: (id > 0) and (id not in self._team_agent_ids))
@@ -154,7 +152,7 @@ class EntityHelper:
     attack_target = np.zeros(max_entities)
 
     if member_pos not in self.member_location:
-      return features, mask
+      return features, mask, attack_target
 
     (row, col) = self.member_location[member_pos]
     nearby_entities = []
@@ -186,6 +184,7 @@ class EntityHelper:
     o = entity_observation
     attack_level = max(o[[EntityAttr["melee_level"], EntityAttr["range_level"],
                           EntityAttr["mage_level"]]])
+    half_map = self._config.MAP_SIZE // 2
 
     # CHECK ME: revisit entity feature scalers
     return np.array([
@@ -195,18 +194,18 @@ class EntityHelper:
       o[EntityAttr["attacker_id"]] > 0,  # attacked by player
       attack_level / 10., # added the missing feature: o[IDX_ENT_LVL] / 10.
       o[EntityAttr["item_level"]] / 20.,
-      (o[EntityAttr["row"]] - self._config.MAP_SIZE // 2) / self._config.MAP_SIZE // 2,
-      (o[EntityAttr["col"]] - self._config.MAP_SIZE // 2) / self._config.MAP_SIZE // 2,
+      (o[EntityAttr["row"]] - half_map // 2) / half_map,
+      (o[EntityAttr["col"]] - half_map // 2) / half_map,
       o[EntityAttr["time_alive"]] / self._config.HORIZON,
       (o[EntityAttr["row"]] - self._config.MAP_BORDER) / play_area,
       (o[EntityAttr["col"]] - self._config.MAP_BORDER) / play_area,
       o[EntityAttr["id"]] >= 0,  # player
       o[EntityAttr["id"]] in self._team_agent_ids,  # my team
-      o[EntityAttr["population_id"]] == -1,  # passive npc
-      o[EntityAttr["population_id"]] == -2,  # neutral npc
-      o[EntityAttr["population_id"]] == -3,  # hostile npc
+      o[EntityAttr["npc_type"]] == 1,  # passive npc
+      o[EntityAttr["npc_type"]] == 2,  # neutral npc
+      o[EntityAttr["npc_type"]] == 3,  # hostile npc
       o[EntityAttr["damage"]] / 10.,
-      o[EntityAttr["time_alive"]] / self._config.HORIZON,
+      o[EntityAttr["id"]],
       o[EntityAttr["gold"]] / 100.,
       o[EntityAttr["health"]] / 100.,
       o[EntityAttr["food"]] / 100.,
