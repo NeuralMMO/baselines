@@ -21,7 +21,10 @@ USE_RATION = 1
 SELL_POULTICE = 0
 SELL_RATION = 1
 N_MOVE = 4
-#N_ATK_TARGET = N_NPC_CONSIDERED + N_ENEMY_CONSIDERED
+# CHECK ME: these are also in other places
+N_NPC_CONSIDERED = 9
+N_ENEMY_CONSIDERED = 9
+N_ATK_TARGET = N_NPC_CONSIDERED + N_ENEMY_CONSIDERED
 N_ATK_TYPE = 3
 N_USE = 2
 N_SELL = 2
@@ -68,7 +71,7 @@ class Action:
       # change the id from entity_id to index in obs
       entity_obs = self.curr_obs[i]['Entity']
       target_row_id = np.argwhere(
-          entity_obs[:, EntityAttr["id"]] == self.target_entity_id[i]).item()
+          entity_obs[:,EntityAttr["id"]] == self.target_entity_id[i]).item()
       self.target_entity_pop[i] = entity_obs[target_row_id, EntityAttr["population_id"]]
       atk_type = PROF_TO_ATK_TYPE[self.prof[i]]
       raw_actions[i][nmmo_act.Attack] = {
