@@ -5,6 +5,7 @@ import nmmo
 
 # pylint: disable=import-error
 from feature_extractor.game_state import GameState
+from model.model import ModelArchitecture
 
 
 class TestGameState(unittest.TestCase):
@@ -15,8 +16,8 @@ class TestGameState(unittest.TestCase):
     self.game_state = GameState(self.config, self.team_size)
 
   def test_init(self):
-    self.assertEqual(self.game_state.MAX_GAME_LENGTH, self.config.HORIZON)
-    self.assertEqual(self.game_state.TEAM_SIZE, self.team_size)
+    self.assertEqual(self.game_state.max_step, self.config.HORIZON)
+    self.assertEqual(self.game_state.team_size, self.team_size)
     self.assertIsNone(self.game_state.curr_step)
     self.assertIsNone(self.game_state.curr_obs)
     self.assertIsNone(self.game_state.prev_obs)
@@ -52,6 +53,9 @@ class TestGameState(unittest.TestCase):
     expected_n_alive = len(obs.keys())
     self.assertEqual(game_features[1], expected_n_alive / self.team_size)
 
+    # check the feature dim
+    expected_feat_n = 1 + 1 + ModelArchitecture.PROGRESS_NUM_FEATURES + self.team_size
+    self.assertEqual(expected_feat_n, len(game_features))
 
 if __name__ == '__main__':
   unittest.main()

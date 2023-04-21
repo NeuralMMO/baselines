@@ -9,9 +9,6 @@ from nmmo.systems.item import ItemState
 from nmmo.io import action
 
 from feature_extractor.entity_helper import EntityHelper
-from feature_extractor.game_state import GameState
-
-from team_helper import TeamHelper
 
 from model.model import ModelArchitecture
 
@@ -27,7 +24,7 @@ NEARBY_DIST = 9
 TEAMMATE_REPR = 1 / 5.
 ENEMY_REPR = 2 / 5.
 PASSIVE_REPR = 3 / 5.
-PASSAGR_REPR = 4 / 5.
+NEUTRAL_REPR = 4 / 5.
 HOSTILE_REPR = 1.
 
 POISON_CLIP = 20.
@@ -42,13 +39,13 @@ DEPLETION_MAP = {
 }
 
 class MapHelper:
-  def __init__(self, config: nmmo.config.Config, team_id: int, team_helper: TeamHelper) -> None:
+  def __init__(self, config: nmmo.config.Config,
+               entity_helper: EntityHelper) -> None:
     self.config = config
     self.map_size = self.config.MAP_SIZE
 
-    self._team_id = team_id
-    self._team_helper = team_helper
-    self.team_size = team_helper.team_size[team_id]
+    self._entity_helper = entity_helper
+    self._team_size = self._entity_helper.team_size
 
     self.tile_map = None
     self.fog_map = None
@@ -63,13 +60,13 @@ class MapHelper:
   def reset(self):
     self.tile_map = self._get_init_tile_map()
     self.fog_map = np.zeros((self.map_size+1, self.map_size+1))
-    self.visit_map = np.zeros((self.team_size, self.map_size+1, self.map_size+1))
+    self.visit_map = np.zeros((self._team_size, self.map_size+1, self.map_size+1))
     self.poison_map = self._get_init_poison_map()
     self.entity_map = None
 
-  def update(self, obs: Dict[int, Any], game_state: GameState):
+  def update(self, obs: Dict[int, Any], curr_step: int):
     # obs for this team, key: ent_id
-    if game_state.curr_step % 16 == 15:
+    if curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
       self.poison_map += 1  # poison shrinking
 
     self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
@@ -95,10 +92,10 @@ class MapHelper:
 
       # mark team/enemy/npc
       entity_obs = player_obs['Entity']
-      valid_entity = entity_obs[:, EntityAttr["id"]] != 0
+      valid_entity = entity_obs[:,EntityAttr["id"]] != 0
       entities = entity_obs[valid_entity, EntityAttr["id"]]
-      ent_in_team = [self._team_helper.is_agent_in_team(ent, self._team_id)
-                     for ent in entities]
+      ent_in_team = [self._entity_helper.is_agent_in_team(agent_id)
+                     for agent_id in entities]
       ent_coords = entity_obs[valid_entity, EntityAttr["row"]:EntityAttr["col"]+1].astype(int)
       npc_type = entity_obs[valid_entity, EntityAttr["npc_type"]].astype(int)
 
@@ -107,11 +104,11 @@ class MapHelper:
       self._mark_point(entity_map[1], ent_coords,
                        np.logical_and(np.logical_not(ent_in_team), entities > 0)) # enemy
       self._mark_point(entity_map[2], ent_coords, npc_type == -1)  # passive npcs
-      self._mark_point(entity_map[3], ent_coords, npc_type == -2)  # passive-aggressive npcs
+      self._mark_point(entity_map[3], ent_coords, npc_type == -2)  # neutral npcs
       self._mark_point(entity_map[4], ent_coords, npc_type == -3)  # hostile npcs
 
       # update visit map
-      self._mark_point(self.visit_map[self._team_helper.agent_position(ent_id)],
+      self._mark_point(self.visit_map[self._entity_helper.agent_id_to_pos(ent_id)],
                        ent_coords[entities == ent_id],
                        VISITATION_MEMORY)
 
@@ -133,19 +130,19 @@ class MapHelper:
 
     # update the entity map based on all team obs
     self.entity_map = entity_map[0] * TEAMMATE_REPR + entity_map[1] * ENEMY_REPR + \
-      entity_map[2] * PASSIVE_REPR + entity_map[3] * PASSAGR_REPR + entity_map[4] * HOSTILE_REPR
+      entity_map[2] * PASSIVE_REPR + entity_map[3] * NEUTRAL_REPR + entity_map[4] * HOSTILE_REPR
 
   # Returns shape: (TEAM_SIZE, NUM_CHANNELS, IMG_SIZE, IMG_SIZE)
-  def extract_tile_feature(self, entity_helper: EntityHelper):
+  def extract_tile_feature(self):
     img_size = ModelArchitecture.TILE_IMG_SIZE[0]
     dummy_img_feat = np.zeros((ModelArchitecture.TILE_NUM_CHANNELS, img_size, img_size))
     imgs = []
-    for member_pos in range(self.team_size):
-      if member_pos not in entity_helper.member_location:
+    for member_pos in range(self._team_size):
+      if not self._entity_helper.is_pos_alive(member_pos):
         imgs.append(dummy_img_feat)
         continue
 
-      curr_pos = entity_helper.member_location[member_pos]
+      curr_pos = self._entity_helper.member_location[member_pos]
       l, r = int(curr_pos[0] - img_size // 2), int(curr_pos[0] + img_size // 2 + 1)
       u, d = int(curr_pos[1] - img_size // 2), int(curr_pos[1] + img_size // 2 + 1)
       tile_img = self.tile_map[l:r, u:d] / (1 + max(material.All.indices))
@@ -163,7 +160,7 @@ class MapHelper:
       img = np.stack([tile_img, entity_img, poison_img, fog_img, visit_img, *coord_imgs])
       imgs.append(img)
 
-    return np.stack(imgs)
+    return np.stack(imgs).astype(np.float32)
 
   def nearby_features(self, row: int, col: int, nearby_dist=NEARBY_DIST):
     # CHECK ME(kywch): my understanding of this function is to provide
@@ -197,17 +194,20 @@ class MapHelper:
     # fish_arr[-1] = max(0, self.poison_map[row-1, col]) / POISON_CLIP
     # obstacle_arr[-1] = max(0, self.poison_map[row, col-1]) / POISON_CLIP
 
-    return np.array(feat_arr)
+    return np.array(feat_arr, dtype=np.float32)
 
   def dummy_nearby_features(self):
-    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES)
+    return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES, dtype=np.float32)
 
-  def legal_moves(self, obs: Dict[int, Any]):
-    moves = np.zeros((self.team_size, len(action.Direction.edges)))
-    for member_pos in range(self.team_size):
-      ent_id = self._team_helper.agent_id(self._team_id, member_pos)
+  def legal_moves(self, obs):
+    # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
+    # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
+    moves = np.zeros((self._team_size, len(action.Direction.edges)), dtype=np.float32)
+    for member_pos in range(self._team_size):
+      ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
         moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
+
 
     return moves
 

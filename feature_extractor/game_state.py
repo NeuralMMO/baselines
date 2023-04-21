@@ -3,12 +3,13 @@ import nmmo
 import numpy as np
 
 from model.util import multi_hot_generator
+from model.model import ModelArchitecture
 
 
 class GameState:
   def __init__(self, config: nmmo.config.Config, team_size: int):
-    self.MAX_GAME_LENGTH = config.HORIZON
-    self.TEAM_SIZE = team_size
+    self.max_step = config.HORIZON
+    self.team_size = team_size
 
     self.curr_step = None
     self.curr_obs = None
@@ -24,16 +25,18 @@ class GameState:
     self.curr_step += 1
 
   def extract_game_feature(self, obs):
-    game_progress = self.curr_step / self.MAX_GAME_LENGTH
+    n_progress_feat = ModelArchitecture.PROGRESS_NUM_FEATURES
+    game_progress = self.curr_step / self.max_step
     n_alive = len(obs.keys())
     arr = np.array([
       game_progress,
-      n_alive / self.TEAM_SIZE,
-      *multi_hot_generator(n_feature=16, index=int(game_progress*16)+1),
-      *multi_hot_generator(n_feature=self.TEAM_SIZE, index=n_alive),
+      n_alive / self.team_size,
+      *multi_hot_generator(n_feature=n_progress_feat,
+                           index=int(game_progress*n_progress_feat)+1),
+      *multi_hot_generator(n_feature=self.team_size, index=n_alive),
     ])
     return arr
 
   def previous_actions(self):
     # xcxc
-    return np.zeros((self.TEAM_SIZE, 4), dtype=np.float32)
+    return np.zeros((self.team_size, 4), dtype=np.float32)
