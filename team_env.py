@@ -12,6 +12,7 @@ class TeamEnv(ParallelEnv):
     self._team_helper = team_helper
 
     self.possible_agents = list(range(team_helper.num_teams))
+    self._num_alive = None
 
   def action_space(self, team: int) -> gym.Space:
     return gym.spaces.Dict({
@@ -42,8 +43,10 @@ class TeamEnv(ParallelEnv):
     return agent_actions
 
   def reset(self, **kwargs) -> Dict[int, Any]:
+    self._num_alive = {
+      tid: len(team) for tid, team in self._team_helper.teams.items()
+    }
     gym_obs = self._env.reset(**kwargs)
-    ret = self._group_by_team(gym_obs)
     return self._group_by_team(gym_obs)
 
   def step(self, actions: Dict[int, Dict[str, Any]]):
@@ -54,9 +57,13 @@ class TeamEnv(ParallelEnv):
       tid: sum(vals.values()) for tid, vals in self._group_by_team(rewards).items()
     }
     merged_infos = self._group_by_team(infos)
-    merged_dones = {
-      tid: all(vals.values()) for tid, vals in self._group_by_team(dones).items()
-    }
+
+    merged_dones = {}
+    for team_id, team_dones in self._group_by_team(dones).items():
+      self._num_alive[team_id] -= len(team_dones)
+      if self._num_alive[team_id] == 0:
+        merged_dones[team_id] = True
+
     return merged_obs, merged_rewards, merged_dones, merged_infos
 
   ############################################################################

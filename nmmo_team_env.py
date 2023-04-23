@@ -58,6 +58,7 @@ class NMMOTeamEnv(TeamEnv):
     })
 
   def reset(self, **kwargs) -> Dict[int, Any]:
+    print("xcxc reset", self._env.realm.tick)
     obs = super().reset(**kwargs)
     for tid, team_obs in obs.items():
       team_obs = self._convert_team_obs_to_agent_ids(tid, team_obs)
