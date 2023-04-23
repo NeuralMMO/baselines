@@ -35,9 +35,10 @@ class TeamEnv(ParallelEnv):
   def _team_actions_to_agent_actions(self, team_actions: Dict[int, Dict[int, Any]]) -> Dict[int, Any]:
     agent_actions = {}
     for team_id, team_action in team_actions.items():
-      for pos, action in team_action.items():
+      # This was passing in action keys as positions before
+      for pos in range(len(team_action)):
         agent_id = self._team_helper.agent_for_team_and_position[team_id, pos]
-        agent_actions[agent_id] = action
+        agent_actions[agent_id] = {k: v[pos] for k, v in team_action.items()}
     return agent_actions
 
   def reset(self, **kwargs) -> Dict[int, Any]:

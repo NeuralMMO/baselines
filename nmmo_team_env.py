@@ -76,6 +76,7 @@ class NMMOTeamEnv(TeamEnv):
     for tid, team_obs in obs.items():
       obs[tid] = self._feature_extractors[tid](
         self._convert_team_obs_to_agent_ids(tid, team_obs))
+    from pdb import set_trace as T; T()
     return obs, rewards, dones, infos
 
   def _convert_team_obs_to_agent_ids(self, team_id, team_obs):

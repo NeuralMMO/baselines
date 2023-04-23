@@ -17,7 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import pufferlib
 import pufferlib.frameworks.cleanrl
-import pufferlib.vectorization
+import pufferlib.vectorization.multiprocessing
+import pufferlib.vectorization.serial
 
 
 def train(
@@ -99,7 +100,7 @@ def train(
     buffers = []
     for i in range(num_buffers):
         buffers.append(
-                pufferlib.vectorization.RayVecEnv(
+                pufferlib.vectorization.serial.VecEnv(
                     binding,
                     num_workers=num_cores,
                     envs_per_worker=int(envs_per_worker),
