@@ -94,9 +94,9 @@ if __name__ == "__main__":
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
       Policy,
-      # recurrent_cls=MemoryBlock,
-      # recurrent_args=[2048, 4096],
-      # recurrent_kwargs={'num_layers': 1},
+      recurrent_cls=MemoryBlock,
+      recurrent_args=[2048, 4096],
+      recurrent_kwargs={'num_layers': 1},
       )(
     binding
   )
