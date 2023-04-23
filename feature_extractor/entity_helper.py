@@ -51,13 +51,6 @@ class EntityHelper:
       i: one_hot_generator(self.team_size, i) for i in range(self.team_size)
     }
 
-    # calculate the # of player features
-    self.n_self_feat = ModelArchitecture.ENTITY_NUM_FEATURES + \
-                       self._team_helper.num_teams + \
-                       self._team_helper.team_size[team_id] + \
-                       ModelArchitecture.NUM_PROFESSIONS + \
-                       ModelArchitecture.NEARBY_NUM_FEATURES
-
   def reset(self, init_obs: Dict) -> None:
     self.attack_target = [None] * self.team_size
     self._choose_professions()
@@ -86,7 +79,8 @@ class EntityHelper:
         self.member_location[agent_pos] = (int(row), int(col))
 
   def team_features_and_mask(self, map_helper):
-    team_members_features = np.zeros((self.team_size, self.n_self_feat))
+    team_members_features = np.zeros((
+      self.team_size, ModelArchitecture.TEAM_NUM_FEATURES))
     team_mask = np.zeros(self.team_size, dtype=np.float32)
     for member_pos in range(self.team_size):
       agent_id = self.pos_to_agent_id(member_pos)

@@ -38,7 +38,9 @@ class Policy(pufferlib.models.Policy):
 
     self.value_head = torch.nn.Linear(ModelArchitecture.LSTM_HIDDEN, 1)
 
-    self.featurized_single_observation_space = binding.featurized_single_observation_space
+    # self.featurized_single_observation_space = binding.featurized_single_observation_space
+    self.single_observation_space = binding.single_observation_space
+
 
     self.policy_head = PolicyHead(
         ModelArchitecture.LSTM_HIDDEN, ModelArchitecture.ACTION_NUM_DIM)
@@ -50,7 +52,9 @@ class Policy(pufferlib.models.Policy):
 
   def encode_observations(self, env_outputs):
     x = pufferlib.emulation.unpack_batched_obs(
-        self.featurized_single_observation_space, env_outputs
+      # self.featurized_single_observation_space,
+      self.single_observation_space,
+      env_outputs
     )
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]

@@ -128,7 +128,8 @@ def train(
 
     next_obs, next_done, next_lstm_state = [], [], []
     for i, envs in enumerate(buffers):
-        envs.async_reset(seed=seed + int(i*num_cores*envs_per_worker*num_agents))
+        # envs.async_reset(seed=seed + int(i*num_cores*envs_per_worker*num_agents))
+        envs.async_reset()
         o, _, _, info = envs.recv()
         next_obs.append(torch.Tensor(o).to(device))
         next_done.append(torch.zeros((num_envs * num_agents,)).to(device))

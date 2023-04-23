@@ -11,6 +11,9 @@ import argparse
 import os
 import subprocess
 
+from nmmo_team_env import NMMOTeamEnv
+from team_helper import TeamHelper
+
 def get_gpu_memory():
   result = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE, text=True)
   return [int(x) for x in result.stdout.strip().split('\n')]
@@ -75,24 +78,25 @@ if __name__ == "__main__":
     MAP_FORCE_GENERATION = False
 
   config = TrainConfig()
+  team_helper = TeamHelper({i: [i*8+j+1 for j in range(8)] for i in range(16)})
 
   def make_env():
-    return nmmo.Env(config)
+    return NMMOTeamEnv(config, team_helper)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
-    teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
-    featurizer_cls=FeatureExtractor,
-    featurizer_args=[config],
+    # teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
+    # featurizer_cls=FeatureExtractor,
+    # featurizer_args=[config],
     suppress_env_prints=False,
   )
 
   agent = pufferlib.frameworks.cleanrl.make_policy(
       Policy,
-      recurrent_cls=MemoryBlock,
-      recurrent_args=[2048, 4096],
-      recurrent_kwargs={'num_layers': 1},
+      # recurrent_cls=MemoryBlock,
+      # recurrent_args=[2048, 4096],
+      # recurrent_kwargs={'num_layers': 1},
       )(
     binding
   )

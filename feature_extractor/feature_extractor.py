@@ -13,16 +13,16 @@ from model.model import ModelArchitecture
 
 from team_helper import TeamHelper
 
-class FeatureExtractor(pufferlib.emulation.Featurizer):
+class FeatureExtractor():
   def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):
-    super().__init__(teams, team_id)
+    # super().__init__(teams, team_id)
     self._config = config
 
     self._team_helper = TeamHelper(teams)
     self._team_id = team_id
-    team_size = self._team_helper.team_size[team_id]
+    self.team_size = self._team_helper.team_size[team_id]
 
-    self.game_state = GameState(config, team_size)
+    self.game_state = GameState(config, self.team_size)
 
     # NOTE: target_tracker merged to entity_helper
     # CHECK ME: if the featurizer is not used for action_translation,
@@ -44,7 +44,7 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
     self.item_helper.reset()
     self.market_helper.reset()
 
-  def __call__(self, obs, current_tick):
+  def __call__(self, obs):
     # NOTE: these updates needs to be in this precise order
     self.game_state.update(obs)
     self.entity_helper.update(obs)
@@ -110,15 +110,9 @@ class FeatureExtractor(pufferlib.emulation.Featurizer):
       'legal': legal_moves,
       'prev_act': self.game_state.previous_actions(),
       'reset': np.array([self.game_state.curr_step == 0]),  # for resetting RNN hidden,
-
-      'prev_act': self.game_state.previous_actions(), # dim (self.team_size, 4) for now
-      'reset': np.array([self.game_state.curr_step == 0])  # for resetting RNN hidden,
     }
-
 
     return state
 
-  # trying to merge action.py to here
-  def trans_action(self, actions):
-    pass
-    #return self.action.trans_actions(actions)
+  def translate_actions(self, actions):
+    return actions

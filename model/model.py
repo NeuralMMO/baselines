@@ -44,12 +44,16 @@ class ModelArchitecture:
   # Melee, Ranged, Magic - only considering combat types
   NUM_PROFESSIONS = 3
 
-  SELF_NUM_FEATURES = (
+  TEAM_NUM_FEATURES = (
     ENTITY_NUM_FEATURES +
     NUM_TEAMS +
     NUM_PLAYERS_PER_TEAM +
     NUM_PROFESSIONS +
-    NEARBY_NUM_FEATURES +
+    NEARBY_NUM_FEATURES
+  )
+
+  SELF_NUM_FEATURES = (
+    TEAM_NUM_FEATURES +
     GAME_NUM_FEATURES +
     sum(ACTION_NUM_DIM.values())
   )
