@@ -24,10 +24,6 @@ class FeatureExtractor():
 
     self.game_state = GameState(config, self.team_size)
 
-    # NOTE: target_tracker merged to entity_helper
-    # CHECK ME: if the featurizer is not used for action_translation,
-    #   target tracking won't work, as these were set at trans_action
-    #   where attack actions are issued
     self.entity_helper = EntityHelper(config, self._team_helper, team_id)
     self.stat_helper = StatHelper(config, self.entity_helper)
 
@@ -74,14 +70,9 @@ class FeatureExtractor():
     # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
     # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
     # npc_target_dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
-    npc, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
-    self.npc_target = npc_target
-
     # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
     # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
     # enemy_target dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
-    enemy, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
-    self.enemy_target = enemy_target
 
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
@@ -89,25 +80,34 @@ class FeatureExtractor():
     legal_moves = {
       action: np.zeros((self.team_size, dim)) for action, dim in ModelArchitecture.ACTION_NUM_DIM.items()
     }
+
     if "move" in ModelArchitecture.ACTION_NUM_DIM:
       legal_moves["move"] = self.map_helper.legal_moves(obs)
 
-    # if "style" in ModelArchitecture.ACTION_NUM_DIM:
     # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
-    # 'target': self.entity_helper.legal_target(npc_target, enemy_target),
+    if "target" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["target"] = self.entity_helper.legal_target()
+    if "style" in ModelArchitecture.ACTION_NUM_DIM:
+      legal_moves["style"] = np.ones((self.team_size, ModelArchitecture.ACTION_NUM_DIM["style"]))
+
     # 'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
     # 'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
 
     state = {
       'tile': tile,
+
+      'team': team,
+      'team_mask': team_mask,
+
       'item_type': item_type,
       'item': item,
-      'team': team,
-      'npc': npc,
-      'enemy': enemy,
-      'team_mask': team_mask,
-      'npc_mask': npc_mask,
-      'enemy_mask': enemy_mask,
+
+      'npc': self.entity_helper.npc_features,
+      'npc_mask': self.entity_helper.npc_mask,
+
+      'enemy': self.entity_helper.enemy_features,
+      'enemy_mask': self.entity_helper.enemy_mask,
+
       'game': game,
       'legal': legal_moves,
       'prev_act': self.game_state.previous_actions(),
@@ -119,15 +119,18 @@ class FeatureExtractor():
   def translate_actions(self, actions):
     trans_actions = {}
     for position in range(self.team_size):
-      # agent_id = self._team_helper.agent_id(self._team_id, position)
       trans_actions[position] = {
         nmmo.action.Move: {
           nmmo.action.Direction: nmmo.action.Direction.edges[actions['move'][position]]
         },
-        # nmmo.action.Attack: {
-        #   nmmo.action.Target: self.enemy_target(actions['target'][position]),
-        #   nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
-        # },
       }
+      if "target" in actions:
+        target_id = self.entity_helper.set_attack_target(position, actions['target'][position])
+        if target_id != 0:
+          trans_actions[position][nmmo.action.Attack] = {
+            nmmo.action.Target: target_id,
+            nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
+          }
+
 
     return trans_actions
