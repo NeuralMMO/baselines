@@ -14,18 +14,8 @@ import subprocess
 from nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
-def get_gpu_memory():
-  result = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE, text=True)
-  return [int(x) for x in result.stdout.strip().split('\n')]
-
-def get_least_utilized_gpu():
-  gpu_memory = get_gpu_memory()
-  return gpu_memory.index(min(gpu_memory))
-
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--gpu_id", type=int, default=None,
-      help="GPU ID to use for training, or -1 to pick the least utilized (default: None)")
   parser.add_argument("--num_cores", type=int, default=1,
       help="number of cores to use for training (default: 1)")
   parser.add_argument("--num_steps", type=int, default=16,
@@ -61,11 +51,6 @@ if __name__ == "__main__":
       help="learning rate (default: 0.00001)")
 
   args = parser.parse_args()
-
-  if torch.cuda.is_available():
-    if args.gpu_id == -1:
-      args.gpu_id = get_least_utilized_gpu()
-      print(f"Selected GPU with least memory utilization: {args.gpu_id}")
 
   class TrainConfig(
     nmmo.config.Medium,
@@ -130,7 +115,7 @@ if __name__ == "__main__":
       num_minibatches=args.num_minibatches,
       update_epochs=args.update_epochs,
 
-      num_agents=16,
+      num_agents=team_helper.num_teams,
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
@@ -148,11 +133,7 @@ if __name__ == "__main__":
       # bptt_trunc_len=16,
     )
 
-  if torch.cuda.is_available():
-    with torch.cuda.device(args.gpu_id):
-      train()
-  else:
-    train()
+  train()
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2
