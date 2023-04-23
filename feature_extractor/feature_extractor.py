@@ -75,11 +75,13 @@ class FeatureExtractor():
     # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
     # npc_target_dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
     npc, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
+    self.npc_target = npc_target
 
     # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
     # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
     # enemy_target dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
     enemy, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
+    self.enemy_target = enemy_target
 
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
@@ -115,4 +117,17 @@ class FeatureExtractor():
     return state
 
   def translate_actions(self, actions):
-    return actions
+    trans_actions = {}
+    for position in range(self.team_size):
+      # agent_id = self._team_helper.agent_id(self._team_id, position)
+      trans_actions[position] = {
+        nmmo.action.Move: {
+          nmmo.action.Direction: nmmo.action.Direction.edges[actions['move'][position]]
+        },
+        # nmmo.action.Attack: {
+        #   nmmo.action.Target: self.enemy_target(actions['target'][position]),
+        #   nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
+        # },
+      }
+
+    return trans_actions

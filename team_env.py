@@ -38,7 +38,7 @@ class TeamEnv(ParallelEnv):
       # This was passing in action keys as positions before
       for pos in range(len(team_action)):
         agent_id = self._team_helper.agent_for_team_and_position[team_id, pos]
-        agent_actions[agent_id] = {k: v[pos] for k, v in team_action.items()}
+        agent_actions[agent_id] = {k: v for k, v in team_action[pos].items()}
     return agent_actions
 
   def reset(self, **kwargs) -> Dict[int, Any]:
