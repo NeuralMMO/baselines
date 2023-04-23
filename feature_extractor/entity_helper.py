@@ -39,9 +39,16 @@ class EntityHelper:
     self.member_location = {}
     self._entity_features = {}
 
-    # CHECK ME: target_tracker merged to entity_helper
-    # NOTE: attack_target is updated in _trans_attack()
     self.attack_target = None
+
+    self.enemy_features = None
+    self.enemy_mask = None
+
+    self.npc_features = None
+    self.npc_mask = None
+
+    # NPC_CONSIDERED + ENEMY_CONSIDERED
+    self._entity_targets = None
 
     self._team_feature = one_hot_generator(
       self._team_helper.num_teams, int(self._team_id))
@@ -78,6 +85,21 @@ class EntityHelper:
         row, col = self._entities[agent_id][EntityAttr["row"]:EntityAttr["col"]+1]
         self.member_location[agent_pos] = (int(row), int(col))
 
+    self.enemy_features, self.enemy_mask, enemey_ids = \
+      self._nearby_entities(
+      ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
+      lambda id: id > 0
+    )
+
+    self.npc_features, self.npc_mask, npc_ids = \
+      self._nearby_entities(
+      ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED,
+      lambda id: id < 0
+    )
+
+    self._entity_targets = np.concatenate([npc_ids, enemey_ids], axis=1)
+
+
   def team_features_and_mask(self, map_helper):
     team_members_features = np.zeros((
       self.team_size, ModelArchitecture.TEAM_NUM_FEATURES))
@@ -105,36 +127,19 @@ class EntityHelper:
 
     return np.array(team_members_features, dtype=np.float32), team_mask
 
-  def npcs_features_and_mask(self):
-    n_npc_considered = ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED
-    npc_features = np.zeros((self.team_size, n_npc_considered,
+  def _nearby_entities(self, num_entities, entity_filter):
+    features = np.zeros((self.team_size, num_entities,
                             ModelArchitecture.ENTITY_NUM_FEATURES))
-    npc_mask = np.ones((self.team_size, n_npc_considered))
-    npc_target = np.zeros((self.team_size, n_npc_considered))
+    mask = np.ones((self.team_size, num_entities))
+    targets = np.zeros((self.team_size, num_entities))
 
     for member_pos in range(self.team_size):
-      npc_features[member_pos], npc_mask[member_pos], npc_target[member_pos] = \
-        self._nearby_entity_features(member_pos, n_npc_considered, lambda id: id < 0)
+      features[member_pos], mask[member_pos], targets[member_pos] = \
+        self._nearby_entity_features(member_pos, num_entities, entity_filter)
 
-    return npc_features.astype(np.float32), \
-           npc_mask.astype(np.float32), \
-           npc_target.astype(np.float32)
-
-  def enemies_features_and_mask(self):
-    n_enemy_considered = ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED
-    enemy_features = np.zeros((self.team_size, n_enemy_considered,
-                              ModelArchitecture.ENTITY_NUM_FEATURES))
-    enemy_mask = np.ones((self.team_size, n_enemy_considered))
-    enemy_target = np.zeros((self.team_size, n_enemy_considered))
-
-    for member_pos in range(self.team_size):
-      enemy_features[member_pos], enemy_mask[member_pos], enemy_target[member_pos] = \
-        self._nearby_entity_features(member_pos, n_enemy_considered,
-                lambda id: (id > 0) and (id not in self._team_agent_ids))
-
-    return enemy_features.astype(np.float32), \
-           enemy_mask.astype(np.float32), \
-           enemy_target.astype(np.float32)
+    return features.astype(np.float32), \
+           mask.astype(np.float32), \
+           targets.astype(np.float32)
 
   # find closest entities matching filter_func
   def _nearby_entity_features(self, member_pos,
@@ -167,11 +172,19 @@ class EntityHelper:
 
     return features, mask, attack_target
 
-  @staticmethod
-  def legal_target(npc_target, enemy_target):
-    target_attackable = np.concatenate([npc_target != 0, enemy_target != 0], axis=-1)
+  def legal_target(self):
+    target_attackable = self._entity_targets != 0
     no_target = np.sum(target_attackable, axis=-1, keepdims=True) == 0
     return np.concatenate([target_attackable, no_target], axis=-1).astype(np.float32)
+
+  def set_attack_target(self, member_pos, attack_target_position):
+    attack_target_id = 0
+    targets = self._entity_targets[member_pos]
+    if attack_target_position < len(targets):
+      attack_target_id = targets[attack_target_position]
+
+    self.attack_target[member_pos] = attack_target_id
+    return attack_target_id
 
   def _extract_entity_features(self, entity_observation: np.ndarray) -> np.ndarray:
     play_area = self._config.MAP_SIZE - 2*self._config.MAP_BORDER
