@@ -88,7 +88,7 @@ class EntityHelper:
     self.enemy_features, self.enemy_mask, enemey_ids = \
       self._nearby_entities(
       ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
-      lambda id: id > 0
+      lambda id: id > 0 and id not in self._team_agent_ids
     )
 
     self.npc_features, self.npc_mask, npc_ids = \
