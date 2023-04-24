@@ -76,7 +76,7 @@ class TeamEnv(ParallelEnv):
 
   @property
   def agents(self) -> List[AgentID]:
-    return self.possible_agents
+    return [k for k, v in self._num_alive.items() if v > 0]
 
   def close(self):
     return self._env.close()
