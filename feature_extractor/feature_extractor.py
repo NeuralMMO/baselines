@@ -124,13 +124,13 @@ class FeatureExtractor():
           nmmo.action.Direction: nmmo.action.Direction.edges[actions['move'][position]]
         },
       }
-      if "target" in actions:
-        target_id = self.entity_helper.set_attack_target(position, actions['target'][position])
-        if target_id != 0:
-          trans_actions[position][nmmo.action.Attack] = {
-            nmmo.action.Target: target_id,
-            nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
-          }
+      # if "target" in actions:
+      #   target_id = self.entity_helper.set_attack_target(position, actions['target'][position])
+      #   if target_id != 0:
+      #     trans_actions[position][nmmo.action.Attack] = {
+      #       nmmo.action.Target: target_id,
+      #       nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
+      #     }
 
 
     return trans_actions

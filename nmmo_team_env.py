@@ -77,6 +77,14 @@ class NMMOTeamEnv(TeamEnv):
     for tid, team_obs in obs.items():
       obs[tid] = self._feature_extractors[tid](
         self._convert_team_obs_to_agent_ids(tid, team_obs))
+
+    if len(self.agents) == 1:
+      winner = self.agents[0]
+      print("Last team standing: ", winner)
+      rewards[winner] = rewards.get(winner, 0) + 10
+      dones[winner] = True
+      self._num_alive[winner] == 0
+
     return obs, rewards, dones, infos
 
   def _convert_team_obs_to_agent_ids(self, team_id, team_obs):
