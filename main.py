@@ -126,9 +126,9 @@ if __name__ == "__main__":
 
       # PPO
       learning_rate=args.learning_rate,
-      clip_coef=0.2, # ratio_clip
+      # clip_coef=0.2, # ratio_clip
       # dual_clip_c=3.,
-      ent_coef=0.001 # entropy_loss_weight,
+      # ent_coef=0.001 # entropy_loss_weight,
       # grad_clip=1.0,
       # bptt_trunc_len=16,
     )
