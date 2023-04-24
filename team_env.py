@@ -62,6 +62,7 @@ class TeamEnv(ParallelEnv):
     for team_id, team_dones in self._group_by_team(dones).items():
       self._num_alive[team_id] -= len(team_dones)
       if self._num_alive[team_id] == 0:
+        print(f"xcxc team {team_id} is dead, {self._num_alive}")
         merged_dones[team_id] = True
 
     return merged_obs, merged_rewards, merged_dones, merged_infos
