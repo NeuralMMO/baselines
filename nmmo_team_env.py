@@ -83,7 +83,7 @@ class NMMOTeamEnv(TeamEnv):
       print("Last team standing: ", winner)
       rewards[winner] = rewards.get(winner, 0) + 10
       dones[winner] = True
-      self._num_alive[winner] == 0
+      self._num_alive[winner] = 0
 
     return obs, rewards, dones, infos
 
