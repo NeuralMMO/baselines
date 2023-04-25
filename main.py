@@ -10,6 +10,7 @@ import torch
 import cleanrl_ppo_lstm
 from model.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
+from nmmo_env import NMMOEnv
 from nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
@@ -60,11 +61,13 @@ if __name__ == "__main__":
     nmmo.config.Medium,
     nmmo.config.Terrain,
     nmmo.config.Resource,
-    nmmo.config.Combat):
+    # nmmo.config.Combat
+  ):
 
     PROVIDE_ACTION_TARGETS = True
     MAP_N = args.num_cores*4
     MAP_FORCE_GENERATION = False
+    PLAYER_N = args.num_teams * args.team_size
 
   config = TrainConfig()
   team_helper = TeamHelper({
@@ -76,16 +79,13 @@ if __name__ == "__main__":
 
   def make_env():
     if args.simple:
-      return nmmo.Env(config)
+      return NMMOEnv(config)
 
     return NMMOTeamEnv(config, team_helper)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
-    # teams = {i: [i*8+j+1 for j in range(8)] for i in range(16)},
-    # featurizer_cls=FeatureExtractor,
-    # featurizer_args=[config],
     suppress_env_prints=False,
   )
 
