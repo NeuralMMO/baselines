@@ -37,9 +37,6 @@ if __name__ == "__main__":
   parser.add_argument("--update_epochs", type=int, default=4,
       help="number of update epochs to use for training (default: 4)")
 
-  parser.add_argument("--num_agents", type=int, default=16,
-      help="number of agents to use for training (default: 16)")
-
   parser.add_argument("--wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
   parser.add_argument("--wandb_entity", type=str, default=None,
@@ -54,7 +51,7 @@ if __name__ == "__main__":
   parser.add_argument("--resume_from", type=str, default=None,
       help="path to resume from (default: None)")
 
-  parser.add_argument("--learning_rate", type=float, default=0.00001,
+  parser.add_argument("--learning_rate", type=float, default=0.0001,
       help="learning rate (default: 0.00001)")
 
   args = parser.parse_args()
@@ -94,8 +91,10 @@ if __name__ == "__main__":
 
   if args.simple:
     agent = SimplePolicy.create_policy()(binding)
+    num_agents = args.num_teams * args.team_size
   else:
     agent = BaselinePolicy.create_policy()(binding)
+    num_agents = args.num_teams
 
   if args.model_path is not None:
     print(f"Loading model from {args.model_path}...")
@@ -126,7 +125,7 @@ if __name__ == "__main__":
       num_minibatches=args.num_minibatches,
       update_epochs=args.update_epochs,
 
-      num_agents=team_helper.num_teams,
+      num_agents=num_agents,
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
