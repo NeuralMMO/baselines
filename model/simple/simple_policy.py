@@ -2,12 +2,14 @@ import torch
 import pufferlib
 
 import numpy as np
+from collections import defaultdict
 
 import torch
 from torch import nn
 from torch.nn.utils import rnn
 from model.simple import io, subnets
 from model.simple.model_architecture import EMBED_DIM, HIDDEN_DIM, PLAYER_VISION_DIAMETER
+import nmmo
 
 from nmmo.entity.entity import EntityState
 EntityId = EntityState.State.attr_name_to_col["id"]
@@ -16,6 +18,7 @@ class SimplePolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=HIDDEN_DIM, hidden_size=HIDDEN_DIM):
     super().__init__(binding, input_size, hidden_size)
     self.observation_space = binding.featurized_single_observation_space
+    self.action_space = binding._single_action_space
 
     # xcxc Do these belong here?
     self.state_handler_dict = {}
@@ -32,7 +35,7 @@ class SimplePolicy(pufferlib.models.Policy):
     self.attend = subnets.SelfAttention(EMBED_DIM, HIDDEN_DIM)
 
     self.value_head = nn.Linear(HIDDEN_DIM, 1)
-    self.policy_head = io.Output()
+    self.policy_head = PolicyHead(self.action_space)
 
   def critic(self, hidden):
       return self.value_head(hidden)
@@ -50,16 +53,12 @@ class SimplePolicy(pufferlib.models.Policy):
     agentEmb  = embedded_obs['Entity']
 
     # Pull out rows corresponding to the agent
-    my_id = obs["Game"][:,1]
+    my_id = obs["AgentId"][0]
     entity_ids = obs["Entity"][:,:,EntityId]
     mask = (entity_ids == my_id.unsqueeze(1)) & (entity_ids != 0)
     mask = mask.int()
     row_indices = torch.where(mask.any(dim=1), mask.argmax(dim=1), torch.zeros_like(mask.sum(dim=1)))
     selfEmb = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
-
-    firstEmb = agentEmb[:,0, :]
-    assert torch.all(torch.eq(selfEmb, firstEmb))
-
     selfEmb   = selfEmb.unsqueeze(dim=1).expand_as(agentEmb)
 
     # Concatenate self and agent embeddings
@@ -90,6 +89,7 @@ class SimplePolicy(pufferlib.models.Policy):
   def decode_actions(self, hidden, embeeded_obs, concat=True):
     return self.policy_head(hidden, embeeded_obs)
 
+
   @staticmethod
   def create_policy():
     return pufferlib.frameworks.cleanrl.make_policy(
@@ -97,3 +97,54 @@ class SimplePolicy(pufferlib.models.Policy):
       recurrent_args=[HIDDEN_DIM, HIDDEN_DIM],
       recurrent_kwargs={'num_layers': 1},
     )
+
+class PolicyHead(nn.Module):
+  def __init__(self, action_space):
+    super().__init__()
+
+    self.action_space = action_space
+    self.proj = None
+    if HIDDEN_DIM != EMBED_DIM:
+        self.proj = nn.Linear(HIDDEN_DIM, EMBED_DIM)
+    self.net = io.DiscreteAction(EMBED_DIM)
+    self.arg = nn.Embedding(nmmo.Action.n, EMBED_DIM)
+
+  def names(self, nameMap, args):
+    '''Lookup argument indices from name mapping'''
+    return np.array([nameMap.get(e) for e in args])
+
+  def forward(self, obs, lookup):
+    '''Populates an IO object with actions in-place
+
+    Args:
+        obs    : An IO object specifying observations
+        lookup : A fixed size representation of each entity
+    '''
+    if self.proj:
+        obs = self.proj(obs)
+
+    batch = obs.shape[0]
+
+    rets = defaultdict(dict)
+    for atn in [
+      nmmo.action.Move,
+      # nmmo.action.Attack
+    ]:
+      for arg in atn.edges:
+        if arg.argType == nmmo.action.Fixed:
+            batch = obs.shape[0]
+            idxs  = [e.idx for e in arg.edges]
+            cands = self.arg.weight[idxs]
+            cands = cands.repeat(batch, 1, 1)
+        elif arg == nmmo.action.Target:
+            cands = lookup['Entity']
+        mask = lookup["ActionTargets"][atn][arg]
+
+        logits         = self.net(obs, cands, mask)
+        rets[atn][arg] = logits
+
+    return [
+      #  rets[nmmo.action.Attack][nmmo.action.Style],
+      #  rets[nmmo.action.Attack][nmmo.action.Target],
+       rets[nmmo.action.Move][nmmo.action.Direction],
+    ]

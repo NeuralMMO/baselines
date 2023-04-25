@@ -7,11 +7,12 @@ import numpy as np
 
 from feature_extractor.feature_extractor import FeatureExtractor
 from model.model import ModelArchitecture
+from nmmo_env import NMMOEnv
 from team_env import TeamEnv
 from team_helper import TeamHelper
 
 
-class NMMOTeamEnv(TeamEnv):
+class NMMOTeamEnv(NMMOEnv):
   def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper):
     super().__init__(nmmo.Env(config), team_helper)
 

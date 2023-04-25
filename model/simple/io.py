@@ -1,12 +1,10 @@
 from pdb import set_trace as T
 import numpy as np
 
-from collections import defaultdict
 
 import torch
 from torch import nn
 
-import nmmo
 from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 
@@ -74,53 +72,6 @@ class Input(nn.Module):
         entityLookup[name] = self.attributes[name](embeddings)
 
     return entityLookup
-
-class Output(nn.Module):
-  def __init__(self):
-    super().__init__()
-
-    self.proj = None
-    if HIDDEN_DIM != EMBED_DIM:
-        self.proj = nn.Linear(HIDDEN_DIM, EMBED_DIM)
-    self.net = DiscreteAction(EMBED_DIM)
-    self.arg = nn.Embedding(nmmo.Action.n, EMBED_DIM)
-
-  def names(self, nameMap, args):
-    '''Lookup argument indices from name mapping'''
-    return np.array([nameMap.get(e) for e in args])
-
-  def forward(self, obs, lookup):
-    '''Populates an IO object with actions in-place
-
-    Args:
-        obs    : An IO object specifying observations
-        lookup : A fixed size representation of each entity
-    '''
-    if self.proj:
-        obs = self.proj(obs)
-
-    batch = obs.shape[0]
-
-    rets = defaultdict(dict)
-    for atn in [nmmo.action.Move, nmmo.action.Attack]:
-      for arg in atn.edges:
-        if arg.argType == nmmo.action.Fixed:
-            batch = obs.shape[0]
-            idxs  = [e.idx for e in arg.edges]
-            cands = self.arg.weight[idxs]
-            cands = cands.repeat(batch, 1, 1)
-        elif arg == nmmo.action.Target:
-            cands = lookup['Entity']
-        mask = lookup["ActionTargets"][atn][arg]
-
-        logits         = self.net(obs, cands, mask)
-        rets[atn][arg] = logits
-
-    return [
-       rets[nmmo.action.Attack][nmmo.action.Style],
-       rets[nmmo.action.Attack][nmmo.action.Target],
-       rets[nmmo.action.Move][nmmo.action.Direction],
-    ]
 
 class Action(nn.Module):
   pass
