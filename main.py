@@ -24,8 +24,8 @@ if __name__ == "__main__":
   parser.add_argument("--team_size", type=int, default=8,
       help="number of agents per team to use for training (default: 8)")
 
-  parser.add_argument("--num_cores", type=int, default=1,
-      help="number of cores to use for training (default: 1)")
+  parser.add_argument("--num_cores", type=int, default=None,
+      help="number of cores to use for training (default: num_envs)")
   parser.add_argument("--num_steps", type=int, default=16,
       help="number of steps to use for training (default: 16)")
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
       track=(args.wandb_project is not None),
 
       num_envs=args.num_envs,
-      num_cores=args.num_cores,
+      num_cores=args.num_cores or args.num_envs,
       num_buffers=args.num_buffers,
 
       num_minibatches=args.num_minibatches,
