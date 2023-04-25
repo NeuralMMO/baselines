@@ -56,6 +56,10 @@ class SimplePolicy(pufferlib.models.Policy):
     mask = mask.int()
     row_indices = torch.where(mask.any(dim=1), mask.argmax(dim=1), torch.zeros_like(mask.sum(dim=1)))
     selfEmb = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
+
+    firstEmb = agentEmb[:,0, :]
+    assert torch.all(torch.eq(selfEmb, firstEmb))
+
     selfEmb   = selfEmb.unsqueeze(dim=1).expand_as(agentEmb)
 
     # Concatenate self and agent embeddings
@@ -84,7 +88,7 @@ class SimplePolicy(pufferlib.models.Policy):
     return hidden, embedded_obs
 
   def decode_actions(self, hidden, embeeded_obs, concat=True):
-    return self.policy_head(hidden, embeeded_obs.to(self.device))
+    return self.policy_head(hidden, embeeded_obs)
 
   @staticmethod
   def create_policy():

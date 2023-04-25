@@ -136,7 +136,7 @@ class DiscreteAction(Action):
     logits  = self.net(stim, args)
 
     if mask is not None:
-        mask_value = torch.tensor(torch.finfo(logits.dtype).min, dtype=logits.dtype)
+        mask_value = torch.tensor(torch.finfo(logits.dtype).min, dtype=logits.dtype).to(logits.device)
         logits  = torch.where(mask.bool(), logits, mask_value)
 
     return logits
