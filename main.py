@@ -52,7 +52,7 @@ if __name__ == "__main__":
       help="path to resume from (default: None)")
 
   parser.add_argument("--learning_rate", type=float, default=0.0001,
-      help="learning rate (default: 0.00001)")
+      help="learning rate (default: 0.0001)")
 
   args = parser.parse_args()
 
