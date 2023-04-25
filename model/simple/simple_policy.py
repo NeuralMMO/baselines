@@ -84,7 +84,7 @@ class SimplePolicy(pufferlib.models.Policy):
     return hidden, embedded_obs
 
   def decode_actions(self, hidden, embeeded_obs, concat=True):
-    return self.policy_head(hidden, embeeded_obs)
+    return self.policy_head(hidden, embeeded_obs.to(self.device))
 
   @staticmethod
   def create_policy():
