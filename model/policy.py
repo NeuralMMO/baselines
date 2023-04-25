@@ -1,9 +1,9 @@
 import torch
 import pufferlib
 
-from model.model import EntityEncoder, InteractionBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
+from model.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
 
-class Policy(pufferlib.models.Policy):
+class BaselinePolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
     super().__init__(binding, input_size, hidden_size)
 
@@ -38,7 +38,7 @@ class Policy(pufferlib.models.Policy):
 
     self.value_head = torch.nn.Linear(ModelArchitecture.LSTM_HIDDEN, 1)
 
-    self.featurized_single_observation_space = binding.featurized_single_observation_space
+    self.observation_space = binding.featurized_single_observation_space
     self.single_observation_space = binding.single_observation_space
 
 
@@ -52,7 +52,7 @@ class Policy(pufferlib.models.Policy):
 
   def encode_observations(self, env_outputs):
     x = pufferlib.emulation.unpack_batched_obs(
-      self.featurized_single_observation_space,
+      self.observation_space,
       #self.single_observation_space,
       env_outputs
     )
@@ -112,3 +112,12 @@ class Policy(pufferlib.models.Policy):
     tmp_x['ally'] = h_self[:, :, :ModelArchitecture.ATTENTION_HIDDEN].repeat(1, 2, 1) \
         .unfold(dimension=1, size=na-1, step=1)[:, 1:-1].transpose(2, 3)
     return tmp_x
+
+  @staticmethod
+  def create_policy():
+    return pufferlib.frameworks.cleanrl.make_policy(
+      BaselinePolicy,
+      recurrent_cls=MemoryBlock,
+      recurrent_args=[2048, 4096],
+      recurrent_kwargs={'num_layers': 1},
+    )

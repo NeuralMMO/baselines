@@ -404,7 +404,7 @@ if __name__ == '__main__':
     import model.policy
     binding = pufferlib.registry.nmmo.make_binding()
     agent = pufferlib.frameworks.cleanrl.make_policy(
-        model.policy.Policy,
+        model.policy.BaselinePolicy,
         recurrent_cls=model.model.MemoryBlock,
         #pufferlib.registry.nmmo.Policy,
         recurrent_layers=1

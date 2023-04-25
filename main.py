@@ -1,21 +1,28 @@
-import torch
-import cleanrl_ppo_lstm
-import pufferlib.emulation
-import pufferlib.registry.nmmo
-import pufferlib.frameworks.cleanrl
-import nmmo
-from model.policy import Policy
-from model.model import MemoryBlock
-from feature_extractor.feature_extractor import FeatureExtractor
 import argparse
 import os
-import subprocess
 
+import nmmo
+import pufferlib.emulation
+import pufferlib.frameworks.cleanrl
+import pufferlib.registry.nmmo
+import torch
+
+import cleanrl_ppo_lstm
+from model.policy import BaselinePolicy
+from model.simple.simple_policy import SimplePolicy
 from nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
+  parser.add_argument("--simple", action="store_true",
+                    help="use simple environment (default: False)")
+
+  parser.add_argument("--num_teams", type=int, default=16,
+      help="number of teams to use for training (default: 16)")
+  parser.add_argument("--team_size", type=int, default=8,
+      help="number of agents per team to use for training (default: 8)")
+
   parser.add_argument("--num_cores", type=int, default=1,
       help="number of cores to use for training (default: 1)")
   parser.add_argument("--num_steps", type=int, default=16,
@@ -63,9 +70,17 @@ if __name__ == "__main__":
     MAP_FORCE_GENERATION = False
 
   config = TrainConfig()
-  team_helper = TeamHelper({i: [i*8+j+1 for j in range(8)] for i in range(16)})
+  team_helper = TeamHelper({
+    i: [i*args.team_size+j+1 for j in range(args.team_size)]
+    for i in range(args.num_teams)}
+  )
+  if args.simple:
+    assert args.team_size == 1
 
   def make_env():
+    if args.simple:
+      return nmmo.Env(config)
+
     return NMMOTeamEnv(config, team_helper)
 
   binding = pufferlib.emulation.Binding(
@@ -77,14 +92,10 @@ if __name__ == "__main__":
     suppress_env_prints=False,
   )
 
-  agent = pufferlib.frameworks.cleanrl.make_policy(
-      Policy,
-      recurrent_cls=MemoryBlock,
-      recurrent_args=[2048, 4096],
-      recurrent_kwargs={'num_layers': 1},
-      )(
-    binding
-  )
+  if args.simple:
+    agent = SimplePolicy.create_policy()(binding)
+  else:
+    agent = BaselinePolicy.create_policy()(binding)
 
   if args.model_path is not None:
     print(f"Loading model from {args.model_path}...")
