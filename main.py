@@ -65,7 +65,7 @@ if __name__ == "__main__":
   ):
 
     PROVIDE_ACTION_TARGETS = True
-    MAP_N = args.num_cores*4
+    MAP_N = args.num_env * 4
     MAP_FORCE_GENERATION = False
     PLAYER_N = args.num_teams * args.team_size
 
