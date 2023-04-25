@@ -12,9 +12,9 @@ from team_env import TeamEnv
 from team_helper import TeamHelper
 
 
-class NMMOTeamEnv(NMMOEnv):
+class NMMOTeamEnv(TeamEnv):
   def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper):
-    super().__init__(nmmo.Env(config), team_helper)
+    super().__init__(NMMOEnv(config), team_helper)
 
     self._config = config
     self._feature_extractors = [

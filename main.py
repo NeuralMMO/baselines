@@ -61,12 +61,14 @@ if __name__ == "__main__":
     nmmo.config.Medium,
     nmmo.config.Terrain,
     nmmo.config.Resource,
+    nmmo.config.Progression,
+    # nmmo.config.Profession
     # nmmo.config.Combat
   ):
 
     PROVIDE_ACTION_TARGETS = True
-    MAP_N = args.num_envs * 4
-    MAP_FORCE_GENERATION = False
+    # MAP_N = 20
+    # MAP_FORCE_GENERATION = False
     PLAYER_N = args.num_teams * args.team_size
 
   config = TrainConfig()
