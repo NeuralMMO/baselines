@@ -61,7 +61,7 @@ def train(
     batch_size = int(num_envs * num_agents * num_buffers * num_steps)
 
     resume_state = None
-    wandb_run_id = wandb.util.generate_id()
+    wandb_run_id = None
     if resume_from_path is not None:
         print(f"Resuming from from {resume_from_path}...")
         resume_state = torch.load(resume_from_path)
@@ -79,7 +79,7 @@ def train(
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
-            id=wandb_run_id,
+            id=wandb_run_id or wandb.util.generate_id(),
             monitor_gym=True,
             save_code=True,
             resume="allow",
