@@ -16,31 +16,43 @@ from team_helper import TeamHelper
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--simple", action="store_true",
-                    help="use simple environment (default: False)")
 
-  parser.add_argument("--num_teams", type=int, default=16,
-      help="number of teams to use for training (default: 16)")
-  parser.add_argument("--team_size", type=int, default=8,
-      help="number of agents per team to use for training (default: 8)")
+  parser.add_argument(
+    "--model.arch",
+    dest="model_arch", choices=["realikun", "simple"],
+    default="realikun",
+    help="model architecture (default: realikun)")
 
-  parser.add_argument("--num_cores", type=int, default=None,
+  parser.add_argument(
+    "--env.num_teams", dest="num_teams", type=int, default=16,
+    help="number of teams to use for training (default: 16)")
+  parser.add_argument(
+    "--env.team_size", dest="team_size", type=int, default=8,
+    help="number of agents per team to use for training (default: 8)")
+
+  parser.add_argument(
+    "--rollout.num_cores", dest="num_cores", type=int, default=None,
       help="number of cores to use for training (default: num_envs)")
-  parser.add_argument("--num_steps", type=int, default=16,
-      help="number of steps to use for training (default: 16)")
+  parser.add_argument(
+    "--rollout.num_envs", dest="num_envs", type=int, default=1,
+    help="number of environments to use for training (default: 1)")
+  parser.add_argument(
+    "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
+    help="number of buffers to use for training (default: 4)")
+  parser.add_argument(
+    "--rollout.num_steps", dest="num_steps", type=int, default=16,
+    help="number of steps to rollout (default: 16)")
 
-  parser.add_argument("--num_envs", type=int, default=1,
-      help="number of environments to use for training (default: 1)")
-  parser.add_argument("--num_buffers", type=int, default=4,
-      help="number of buffers to use for training (default: 4)")
-  parser.add_argument("--num_minibatches", type=int, default=4,
-      help="number of minibatches to use for training (default: 4)")
-  parser.add_argument("--update_epochs", type=int, default=4,
-      help="number of update epochs to use for training (default: 4)")
+  parser.add_argument(
+    "--train.num_steps",
+    dest="train_num_steps", type=int, default=10_000_000,
+    help="number of steps to train (default: 10_000_000)")
 
-  parser.add_argument("--wandb_project", type=str, default=None,
+  parser.add_argument(
+    "--wandb.project", dest="wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
-  parser.add_argument("--wandb_entity", type=str, default=None,
+  parser.add_argument(
+    "--wandb.entity", dest="wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
 
   parser.add_argument("--model_path", type=str, default=None,
@@ -52,8 +64,18 @@ if __name__ == "__main__":
   parser.add_argument("--resume_from", type=str, default=None,
       help="path to resume from (default: None)")
 
-  parser.add_argument("--learning_rate", type=float, default=0.0001,
-      help="learning rate (default: 0.0001)")
+  parser.add_argument(
+    "--ppo.num_minibatches",
+    store="ppo_num_minibatches", type=int, default=4,
+    help="number of minibatches to use for training (default: 4)")
+  parser.add_argument(
+    "--ppo.update_epochs",
+    dest="ppo_update_epochs", type=int, default=4,
+    help="number of update epochs to use for training (default: 4)")
+  parser.add_argument(
+    "--ppo.learning_rate", dest="ppo_learning_rate",
+    type=float, default=0.0001,
+    help="learning rate (default: 0.0001)")
 
   args = parser.parse_args()
 
@@ -76,11 +98,12 @@ if __name__ == "__main__":
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
     for i in range(args.num_teams)}
   )
-  if args.simple:
+
+  if args.model_arch == "simple":
     assert args.team_size == 1
 
   def make_env():
-    if args.simple:
+    if args.model_arch == "simple":
       return NMMOEnv(config)
 
     return NMMOTeamEnv(config, team_helper)
@@ -91,7 +114,7 @@ if __name__ == "__main__":
     suppress_env_prints=False,
   )
 
-  if args.simple:
+  if args.model_arch == "simple":
     agent = SimplePolicy.create_policy()(binding)
     num_agents = args.num_teams * args.team_size
   else:
@@ -117,15 +140,15 @@ if __name__ == "__main__":
       binding,
       agent,
       cuda=torch.cuda.is_available(),
-      total_timesteps=10_000_000,
+      total_timesteps=args.train_num_steps,
       track=(args.wandb_project is not None),
 
       num_envs=args.num_envs,
       num_cores=args.num_cores or args.num_envs,
       num_buffers=args.num_buffers,
 
-      num_minibatches=args.num_minibatches,
-      update_epochs=args.update_epochs,
+      num_minibatches=args.ppo_num_minibatches,
+      update_epochs=args.ppo_update_epochs,
 
       num_agents=num_agents,
       num_steps=args.num_steps,
@@ -137,7 +160,7 @@ if __name__ == "__main__":
       resume_from_path=args.resume_from,
 
       # PPO
-      learning_rate=args.learning_rate,
+      learning_rate=args.ppo_learning_rate,
       # clip_coef=0.2, # ratio_clip
       # dual_clip_c=3.,
       # ent_coef=0.001 # entropy_loss_weight,
