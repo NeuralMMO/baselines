@@ -24,6 +24,11 @@ if __name__ == "__main__":
     help="model architecture (default: realikun)")
 
   parser.add_argument(
+    "--model.init_from_path",
+    dest="model_init_from_path", type=str, default=None,
+    help="path to model to load (default: None)")
+
+  parser.add_argument(
     "--env.num_teams", dest="num_teams", type=int, default=16,
     help="number of teams to use for training (default: 16)")
   parser.add_argument(
@@ -47,6 +52,18 @@ if __name__ == "__main__":
     "--train.num_steps",
     dest="train_num_steps", type=int, default=10_000_000,
     help="number of steps to train (default: 10_000_000)")
+  parser.add_argument(
+    "--train.checkpoint_interval",
+    dest="checkpoint_interval", type=int, default=10,
+    help="interval to save models (default: 10)")
+  parser.add_argument(
+    "--train.experiment_name",
+    dest="experiment_name", type=str, default=None,
+    help="experiment name (default: None)")
+  parser.add_argument(
+    "--train.experiments_dir",
+    dest="experiments_dir", type=str, default="experiments",
+    help="experiments directory (default: experiments)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -54,15 +71,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--wandb.entity", dest="wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
-
-  parser.add_argument("--model_path", type=str, default=None,
-      help="path to model to load (default: None)")
-  parser.add_argument("--checkpoint_dir", type=str, default=None,
-      help="path to save models (default: None)")
-  parser.add_argument("--checkpoint_interval", type=int, default=10,
-                      help="interval to save models (default: 10)")
-  parser.add_argument("--resume_from", type=str, default=None,
-      help="path to resume from (default: None)")
 
   parser.add_argument(
     "--ppo.num_minibatches",
@@ -87,10 +95,7 @@ if __name__ == "__main__":
     # nmmo.config.Profession
     # nmmo.config.Combat
   ):
-
     PROVIDE_ACTION_TARGETS = True
-    # MAP_N = 20
-    # MAP_FORCE_GENERATION = False
     PLAYER_N = args.num_teams * args.team_size
 
   config = TrainConfig()
@@ -99,31 +104,20 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
+  policy_cls = BaselinePolicy
   if args.model_arch == "simple":
-    assert args.team_size == 1
-
-  def make_env():
-    if args.model_arch == "simple":
-      return NMMOEnv(config)
-
-    return NMMOTeamEnv(config, team_helper)
+    policy_cls = SimplePolicy
 
   binding = pufferlib.emulation.Binding(
-    env_creator=make_env,
+    env_creator=policy_cls.env_creator(config, team_helper),
     env_name="Neural MMO",
     suppress_env_prints=False,
   )
+  agent = policy_cls.create_policy()(binding)
 
-  if args.model_arch == "simple":
-    agent = SimplePolicy.create_policy()(binding)
-    num_agents = args.num_teams * args.team_size
-  else:
-    agent = BaselinePolicy.create_policy()(binding)
-    num_agents = args.num_teams
-
-  if args.model_path is not None:
-    print(f"Loading model from {args.model_path}...")
-    agent.load_state_dict(torch.load(args.model_path)["agent_state_dict"])
+  if args.model_init_from_path is not None:
+    print(f"Initializing model from {args.model_init_from_path}...")
+    agent.load_state_dict(torch.load(args.model_init_from_path)["agent_state_dict"])
 
   if args.checkpoint_dir is not None:
     os.makedirs(args.checkpoint_dir, exist_ok=True)
@@ -150,7 +144,7 @@ if __name__ == "__main__":
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
 
-      num_agents=num_agents,
+      num_agents=policy_cls.num_agents(team_helper),
       num_steps=args.num_steps,
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,

@@ -2,6 +2,8 @@ import torch
 import pufferlib
 
 from model.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
+from nmmo_team_env import NMMOTeamEnv
+from team_helper import TeamHelper
 
 class BaselinePolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
@@ -121,3 +123,11 @@ class BaselinePolicy(pufferlib.models.Policy):
       recurrent_args=[2048, 4096],
       recurrent_kwargs={'num_layers': 1},
     )
+
+  @staticmethod
+  def env_creator(config, team_helper):
+    return lambda: NMMOTeamEnv(config, team_helper)
+
+  @staticmethod
+  def num_agents(team_helper: TeamHelper):
+     return team_helper.num_teams
