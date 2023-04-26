@@ -12,6 +12,9 @@ from model.simple.model_architecture import EMBED_DIM, HIDDEN_DIM, PLAYER_VISION
 import nmmo
 
 from nmmo.entity.entity import EntityState
+
+from nmmo_env import NMMOEnv
+from team_helper import TeamHelper
 EntityId = EntityState.State.attr_name_to_col["id"]
 
 class SimplePolicy(pufferlib.models.Policy):
@@ -89,7 +92,6 @@ class SimplePolicy(pufferlib.models.Policy):
   def decode_actions(self, hidden, embeeded_obs, concat=True):
     return self.policy_head(hidden, embeeded_obs)
 
-
   @staticmethod
   def create_policy():
     return pufferlib.frameworks.cleanrl.make_policy(
@@ -98,6 +100,13 @@ class SimplePolicy(pufferlib.models.Policy):
       recurrent_kwargs={'num_layers': 1},
     )
 
+  @staticmethod
+  def env_creator(config, team_helper: TeamHelper):
+    return lambda: NMMOEnv(config)
+
+  @staticmethod
+  def num_agents(team_helper: TeamHelper):
+     return sum(len(t) for t in team_helper.teams)
 class PolicyHead(nn.Module):
   def __init__(self, action_space):
     super().__init__()
