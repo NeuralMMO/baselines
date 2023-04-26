@@ -61,9 +61,11 @@ def train(
     batch_size = int(num_envs * num_agents * num_buffers * num_steps)
 
     resume_state = None
+    wandb_run_id = wandb.util.generate_id()
     if resume_from_path is not None:
         print(f"Resuming from from {resume_from_path}...")
         resume_state = torch.load(resume_from_path)
+        wandb_run_id = resume_state['wandb_run_id']
 
     if run_name is None:
         run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
@@ -77,9 +79,10 @@ def train(
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
+            id=wandb_run_id,
             monitor_gym=True,
             save_code=True,
-            resume=(resume_state is not None and resume_state["update"] > 0),
+            resume="allow",
         )
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -380,6 +383,7 @@ def train(
                 'global_step': global_step,
                 'optimizer_state_dict': optimizer.state_dict(),
                 'agent_state_dict': agent.state_dict(),
+                'wandb_run_id': wandb_run_id
             }
             torch.save(state, save_path)
 
@@ -389,40 +393,3 @@ def train(
     if track:
         wandb.finish()
 
-if __name__ == '__main__':
-    if __debug__:
-        print('WARNING: Running in debug mode. This will be slower than normal due to extensive checks in PufferLib emulation. Run with -O to disable debug mode.')
-
-    import sys
-    assert sys.argv[1] in 'nmmo nethack breakout atari'.split()
-
-    cuda = torch.cuda.is_available()
-    track = True # WandB tracking
-
-    # Note: the dependencies for these demos are not currently compatible
-    # Run pip install -e .[atari] or .[nethack] to install the dependencies for a specific demo
-    # This will be resolved in a future update
-    # Neural MMO requires the CarperAI fork of the nmmo-environment repo
-    import pufferlib.registry.nmmo
-    import model.policy
-    binding = pufferlib.registry.nmmo.make_binding()
-    agent = pufferlib.frameworks.cleanrl.make_policy(
-        model.policy.BaselinePolicy,
-        recurrent_cls=model.model.MemoryBlock,
-        #pufferlib.registry.nmmo.Policy,
-        recurrent_layers=1
-    )(binding)
-
-    train(
-        binding,
-        agent,
-        cuda=cuda,
-        total_timesteps=10_000_000,
-        track=track,
-        num_envs=1,
-        num_cores=1,
-        num_minibatches=1,
-        num_agents=128,
-        wandb_project_name='pufferlib',
-        wandb_entity='jsuarez',
-    )
