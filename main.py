@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
   parser.add_argument(
     "--ppo.num_minibatches",
-    store="ppo_num_minibatches", type=int, default=4,
+    dest="ppo_num_minibatches", type=int, default=4,
     help="number of minibatches to use for training (default: 4)")
   parser.add_argument(
     "--ppo.update_epochs",
