@@ -3,7 +3,7 @@ from typing import Dict, List
 
 import nmmo
 from pettingzoo.utils.env import AgentID
-
+import numpy as np
 
 class NMMOEnv(nmmo.Env):
   def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
@@ -31,4 +31,19 @@ class NMMOEnv(nmmo.Env):
       if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.6:
         rewards[agent_id] += 0.5
 
+      rewards[agent_id] = _symlog(rewards[agent_id])
+
     return rewards, infos
+
+def _symlog(value):
+    """Applies symmetrical logarithmic transformation to a float value."""
+    sign = np.sign(value)
+    abs_value = np.abs(value)
+
+    if abs_value >= 1:
+        log_value = np.log10(abs_value)
+    else:
+        log_value = abs_value
+
+    symlog_value = sign * log_value
+    return symlog_value
