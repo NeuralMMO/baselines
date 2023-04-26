@@ -106,7 +106,7 @@ class SimplePolicy(pufferlib.models.Policy):
 
   @staticmethod
   def num_agents(team_helper: TeamHelper):
-     return sum(len(t) for t in team_helper.teams)
+     return sum(len(t) for t in team_helper.teams.values())
 class PolicyHead(nn.Module):
   def __init__(self, action_space):
     super().__init__()
