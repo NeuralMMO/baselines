@@ -66,13 +66,14 @@ def train(
         print(f"Resuming from from {resume_from_path}...")
         resume_state = torch.load(resume_from_path)
         wandb_run_id = resume_state.get('wandb_run_id')
-        print(f"Resuming from run wandb={wandb_run_id}")
+        print(f"Resuming from run wandb_run_id={wandb_run_id}")
 
     if run_name is None:
         run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
 
     if track:
         import wandb
+        wandb_run_id = wandb_run_id or wandb.util.generate_id()
 
         wandb.init(
             project=wandb_project_name,
@@ -80,7 +81,7 @@ def train(
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
-            id=wandb_run_id or wandb.util.generate_id(),
+            id=wandb_run_id,
             monitor_gym=True,
             save_code=True,
             resume="allow",
