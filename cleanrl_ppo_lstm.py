@@ -53,6 +53,7 @@ def train(
         checkpoint_dir=None,
         checkpoint_interval=1,
         resume_from_path=None,
+        run_name=None
     ):
     program_start = time.time()
     env_id = binding.env_name
@@ -64,7 +65,9 @@ def train(
         print(f"Resuming from from {resume_from_path}...")
         resume_state = torch.load(resume_from_path)
 
-    run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
+    if run_name is None:
+        run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
+
     if track:
         import wandb
 
@@ -76,7 +79,7 @@ def train(
             name=run_name,
             monitor_gym=True,
             save_code=True,
-            # resume=(resume_state is not None and resume_state["update"] > 0),
+            resume=(resume_state is not None and resume_state["update"] > 0),
         )
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(

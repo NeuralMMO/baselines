@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 
 import nmmo
 import pufferlib.emulation
@@ -10,8 +11,6 @@ import torch
 import cleanrl_ppo_lstm
 from model.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
-from nmmo_env import NMMOEnv
-from nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
 if __name__ == "__main__":
@@ -119,20 +118,29 @@ if __name__ == "__main__":
     print(f"Initializing model from {args.model_init_from_path}...")
     agent.load_state_dict(torch.load(args.model_init_from_path)["agent_state_dict"])
 
-  if args.checkpoint_dir is not None:
-    os.makedirs(args.checkpoint_dir, exist_ok=True)
+  os.makedirs(args.experiments_dir, exist_ok=True)
+  if args.experiment_name is None:
+    prefix = f"{args.model_arch}_{args.num_teams}x{args.team_size}_"
+    existing = os.listdir(args.experiments_dir)
+    prefix_pattern = re.compile(f'^{prefix}(\\d{{4}})$')
+    existing_numbers = [int(match.group(1)) for name in existing for match in [prefix_pattern.match(name)] if match]
+    next_number = max(existing_numbers, default=0) + 1
+    args.experiment_name = f"{prefix}{next_number:04}"
 
-  if args.resume_from == "latest":
-    checkpoins = os.listdir(args.checkpoint_dir)
-    if len(checkpoins) > 0:
-      args.resume_from = os.path.join(args.checkpoint_dir, max(checkpoins))
-    else :
-      args.resume_from = None
+  experiment_dir = os.path.join(args.experiments_dir, args.experiment_name)
 
-  assert binding is not None
+  print("Experiment directory:", experiment_dir)
+  os.makedirs(experiment_dir, exist_ok=True)
+  resume_from_path = None
+  checkpoins = os.listdir(experiment_dir)
+  if len(checkpoins) > 0:
+    resume_from_path = os.path.join(experiment_dir, max(checkpoins))
+
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
       agent,
+      run_name = args.experiment_name,
+
       cuda=torch.cuda.is_available(),
       total_timesteps=args.train_num_steps,
       track=(args.wandb_project is not None),
@@ -146,12 +154,13 @@ if __name__ == "__main__":
 
       num_agents=policy_cls.num_agents(team_helper),
       num_steps=args.num_steps,
+
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
 
-      checkpoint_dir=args.checkpoint_dir,
+      checkpoint_dir=experiment_dir,
       checkpoint_interval=args.checkpoint_interval,
-      resume_from_path=args.resume_from,
+      resume_from_path=resume_from_path,
 
       # PPO
       learning_rate=args.ppo_learning_rate,
