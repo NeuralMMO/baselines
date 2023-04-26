@@ -1,5 +1,6 @@
 #!/bin/bash
 
+conda activate nmmo
 python -O -m main \
 --rollout.num_envs=4 \
 --rollout.num_buffers=4  \
