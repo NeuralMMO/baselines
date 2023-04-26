@@ -1,7 +1,7 @@
 python -O -m main \
 --model.arch=simple \
 --env.num_teams=8 \
---envteam_size=1 \
+--env.team_size=1 \
 --rollout.num_envs=1 \
 --rollout.num_buffers=1  \
 --rollout.num_steps=128 \
