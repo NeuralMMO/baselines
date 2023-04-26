@@ -1,5 +1,7 @@
 #!/bin/bash
 
+conda activate nmmo
+
 python -O -m main \
 --model.arch=simple \
 --env.num_teams=8 \
