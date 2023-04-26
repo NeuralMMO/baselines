@@ -65,7 +65,7 @@ def train(
     if resume_from_path is not None:
         print(f"Resuming from from {resume_from_path}...")
         resume_state = torch.load(resume_from_path)
-        wandb_run_id = resume_state['wandb_run_id']
+        wandb_run_id = resume_state.get('wandb_run_id', wandb_run_id)
 
     if run_name is None:
         run_name = f"{env_id}__{exp_name}__{seed}__{int(time.time())}"
