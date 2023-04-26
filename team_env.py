@@ -54,7 +54,8 @@ class TeamEnv(ParallelEnv):
     gym_obs, rewards, dones, infos = self._env.step(agent_actions)
     merged_obs = self._group_by_team(gym_obs)
     merged_rewards = {
-      tid: sum(vals.values()) for tid, vals in self._group_by_team(rewards).items()
+      tid: sum(vals.values()) / self._team_helper.team_size[tid]
+      for tid, vals in self._group_by_team(rewards).items()
     }
     merged_infos = self._group_by_team(infos)
 
@@ -63,13 +64,6 @@ class TeamEnv(ParallelEnv):
       self._num_alive[team_id] -= len(team_dones)
       if self._num_alive[team_id] == 0:
         merged_dones[team_id] = True
-
-    if len(self.agents) == 1:
-      winner = self.agents[0]
-      print("Last team standing: ", winner)
-      merged_rewards[winner] = merged_rewards.get(winner, 0) + 10
-      merged_dones[winner] = True
-      self._num_alive[winner] == 0
 
     return merged_obs, merged_rewards, merged_dones, merged_infos
 
