@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/fsx/home-daveey/miniconda3/etc/profile.d/conda.sh
+source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh
 conda activate nmmo
 
 python -O -m main \
