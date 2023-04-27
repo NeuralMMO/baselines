@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Usage: sbatch train_simple.sh experiment_name --arg1=value1 --arg2=value2 ...
+
 #SBATCH --comment=carperai
 #SBATCH --partition=g40
 #SBATCH --nodes=1
@@ -10,6 +12,7 @@
 #SBATCH --output=sbatch/%j.out
 #SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
+#SBATCH --job-name="$1"
 
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
 conda activate nmmo && \
@@ -24,4 +27,5 @@ stdbuf -oL -eL python -O -m main \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=100000000 \
-"$@"
+--experiment_name="$1" \
+"${@:2}"
