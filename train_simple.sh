@@ -3,6 +3,7 @@
 # Usage: sbatch train_simple.sh experiment_name --arg1=value1 --arg2=value2 ...
 
 job_name=$1
+echo $job_name
 
 #SBATCH --comment=carperai
 #SBATCH --partition=g40
