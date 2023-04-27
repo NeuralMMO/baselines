@@ -6,8 +6,8 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=6
 #SBATCH --chdir=/fsx/home-daveey/nmmo-baselines/
-#SBATCH --output=job_output_%j.txt
-#SBATCH --error=job_error_%j.txt
+#SBATCH --output=sbatch/%j.out
+#SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
 
 stdbuf -oL -eL "$@"
