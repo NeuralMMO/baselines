@@ -70,6 +70,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--wandb.entity", dest="wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
+  parser.add_argument(
+    "--wandb.comment", dest="wandb_comment", type=str, default=None,
+      help="useful for logging job id or other data to wandb (default: None)")
 
   parser.add_argument(
     "--ppo.num_minibatches",
