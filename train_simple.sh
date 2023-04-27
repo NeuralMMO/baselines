@@ -20,7 +20,6 @@ job_name=$3
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
 conda activate nmmo && \
 ulimit -c unlimited && \
-ulimit -u unlimited && \
 ulimit -s unlimited && \
 ulimit -a && \
 stdbuf -oL -eL python -u -O -m main \
