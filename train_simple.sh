@@ -27,5 +27,5 @@ stdbuf -oL -eL python -O -m main \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=100000000 \
---experiment_name="$1" \
+--experiment_name=$1 \
 "${@:2}"
