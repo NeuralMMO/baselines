@@ -2,7 +2,7 @@
 
 # Usage: sbatch train_simple.sh experiment_name --arg1=value1 --arg2=value2 ...
 
-job_name=$1
+job_name=$2
 echo $job_name
 
 #SBATCH --comment=carperai
@@ -30,5 +30,5 @@ stdbuf -oL -eL python -O -m main \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=100000000 \
---experiment_name="$1" \
-"${@:2}"
+--experiment_name="$2" \
+"${@:3}"
