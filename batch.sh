@@ -10,4 +10,4 @@
 #SBATCH --error=job_error_%j.txt
 #SBATCH --requeue
 
-"$@"
+stdbuf -oL -eL "$@"
