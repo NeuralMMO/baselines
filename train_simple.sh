@@ -13,12 +13,17 @@
 #SBATCH --output=sbatch/%j.out
 #SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
+#SBATCH --export=PYTHONUNBUFFERED=1
 job_name=$3
 #SBATCH --job-name="$job_name"
 
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
 conda activate nmmo && \
-stdbuf -oL -eL python -O -m main \
+ulimit -c unlimited && \
+ulimit -u unlimited && \
+ulimit -s unlimited && \
+ulimit -a && \
+stdbuf -oL -eL python -u -O -m main \
 --model.arch=simple \
 --env.num_teams=8 \
 --env.team_size=1 \
