@@ -19,7 +19,7 @@ ulimit -s unlimited && \
 ulimit -a
 
 while true; do
-  stdbuf -oL -eL python -u -O $@
+  stdbuf -oL -eL $@
 
   exit_status=$?
 
