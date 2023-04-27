@@ -13,7 +13,7 @@
 #SBATCH --output=sbatch/%j.out
 #SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
-job_name=$2
+job_name=$3
 #SBATCH --job-name="$job_name"
 
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
