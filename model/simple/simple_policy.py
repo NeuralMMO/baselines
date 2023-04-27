@@ -56,7 +56,7 @@ class SimplePolicy(pufferlib.models.Policy):
     agentEmb  = embedded_obs['Entity']
 
     # Pull out rows corresponding to the agent
-    my_id = obs["AgentId"][0]
+    my_id = obs["AgentId"][:,0]
     entity_ids = obs["Entity"][:,:,EntityId]
     mask = (entity_ids == my_id.unsqueeze(1)) & (entity_ids != 0)
     mask = mask.int()
