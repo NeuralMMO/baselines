@@ -2,8 +2,6 @@
 
 # Usage: sbatch train_simple.sh experiment_name --arg1=value1 --arg2=value2 ...
 
-job_name=$2
-echo $job_name
 
 #SBATCH --comment=carperai
 #SBATCH --partition=g40
@@ -15,6 +13,10 @@ echo $job_name
 #SBATCH --output=sbatch/%j.out
 #SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
+
+job_name=$1
+echo $job_name
+
 #SBATCH --job-name="$job_name"
 
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
@@ -30,5 +32,5 @@ stdbuf -oL -eL python -O -m main \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=100000000 \
---experiment_name="$2" \
+--experiment_name="$1" \
 "${@:3}"
