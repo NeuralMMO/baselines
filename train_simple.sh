@@ -12,7 +12,7 @@
 #SBATCH --output=sbatch/%j.out
 #SBATCH --error=sbatch/%j.error
 #SBATCH --requeue
-#SBATCH --job-name="$1"
+#SBATCH --job-name=$1
 
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
 conda activate nmmo && \
@@ -27,5 +27,5 @@ stdbuf -oL -eL python -O -m main \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=100000000 \
---experiment_name=$1 \
+--experiment_name="$1" \
 "${@:2}"
