@@ -17,6 +17,8 @@
 #SBATCH --requeue
 #SBATCH --export=PYTHONUNBUFFERED=1
 
+trap "echo Received USR1 signal, job will be requeued; exit" USR1
+
 source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
 conda activate nmmo && \
 ulimit -c unlimited && \
