@@ -70,9 +70,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--wandb.entity", dest="wandb_entity", type=str, default=None,
       help="wandb entity name (default: None)")
-  parser.add_argument(
-    "--wandb.comment", dest="wandb_comment", type=str, default=None,
-      help="useful for logging job id or other data to wandb (default: None)")
 
   parser.add_argument(
     "--ppo.num_minibatches",
@@ -95,7 +92,7 @@ if __name__ == "__main__":
     nmmo.config.Resource,
     nmmo.config.Progression,
     # nmmo.config.Profession
-    # nmmo.config.Combat
+    nmmo.config.Combat
   ):
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = args.num_teams * args.team_size
@@ -119,7 +116,10 @@ if __name__ == "__main__":
 
   if args.model_init_from_path is not None:
     print(f"Initializing model from {args.model_init_from_path}...")
-    agent.load_state_dict(torch.load(args.model_init_from_path)["agent_state_dict"])
+    agent.load_state_dict(
+      torch.load(args.model_init_from_path)["agent_state_dict"],
+      strict=False
+    )
 
   os.makedirs(args.experiments_dir, exist_ok=True)
   if args.experiment_name is None:
