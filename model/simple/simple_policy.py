@@ -137,23 +137,26 @@ class PolicyHead(nn.Module):
     rets = defaultdict(dict)
     for atn in [
       nmmo.action.Move,
-      # nmmo.action.Attack
+      nmmo.action.Attack
     ]:
       for arg in atn.edges:
         if arg.argType == nmmo.action.Fixed:
             batch = obs.shape[0]
-            idxs  = [e.idx for e in arg.edges]
+            idxs  = range(len(arg.edges))
             cands = self.arg.weight[idxs]
             cands = cands.repeat(batch, 1, 1)
         elif arg == nmmo.action.Target:
             cands = lookup['Entity']
-        mask = lookup["ActionTargets"][atn][arg]
+
+        mask = None
+        if atn in lookup["ActionTargets"]:
+          mask = lookup["ActionTargets"][atn][arg]
 
         logits         = self.net(obs, cands, mask)
         rets[atn][arg] = logits
 
     return [
-      #  rets[nmmo.action.Attack][nmmo.action.Style],
-      #  rets[nmmo.action.Attack][nmmo.action.Target],
+       rets[nmmo.action.Attack][nmmo.action.Style],
+       rets[nmmo.action.Attack][nmmo.action.Target],
        rets[nmmo.action.Move][nmmo.action.Direction],
     ]

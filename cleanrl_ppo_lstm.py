@@ -118,7 +118,7 @@ def train(
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
     if resume_state is not None:
-        agent.load_state_dict(resume_state['agent_state_dict'])
+        agent.load_state_dict(resume_state['agent_state_dict'], strict=False)
         optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     # ALGO Logic: Storage setup
@@ -132,8 +132,10 @@ def train(
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
+    agent_steps = 0
     if resume_state is not None:
-        global_step = resume_state['global_step']
+        global_step = resume_state.get('global_step', 0)
+        agent_step = resume_state.get('agent_step', 0)
 
     next_obs, next_done, next_lstm_state = [], [], []
     for i, envs in enumerate(buffers):
@@ -383,6 +385,7 @@ def train(
             state = {
                 'update': update,
                 'global_step': global_step,
+                'agent_step': agent_step,
                 'optimizer_state_dict': optimizer.state_dict(),
                 'agent_state_dict': agent.state_dict(),
                 'wandb_run_id': wandb_run_id
