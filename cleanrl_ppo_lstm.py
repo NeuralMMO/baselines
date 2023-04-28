@@ -133,7 +133,7 @@ def train(
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
-    agent_steps = 0
+    agent_step = 0
     if resume_state is not None:
         global_step = resume_state.get('global_step', 0)
         agent_step = resume_state.get('agent_step', 0)
