@@ -15,11 +15,6 @@ from model.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
 from team_helper import TeamHelper
 
-def handle_usr1_signal(signum, frame):
-    print("Received USR1 signal, job will be requeued")
-    sys.exit(-1)
-signal.signal(signal.SIGUSR1, handle_usr1_signal)
-
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
 
