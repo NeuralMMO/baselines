@@ -118,7 +118,7 @@ def train(
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
     if resume_state is not None:
-        load_matching_state_dict(agent, resume_state['agent_state_dict'], strict=False)
+        load_matching_state_dict(agent, resume_state['agent_state_dict'])
         optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     # ALGO Logic: Storage setup
