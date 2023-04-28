@@ -18,6 +18,7 @@ from team_helper import TeamHelper
 def handle_usr1_signal(signum, frame):
     print("Received USR1 signal, job will be requeued")
     sys.exit(-1)
+signal.signal(signal.SIGUSR1, handle_usr1_signal)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
@@ -145,7 +146,6 @@ if __name__ == "__main__":
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
 
-  signal.signal(signal.SIGUSR1, handle_usr1_signal)
 
   train = lambda: cleanrl_ppo_lstm.train(
       binding,
