@@ -118,7 +118,7 @@ def train(
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
     if resume_state is not None:
-        agent.load_state_dict(resume_state['agent_state_dict'], strict=False)
+        load_matching_state_dict(agent, resume_state['agent_state_dict'], strict=False)
         optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     # ALGO Logic: Storage setup
@@ -398,3 +398,15 @@ def train(
     if track:
         wandb.finish()
 
+# TODO: move this to a utils file
+def load_matching_state_dict(model, state_dict):
+    model_state_dict = model.state_dict()
+    for name, param in state_dict.items():
+        if name in model_state_dict:
+            if model_state_dict[name].shape == param.shape:
+                model_state_dict[name].copy_(param)
+            else:
+                print(f"Skipping {name} due to shape mismatch. Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}")
+        else:
+            print(f"Skipping {name} as it is not found in the model's state_dict")
+    model.load_state_dict(model_state_dict, strict=False)
