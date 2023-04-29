@@ -53,7 +53,8 @@ def train(
         checkpoint_dir=None,
         checkpoint_interval=1,
         resume_from_path=None,
-        run_name=None
+        run_name=None,
+        use_serial_vecenv=False,
     ):
     program_start = time.time()
     env_id = binding.env_name
@@ -106,9 +107,14 @@ def train(
     assert envs_per_worker >= 1
 
     buffers = []
+
+    vec_impl = pufferlib.vectorization.multiprocessing.VecEnv
+    if use_serial_vecenv:
+        vec_impl = pufferlib.vectorization.serial.VecEnv
+
     for i in range(num_buffers):
         buffers.append(
-                pufferlib.vectorization.serial.VecEnv(
+                vec_impl(
                     binding,
                     num_workers=num_cores,
                     envs_per_worker=int(envs_per_worker),

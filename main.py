@@ -65,6 +65,11 @@ if __name__ == "__main__":
     "--train.experiments_dir",
     dest="experiments_dir", type=str, default="experiments",
     help="experiments directory (default: experiments)")
+  parser.add_argument(
+    "--train.use_serial_vecenv",
+    dest="use_serial_vecenv", action="store_true",
+    help="use serial vecenv impl (default: False)")
+
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -154,6 +159,7 @@ if __name__ == "__main__":
       num_envs=args.num_envs,
       num_cores=args.num_cores or args.num_envs,
       num_buffers=args.num_buffers,
+      use_serial_vecenv=args.use_serial_vecenv,
 
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
