@@ -48,9 +48,7 @@ if __name__ == "__main__":
   parser.add_argument(
     "--rollout.num_steps", dest="num_steps", type=int, default=16,
     help="number of steps to rollout (default: 16)")
-  parser.add_argument(
-    "--rollout.bptt_horizon", dest="bptt_horizon", type=int, default=4,
-    help="number of steps to backprop (default: 4)")
+
   parser.add_argument(
     "--train.num_steps",
     dest="train_num_steps", type=int, default=10_000_000,
@@ -67,6 +65,11 @@ if __name__ == "__main__":
     "--train.experiments_dir",
     dest="experiments_dir", type=str, default="experiments",
     help="experiments directory (default: experiments)")
+  parser.add_argument(
+    "--train.use_serial_vecenv",
+    dest="use_serial_vecenv", action="store_true",
+    help="use serial vecenv impl (default: False)")
+
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -156,13 +159,13 @@ if __name__ == "__main__":
       num_envs=args.num_envs,
       num_cores=args.num_cores or args.num_envs,
       num_buffers=args.num_buffers,
+      use_serial_vecenv=args.use_serial_vecenv,
 
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
 
       num_agents=policy_cls.num_agents(team_helper),
       num_steps=args.num_steps,
-      bptt_horizon=args.bptt_horizon,
 
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
