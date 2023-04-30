@@ -79,6 +79,11 @@ if __name__ == "__main__":
       help="wandb entity name (default: None)")
 
   parser.add_argument(
+    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=16,
+    help="train on bptt_horizon steps of a rollout at a time. "
+     "use this to reduce GPU memory (default: 16)")
+
+  parser.add_argument(
     "--ppo.num_minibatches",
     dest="ppo_num_minibatches", type=int, default=4,
     help="number of minibatches to use for training (default: 4)")
@@ -166,6 +171,7 @@ if __name__ == "__main__":
 
       num_agents=policy_cls.num_agents(team_helper),
       num_steps=args.num_steps,
+      bptt_horizon=args.bptt_horizon,
 
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,

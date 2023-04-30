@@ -12,8 +12,8 @@
 #SBATCH --cpus-per-gpu=6
 #SBATCH --mem=40G
 #SBATCH --chdir=/fsx/home-daveey/nmmo-baselines/
-#SBATCH --output=sbatch/%j.out
-#SBATCH --error=sbatch/%j.error
+#SBATCH --output=sbatch/%j.log
+#SBATCH --error=sbatch/%j.log
 #SBATCH --requeue
 #SBATCH --export=PYTHONUNBUFFERED=1
 
