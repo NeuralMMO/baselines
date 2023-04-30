@@ -25,11 +25,17 @@ ulimit -a
 
 # Extract experiment_name from the arguments
 experiment_name=""
+args=()
 for i in "$@"
 do
   case $i in
     --train.experiment_name=*)
     experiment_name="${i#*=}"
+    args+=("$i")
+    shift
+    ;;
+    *)
+    args+=("$i")
     shift
     ;;
   esac
@@ -46,7 +52,7 @@ if [ ! -z "$experiment_name" ]; then
 fi
 
 while true; do
-  stdbuf -oL -eL $@
+  stdbuf -oL -eL "${args[@]}"
 
   exit_status=$?
 
