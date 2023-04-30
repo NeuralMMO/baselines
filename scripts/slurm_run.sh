@@ -44,7 +44,7 @@ done
 # Create symlink to the log file
 if [ ! -z "$experiment_name" ]; then
   logfile="sbatch/$SLURM_JOB_ID.log"
-  symlink="sbatch/${experiment_name}.log"
+  symlink="${experiment_name}.log"
   if [ -L "$symlink" ]; then
     rm "$symlink"
   fi
