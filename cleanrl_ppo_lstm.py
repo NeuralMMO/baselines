@@ -38,6 +38,7 @@ def train(
         num_agents=1,
         num_cores=psutil.cpu_count(logical=False),
         num_steps=128,
+        bptt_horizon=16,
         anneal_lr=True,
         gamma=0.99,
         gae_lambda=0.95,
@@ -59,6 +60,7 @@ def train(
     env_id = binding.env_name
     args = pufferlib.utils.dotdict(locals())
     batch_size = int(num_envs * num_agents * num_buffers * num_steps)
+    assert num_steps % bptt_horizon == 0, "num_steps must be divisible by bptt_horizon"
 
     resume_state = None
     wandb_run_id = None
@@ -247,35 +249,25 @@ def train(
                 returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
-        b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
-        b_dones = dones.reshape(-1)
-        b_advantages = advantages.reshape(-1)
-        b_returns = returns.reshape(-1)
-        b_values = values.reshape(-1)
+        b_obs = obs.reshape((num_minibatches, bptt_horizon, -1) + envs.single_observation_space.shape)
+        b_logprobs = logprobs.reshape(num_minibatches, bptt_horizon, -1)
+        b_actions = actions.reshape((num_minibatches, bptt_horizon, -1) + envs.single_action_space.shape)
+        b_dones = dones.reshape(num_minibatches, bptt_horizon, -1)
+        b_advantages = advantages.reshape(num_minibatches, bptt_horizon, -1)
+        b_returns = returns.reshape(num_minibatches, -1)
+        b_values = values.reshape(num_minibatches, -1)
 
         # Optimizing the policy and value network
         train_time = time.time()
-        assert num_envs * num_buffers % num_minibatches == 0
-        agentsperbatch = num_envs * num_agents * num_buffers // num_minibatches
-        agentinds = np.arange(num_envs * num_agents * num_buffers)
-        flatinds = np.arange(batch_size).reshape(num_steps, num_envs * num_agents * num_buffers)
         clipfracs = []
         for epoch in range(update_epochs):
-            np.random.shuffle(agentinds)
-            for start in range(0, num_envs * num_agents * num_buffers, agentsperbatch):
-                end = start + agentsperbatch
-                mbagentinds = agentinds[start:end]
-                mb_inds = flatinds[:, mbagentinds].ravel()  # be really careful about the index
-
-                _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
-                    b_obs[mb_inds],
-                    (initial_lstm_state[0][:, mbagentinds], initial_lstm_state[1][:, mbagentinds]),
-                    b_dones[mb_inds],
-                    b_actions.long()[mb_inds],
-                )
-                logratio = newlogprob - b_logprobs[mb_inds]
+            initial_initial_lstm_state = initial_lstm_state
+            for minibatch in range(num_minibatches):
+                initial_lstm_state = initial_initial_lstm_state
+                _, newlogprob, entropy, newvalue, initial_lstm_state = agent.get_action_and_value(
+                    b_obs[minibatch], initial_lstm_state, b_dones[minibatch], b_actions[minibatch])
+                initial_lstm_state = (initial_lstm_state[0].detach(), initial_lstm_state[1].detach())
+                logratio = newlogprob - b_logprobs[minibatch].reshape(-1)
                 ratio = logratio.exp()
 
                 with torch.no_grad():
@@ -284,7 +276,7 @@ def train(
                     approx_kl = ((ratio - 1) - logratio).mean()
                     clipfracs += [((ratio - 1.0).abs() > clip_coef).float().mean().item()]
 
-                mb_advantages = b_advantages[mb_inds]
+                mb_advantages = b_advantages[minibatch].reshape(-1)
                 if norm_adv:
                     mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
@@ -296,17 +288,17 @@ def train(
                 # Value loss
                 newvalue = newvalue.view(-1)
                 if clip_vloss:
-                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                    v_clipped = b_values[mb_inds] + torch.clamp(
-                        newvalue - b_values[mb_inds],
+                    v_loss_unclipped = (newvalue - b_returns[minibatch]) ** 2
+                    v_clipped = b_values[minibatch] + torch.clamp(
+                        newvalue - b_values[minibatch],
                         -clip_coef,
                         clip_coef,
                     )
-                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
+                    v_loss_clipped = (v_clipped - b_returns[minibatch]) ** 2
                     v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
                     v_loss = 0.5 * v_loss_max.mean()
                 else:
-                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
+                    v_loss = 0.5 * ((newvalue - b_returns[minibatch]) ** 2).mean()
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - ent_coef * entropy_loss + v_loss * vf_coef

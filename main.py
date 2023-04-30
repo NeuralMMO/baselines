@@ -48,7 +48,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--rollout.num_steps", dest="num_steps", type=int, default=16,
     help="number of steps to rollout (default: 16)")
-
+  parser.add_argument(
+    "--rollout.bptt_horizon", dest="bptt_horizon", type=int, default=4,
+    help="number of steps to backprop (default: 4)")
   parser.add_argument(
     "--train.num_steps",
     dest="train_num_steps", type=int, default=10_000_000,
@@ -160,6 +162,7 @@ if __name__ == "__main__":
 
       num_agents=policy_cls.num_agents(team_helper),
       num_steps=args.num_steps,
+      bptt_horizon=args.bptt_horizon,
 
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
