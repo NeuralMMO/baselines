@@ -23,6 +23,28 @@ ulimit -c unlimited && \
 ulimit -s unlimited && \
 ulimit -a
 
+# Extract experiment_name from the arguments
+experiment_name=""
+for i in "$@"
+do
+  case $i in
+    --train.experiment_name=*)
+    experiment_name="${i#*=}"
+    shift
+    ;;
+  esac
+done
+
+# Create symlink to the log file
+if [ ! -z "$experiment_name" ]; then
+  logfile="sbatch/$SLURM_JOB_ID.log"
+  symlink="sbatch/${experiment_name}.log"
+  if [ -L "$symlink" ]; then
+    rm "$symlink"
+  fi
+  ln -s "$logfile" "$symlink"
+fi
+
 while true; do
   stdbuf -oL -eL $@
 
