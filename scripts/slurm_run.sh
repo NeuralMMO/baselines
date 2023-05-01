@@ -59,6 +59,9 @@ while true; do
   if [ $exit_status -eq 0 ]; then
     echo "Job completed successfully."
     break
+  elif [ $exit_status -eq 101 ]; then
+    echo "Job failed due to torch.cuda.OutOfMemoryError."
+    break
   else
     echo "Job failed with exit status $exit_status. Retrying..."
   fi

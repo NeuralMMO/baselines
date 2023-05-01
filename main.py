@@ -1,7 +1,6 @@
 import argparse
 import os
 import re
-import signal
 import sys
 
 import nmmo
@@ -189,7 +188,14 @@ if __name__ == "__main__":
       # bptt_trunc_len=16,
     )
 
-  train()
+  try:
+    train()
+  except RuntimeError as e:
+    if "CUDA out of memory" in str(e):
+      print("CUDA out of memory error, exiting...")
+      sys.exit(101)
+    else:
+      raise e
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2
