@@ -355,11 +355,17 @@ def train(
         )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("performance/epoch_sps", epoch_sps, global_step)
+        writer.add_scalar("performance/env_sps", env_sps, global_step)
+        writer.add_scalar("performance/inference_sps", inference_sps, global_step)
+        writer.add_scalar("performance/train_sps", epoch_sps, train_sps)
+
         writer.add_scalar("performance/env_time", env_step_time, global_step)
         writer.add_scalar("performance/inference_time", inference_time, global_step)
         writer.add_scalar("performance/train_time", train_time, global_step)
         writer.add_scalar("performance/epoch_time", epoch_time, global_step)
         writer.add_scalar("performance/extra_time", extra_time, global_step)
+
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("charts/reward", mean_reward, global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
