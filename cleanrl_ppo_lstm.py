@@ -82,7 +82,7 @@ def train(
             project=wandb_project_name,
             entity=wandb_entity,
             sync_tensorboard=True,
-            config=vars(args),
+            config=args,
             name=run_name,
             id=wandb_run_id,
             monitor_gym=True,
@@ -92,7 +92,7 @@ def train(
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in args.items()])),
     )
 
     # TRY NOT TO MODIFY: seeding
