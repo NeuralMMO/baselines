@@ -106,8 +106,11 @@ if __name__ == "__main__":
     nmmo.config.Resource,
     nmmo.config.NPC,
     nmmo.config.Progression,
-    # nmmo.config.Profession
-    nmmo.config.Combat
+    # nmmo.config.Equipment,
+    # nmmo.config.Item,
+    # nmmo.config.Exchange,
+    # nmmo.config.Profession,
+    nmmo.config.Combat,
   ):
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = args.num_teams * args.team_size
