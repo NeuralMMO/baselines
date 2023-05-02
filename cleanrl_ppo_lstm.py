@@ -60,8 +60,7 @@ def train(
     program_start = time.time()
     env_id = binding.env_name
     args = pufferlib.utils.dotdict(locals())
-    args = {k: str(v)[:5
-                      ++0] for k,v in args.items()}
+    args = {k: str(v)[:50] for k,v in args.items()}
     batch_size = int(num_envs * num_agents * num_buffers * num_steps)
     assert num_steps % bptt_horizon == 0, "num_steps must be divisible by bptt_horizon"
 

@@ -84,8 +84,8 @@ if __name__ == "__main__":
 
   parser.add_argument(
     "--ppo.num_minibatches",
-    dest="ppo_num_minibatches", type=int, default=4,
-    help="number of minibatches to use for training (default: 4)")
+    dest="ppo_num_minibatches", type=int, default=None,
+    help="number of minibatches to use for training")
   parser.add_argument(
     "--ppo.update_epochs",
     dest="ppo_update_epochs", type=int, default=4,
@@ -151,6 +151,9 @@ if __name__ == "__main__":
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
 
   num_minibatches = args.ppo_num_minibatches
+  if num_minibatches is None:
+    num_minibatches = args.num_envs * args.num_buffers * args.bptt_horizon // 16
+
   while True:
     try:
       cleanrl_ppo_lstm.train(
