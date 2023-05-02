@@ -2,6 +2,7 @@ experiments/
 maps/
 wandb*
 runs/
+replay*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
