@@ -35,7 +35,7 @@ if __name__ == "__main__":
     "--env.team_size", dest="team_size", type=int, default=8,
     help="number of agents per team to use for training (default: 8)")
   parser.add_argument(
-    "--env.num_npc", dest="num_npc", type=int, default=0,
+    "--env.num_npcs", dest="num_npcs", type=int, default=0,
     help="number of NPCs to use for training (default: 0)")
 
   parser.add_argument(
@@ -111,7 +111,7 @@ if __name__ == "__main__":
   ):
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = args.num_teams * args.team_size
-    NPC_N = args.num_npc
+    NPC_N = args.num_npcs
 
   config = TrainConfig()
   team_helper = TeamHelper({
