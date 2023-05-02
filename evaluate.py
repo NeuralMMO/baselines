@@ -38,6 +38,9 @@ def replay_config(num_teams, team_size):
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = num_teams * team_size
 
+    MAP_PREVIEW_DOWNSCALE        = 5
+    MAP_CENTER                   = 40
+
   return ReplayConfig()
 
 
