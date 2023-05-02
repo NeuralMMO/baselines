@@ -34,6 +34,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.team_size", dest="team_size", type=int, default=8,
     help="number of agents per team to use for training (default: 8)")
+  parser.add_argument(
+    "--env.num_npc", dest="num_npc", type=int, default=0,
+    help="number of NPCs to use for training (default: 0)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -101,12 +104,14 @@ if __name__ == "__main__":
     nmmo.config.Medium,
     nmmo.config.Terrain,
     nmmo.config.Resource,
+    nmmo.config.NPC,
     nmmo.config.Progression,
     # nmmo.config.Profession
     nmmo.config.Combat
   ):
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = args.num_teams * args.team_size
+    NPC_N = args.num_npc
 
   config = TrainConfig()
   team_helper = TeamHelper({

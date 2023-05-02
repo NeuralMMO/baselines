@@ -52,9 +52,6 @@ class FeatureExtractor():
     # CHECK ME: we can get better stat from the event log. Do we need stat_helper?
     self.stat_helper.update(obs)
 
-    """Update finished. Generating features"""
-    # CHECK ME: how item force_use/sell/buy_idx are traslated into actions?
-
     # tile dim: (team_size, TILE_NUM_CHANNELS, *TILE_IMG_SIZE)
     tile = self.map_helper.extract_tile_feature()
 
@@ -62,17 +59,8 @@ class FeatureExtractor():
     # item dim: (team_size, config.ITEM_INVENTORY_CAPACITY, ITEM_NUM_FEATURES)
     item_type, item = self.item_helper.extract_item_feature()
 
-    # team does NOT include legal actions
-    # team dim: (team_size, SELF_NUM_FEATURES - sum(ACTION_NUM_DIM.values())
     # team_mask dim: (team_size)
     team, team_mask = self.entity_helper.team_features_and_mask(self.map_helper)
-
-    # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
-    # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
-    # npc_target_dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
-    # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
-    # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
-    # enemy_target dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
 
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
@@ -102,10 +90,14 @@ class FeatureExtractor():
       'item_type': item_type,
       'item': item,
 
+      # npc dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED, ENTITY_NUM_FEATURES)
       'npc': self.entity_helper.npc_features,
+      # npc_mask dim: (team_size, ENTITY_NUM_NPCS_CONSIDERED)
       'npc_mask': self.entity_helper.npc_mask,
 
+      # enemy dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED, ENTITY_NUM_FEATURES)
       'enemy': self.entity_helper.enemy_features,
+      # enemy_mask dim: (team_size, ENTITY_NUM_ENEMIES_CONSIDERED)
       'enemy_mask': self.entity_helper.enemy_mask,
 
       'game': game,
