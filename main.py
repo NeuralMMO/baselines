@@ -153,6 +153,7 @@ if __name__ == "__main__":
   num_minibatches = args.ppo_num_minibatches
   if num_minibatches is None:
     num_minibatches = args.num_envs * args.num_buffers * args.bptt_horizon // 16
+    print(f"Using num_minibatches={num_minibatches}")
 
   while True:
     try:
@@ -170,7 +171,7 @@ if __name__ == "__main__":
         num_buffers=args.num_buffers,
         use_serial_vecenv=args.use_serial_vecenv,
 
-        num_minibatches=args.ppo_num_minibatches,
+        num_minibatches=num_minibatches,
         update_epochs=args.ppo_update_epochs,
 
         num_agents=policy_cls.num_agents(team_helper),
