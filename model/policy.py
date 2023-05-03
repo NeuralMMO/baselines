@@ -58,6 +58,7 @@ class BaselinePolicy(pufferlib.models.Policy):
       #self.single_observation_space,
       env_outputs
     )
+
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]
 
@@ -83,6 +84,7 @@ class BaselinePolicy(pufferlib.models.Policy):
 
   def decode_actions(self, hidden, lookup, concat=True):
     batch_size = hidden.shape[0]
+
     # reshape the batch so that we compute actions per-agent
     hidden = hidden.view(-1, 512)
     actions = self.policy_head(hidden)

@@ -158,60 +158,50 @@ if __name__ == "__main__":
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
 
-  num_minibatches = args.ppo_num_minibatches
-  if num_minibatches is None:
-    num_minibatches = args.num_envs * args.num_buffers * args.bptt_horizon // 16
-    print(f"Using num_minibatches={num_minibatches}")
+  try:
+    cleanrl_ppo_lstm.train(
+      binding,
+      agent,
+      run_name = args.experiment_name,
 
-  while True:
-    try:
-      cleanrl_ppo_lstm.train(
-        binding,
-        agent,
-        run_name = args.experiment_name,
+      cuda=torch.cuda.is_available(),
+      total_timesteps=args.train_num_steps,
+      track=(args.wandb_project is not None),
 
-        cuda=torch.cuda.is_available(),
-        total_timesteps=args.train_num_steps,
-        track=(args.wandb_project is not None),
+      num_envs=args.num_envs,
+      num_cores=args.num_cores or args.num_envs,
+      num_buffers=args.num_buffers,
+      use_serial_vecenv=args.use_serial_vecenv,
 
-        num_envs=args.num_envs,
-        num_cores=args.num_cores or args.num_envs,
-        num_buffers=args.num_buffers,
-        use_serial_vecenv=args.use_serial_vecenv,
+      num_minibatches=args.ppo_num_minibatches,
+      update_epochs=args.ppo_update_epochs,
 
-        num_minibatches=num_minibatches,
-        update_epochs=args.ppo_update_epochs,
+      num_agents=policy_cls.num_agents(team_helper),
+      num_steps=args.num_steps,
+      bptt_horizon=args.bptt_horizon,
 
-        num_agents=policy_cls.num_agents(team_helper),
-        num_steps=args.num_steps,
-        bptt_horizon=args.bptt_horizon,
+      wandb_project_name=args.wandb_project,
+      wandb_entity=args.wandb_entity,
 
-        wandb_project_name=args.wandb_project,
-        wandb_entity=args.wandb_entity,
+      checkpoint_dir=experiment_dir,
+      checkpoint_interval=args.checkpoint_interval,
+      resume_from_path=resume_from_path,
 
-        checkpoint_dir=experiment_dir,
-        checkpoint_interval=args.checkpoint_interval,
-        resume_from_path=resume_from_path,
+      # PPO
+      learning_rate=args.ppo_learning_rate,
+      # clip_coef=0.2, # ratio_clip
+      # dual_clip_c=3.,
+      # ent_coef=0.001 # entropy_loss_weight,
+      # grad_clip=1.0,
+      # bptt_trunc_len=16,
+    )
 
-        # PPO
-        learning_rate=args.ppo_learning_rate,
-        # clip_coef=0.2, # ratio_clip
-        # dual_clip_c=3.,
-        # ent_coef=0.001 # entropy_loss_weight,
-        # grad_clip=1.0,
-        # bptt_trunc_len=16,
-      )
-
-    except RuntimeError as e:
-      if "CUDA out of memory" in str(e):
-        print("CUDA out of memory")
-        num_minibatches *= 2
-        if num_minibatches > 128:
-          print("Exitting due to CUDA out of memory")
-          sys.exit(101)
-        print(f"Rerying with num_minibatches={num_minibatches}")
-      else:
-        raise e
+  except RuntimeError as e:
+    if "CUDA out of memory" in str(e):
+        print("Exitting due to CUDA out of memory")
+        sys.exit(101)
+    else:
+      raise e
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2

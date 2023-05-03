@@ -55,6 +55,7 @@ while true; do
   stdbuf -oL -eL "${args[@]}"
 
   exit_status=$?
+  echo "Job exited with status $exit_status."
 
   if [ $exit_status -eq 0 ]; then
     echo "Job completed successfully."
@@ -66,3 +67,5 @@ while true; do
     echo "Job failed with exit status $exit_status. Retrying..."
   fi
 done
+
+echo "Slurm Job completed."

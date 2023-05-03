@@ -387,6 +387,7 @@ def train(
 
         if checkpoint_dir is not None and update % checkpoint_interval == 0:
             save_path = os.path.join(checkpoint_dir, f'{update:06d}.pt')
+            temp_path = os.path.join(checkpoint_dir, f'.{update:06d}.pt.tmp')
             print(f'Saving checkpoint to {save_path}')
             state = {
                 'update': update,
@@ -396,7 +397,8 @@ def train(
                 'agent_state_dict': agent.state_dict(),
                 'wandb_run_id': wandb_run_id
             }
-            torch.save(state, save_path)
+            torch.save(state, temp_path)
+            os.rename(temp_path, save_path)
 
     envs.close()
     writer.close()
