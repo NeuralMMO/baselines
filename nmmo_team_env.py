@@ -47,7 +47,7 @@ class NMMOTeamEnv(TeamEnv):
       "npc_mask": self._box(team_size),
       "game": self._box(ModelArchitecture.GAME_NUM_FEATURES),
       "legal": action_space,
-      "prev_act": action_space,
+      "prev_act": self._box(team_size, len(ModelArchitecture.ACTION_NUM_DIM)),
       "reset": self._box(1),
     })
 
@@ -69,12 +69,12 @@ class NMMOTeamEnv(TeamEnv):
     return obs
 
   def step(self, actions: Dict[int, Dict[str, Any]]):
-    actions = {
+    trans_actions = {
       tid: self._feature_extractors[tid].translate_actions(a)
       for tid, a in actions.items()
     }
 
-    obs, rewards, dones, infos = super().step(actions)
+    obs, rewards, dones, infos = super().step(trans_actions)
     for tid, team_obs in obs.items():
       obs[tid] = self._feature_extractors[tid](
         self._convert_team_obs_to_agent_ids(tid, team_obs))
