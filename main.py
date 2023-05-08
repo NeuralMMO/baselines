@@ -8,20 +8,17 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
+from model.policy_pool import ModelPool, PolicyPool
+from agent_env import AgentEnv
 
 import cleanrl_ppo_lstm
 from model.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
+from nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-
-  parser.add_argument(
-    "--model.arch",
-    dest="model_arch", choices=["realikun", "simple"],
-    default="realikun",
-    help="model architecture (default: realikun)")
 
   parser.add_argument(
     "--model.init_from_path",
@@ -37,6 +34,12 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.num_npcs", dest="num_npcs", type=int, default=0,
     help="number of NPCs to use for training (default: 0)")
+  parser.add_argument(
+    "--env.num_learners", dest="num_learners", type=int, default=16,
+    help="number of agents running he learner policy (default: 16)")
+  parser.add_argument(
+    "--env.policy_pool_dir", dest="policy_pool_dir", type=str,
+    help="directory containing policies to use for non-learner agents")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -71,7 +74,6 @@ if __name__ == "__main__":
     "--train.use_serial_vecenv",
     dest="use_serial_vecenv", action="store_true",
     help="use serial vecenv impl (default: False)")
-
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -122,16 +124,21 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  policy_cls = BaselinePolicy
-  if args.model_arch == "simple":
-    policy_cls = SimplePolicy
+  policy_pool = PolicyPool.from_dir(args.model_pool_dir)
+
+  def make_env():
+    return AgentEnv(
+      NMMOTeamEnv(config, team_helper), {
+        id: policy_pool.agent()
+          for id in range(args.num_learners, team_helper.num_teams)
+      })
 
   binding = pufferlib.emulation.Binding(
-    env_creator=policy_cls.env_creator(config, team_helper),
+    env_creator=BaselinePolicy.env_creator(config, team_helper),
     env_name="Neural MMO",
     suppress_env_prints=False,
   )
-  agent = policy_cls.create_policy()(binding)
+  agent = BaselinePolicy.create_policy()(binding)
 
   if args.model_init_from_path is not None:
     print(f"Initializing model from {args.model_init_from_path}...")
