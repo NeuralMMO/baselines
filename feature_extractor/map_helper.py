@@ -179,20 +179,7 @@ class MapHelper:
           feat_arr.append(near_tile_map[i, j] == material.Herb.index) # herb_arr
           feat_arr.append(near_tile_map[i, j] == material.Fish.index) # fish_arr
           feat_arr.append(near_tile_map[i, j] in material.Impassible.indices) # obstacle_arr
-
-        # TODO: add poison map and modify ModelArchitecture.n_nearby_feat accordingly
-        #if abs(i-nearby_dist//2) + abs(j-nearby_dist//2) <= 0: # 1:
-          # CHECK ME: poison_map values can go over 1, unlike the above values
-          #feat_arr.append(max(0, self.poison_map[row+i, col+j]) / POISON_CLIP)
-
-    # CHECK ME: the below lines had the comment: "patch after getting trained"
-    #   It looks like they added poison map after training the model,
-    #   and they did so to NOT change the dimension
-    # food_arr[-1] = max(0, self.poison_map[row, col]) / POISON_CLIP
-    # water_arr[-1] = max(0, self.poison_map[row+1, col]) / POISON_CLIP
-    # herb_arr[-1] = max(0, self.poison_map[row, col+1]) / POISON_CLIP
-    # fish_arr[-1] = max(0, self.poison_map[row-1, col]) / POISON_CLIP
-    # obstacle_arr[-1] = max(0, self.poison_map[row, col-1]) / POISON_CLIP
+          feat_arr.append(max(0, self.poison_map[row+i, col+j]) / POISON_CLIP) # poison map
 
     return np.array(feat_arr, dtype=np.float32)
 
@@ -200,14 +187,13 @@ class MapHelper:
     return np.zeros(ModelArchitecture.NEARBY_NUM_FEATURES, dtype=np.float32)
 
   def legal_moves(self, obs):
-    # NOTE: config.PROVIDE_ACTION_TARGETS is set to True to get the action targerts
-    # CHECK ME: ACTION_NUM_DIM was changed to 4 (from 5)
+    assert self.config.PROVIDE_ACTION_TARGETS,\
+      "config.PROVIDE_ACTION_TARGETS must be set True"
     moves = np.zeros((self._team_size, len(action.Direction.edges)), dtype=np.float32)
     for member_pos in range(self._team_size):
       ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
         moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
-
 
     return moves
 

@@ -15,6 +15,8 @@ class GameState:
     self.curr_obs = None
     self.prev_obs = None
 
+    self.prev_atns = None
+
   def reset(self, init_obs):
     self.curr_step = 0
     self.prev_obs = init_obs
@@ -38,5 +40,8 @@ class GameState:
     return arr
 
   def previous_actions(self):
-    # xcxc
-    return np.zeros((self.team_size, 4), dtype=np.float32)
+    if self.prev_atns is None:
+      atn_dim = len(ModelArchitecture.ACTION_NUM_DIM)
+      return np.zeros((self.team_size, atn_dim), dtype=np.float32)
+
+    return np.array(list(self.prev_atns.values()), dtype=np.float32).T
