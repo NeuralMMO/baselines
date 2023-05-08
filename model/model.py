@@ -1,13 +1,17 @@
 # TODO: remove the below line, eventually...
 # pylint: disable=all
 from attr import dataclass
+from collections import OrderedDict
 
 import torch
 from .resnet import ResNet
 from .mlp import MLPEncoder
 import torch.nn as nn
 
-# Gather the moodel-related constants here
+def sort_dict_by_key(dict):
+  return OrderedDict((key, dict[key]) for key in sorted(dict.keys()))
+  
+# Gather the model-related constants here
 @dataclass
 class ModelArchitecture:
 
@@ -32,16 +36,16 @@ class ModelArchitecture:
   # Actions
   # NOTE: The order of policy heads are the same as here, 
   #   but gym.spaces.Dict sorts the keys, so the orders can be different
-  # CHECK ME: A hack -- number prefixes were added to keep the order same
-  ACTION_NUM_DIM = {
-    '10_move': 5, # 4 dirs + 1 for no move
-    '21_style' : 3,
+  #   So, sort_dict_by_key func was used to match these.
+  ACTION_NUM_DIM = sort_dict_by_key({
+    'move': 5, # 4 dirs + 1 for no move
+    'style' : 3,
     # 9 npcs 9 enemies + 1 for no target
-    '22_target': ENTITY_NUM_NPCS_CONSIDERED + ENTITY_NUM_ENEMIES_CONSIDERED + 1, # for no attack
-    '30_use': INVENTORY_CAPACITY + 1, # for no use
-    '40_destroy': INVENTORY_CAPACITY + 1, # for no destroy
-    '50_sell': INVENTORY_CAPACITY + 1, # for no sell
-  }
+    'target': ENTITY_NUM_NPCS_CONSIDERED + ENTITY_NUM_ENEMIES_CONSIDERED + 1, # for no attack
+    'use': INVENTORY_CAPACITY + 1, # for no use
+    'destroy': INVENTORY_CAPACITY + 1, # for no destroy
+    'sell': INVENTORY_CAPACITY + 1, # for no sell
+  })
 
   # the game progress is encoded with multi-hot-generator
   PROGRESS_NUM_FEATURES = 16 # index=int(1+16*curr_step/config.HORIZON)

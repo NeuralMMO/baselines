@@ -1,8 +1,6 @@
 import nmmo
 import numpy as np
 
-#import pufferlib.emulation
-
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
@@ -32,7 +30,8 @@ class FeatureExtractor():
     self.item_helper = ItemHelper(config, self.entity_helper)
     self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
-    # TODO: check if using _force_use/sell/buy helps
+    # force_action = True overrides the policy outputs with the featurizer's decisions
+    # TODO: check if using featurizer's decisions is actually better
     self.force_action = True
 
   def reset(self, init_obs):
@@ -102,21 +101,21 @@ class FeatureExtractor():
     }
 
     # move
-    legal_moves["10_move"] = self.map_helper.legal_moves(obs)
+    legal_moves["move"] = self.map_helper.legal_moves(obs)
 
     # attack
-    legal_moves["21_style"] = np.ones((self.team_size,
-                                       ModelArchitecture.ACTION_NUM_DIM["21_style"]))
-    legal_moves["22_target"] = self.entity_helper.legal_target()
+    legal_moves["style"] = np.ones((self.team_size,
+                                       ModelArchitecture.ACTION_NUM_DIM["style"]))
+    legal_moves["target"] = self.entity_helper.legal_target()
 
     # use, destroy
     if self._config.ITEM_SYSTEM_ENABLED:
-      legal_moves["30_use"] = self.item_helper.legal_inventory(obs, nmmo.action.Use)
-      legal_moves["40_destroy"] = self.item_helper.legal_inventory(obs, nmmo.action.Destroy)
+      legal_moves["use"] = self.item_helper.legal_inventory(obs, nmmo.action.Use)
+      legal_moves["destroy"] = self.item_helper.legal_inventory(obs, nmmo.action.Destroy)
 
     if self._config.EXCHANGE_SYSTEM_ENABLED:
-      legal_moves["50_sell"] = self.item_helper.legal_inventory(obs, nmmo.action.Sell)
-      # legal_moves["60_buy"] = self.market_helper.legal_buy(obs)
+      legal_moves["sell"] = self.item_helper.legal_inventory(obs, nmmo.action.Sell)
+      # legal_moves["buy"] = self.market_helper.legal_buy(obs)
 
     # TODO: give, give-gold
     #   give-gold and sell should benefit from a continuous price policy head
@@ -130,32 +129,32 @@ class FeatureExtractor():
     self.game_state.prev_atns = actions
 
     key_to_action = {
-      "30_use": nmmo.action.Use,
-      "40_destroy": nmmo.action.Destroy,
-      '50_sell': nmmo.action.Sell, }
+      "use": nmmo.action.Use,
+      "destroy": nmmo.action.Destroy,
+      'sell': nmmo.action.Sell, }
     trans_actions = {}
     for member_pos in range(self.team_size):
       # NOTE: these keys are defined in ModelArchitecture.ACTION_NUM_DIM
       # 'move': nmmo.action.Move
-      if "10_move" in actions:
+      if "move" in actions:
         trans_actions[member_pos] = {
           nmmo.action.Move: {
             nmmo.action.Direction:
-              nmmo.action.Direction.edges[actions['10_move'][member_pos]] }}
+              nmmo.action.Direction.edges[actions['move'][member_pos]] }}
 
       # 'target', 'style': nmmo.action.Attack
-      if "22_target" in actions:
+      if "target" in actions:
         target_id = self.entity_helper.set_attack_target(member_pos,
-                                                         actions['22_target'][member_pos])
+                                                         actions['target'][member_pos])
         if target_id != 0:
           trans_actions[member_pos][nmmo.action.Attack] = {
             nmmo.action.Target: target_id,
-            nmmo.action.Style: nmmo.action.Style.edges[actions['21_style'][member_pos]] }
+            nmmo.action.Style: nmmo.action.Style.edges[actions['style'][member_pos]] }
 
       # 'use': is overrided by item_helper.force_use_idx, if force_action = True
       # 'destroy': is entirely from the policy
       if self._config.ITEM_SYSTEM_ENABLED:
-        for key in ['30_use', '40_destroy']:
+        for key in ['use', 'destroy']:
           if key in actions:
             inv_idx = actions[key][member_pos]
             if self.item_helper.in_inventory(member_pos, inv_idx):
@@ -170,17 +169,17 @@ class FeatureExtractor():
             nmmo.action.InventoryItem: force_use }
 
       # 'sell' is overrided by item_helper.force_sell_idx, if force_action = True
-      if self._config.EXCHANGE_SYSTEM_ENABLED and '50_sell' in actions:
+      if self._config.EXCHANGE_SYSTEM_ENABLED and 'sell' in actions:
         # TODO: test if using force_sell actually helps
         inv_idx = self.item_helper.force_sell_idx[member_pos] if self.force_action \
-                    else actions['50_sell'][member_pos]
+                    else actions['sell'][member_pos]
         if self.item_helper.in_inventory(member_pos, inv_idx):
           trans_actions[member_pos][nmmo.action.Sell] = {
             nmmo.action.InventoryItem: inv_idx,
             nmmo.action.Price: self.item_helper.get_price(member_pos, inv_idx) }
 
       # 'buy' is entirely from the item_helper (TODO: let the policy decide)
-      if self._config.EXCHANGE_SYSTEM_ENABLED and '60_buy' in actions:
+      if self._config.EXCHANGE_SYSTEM_ENABLED and 'buy' in actions:
         buy_idx = self.item_helper.force_buy_idx[member_pos]
         if buy_idx is not None:
           trans_actions[member_pos][nmmo.action.Buy] = {
