@@ -7,5 +7,5 @@ python -u -O -m main \
 --wandb.entity=daveey \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
---train.num_steps=100000000 \
+--train.num_steps=10000000000 \
 "${@}"
