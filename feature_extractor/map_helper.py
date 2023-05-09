@@ -10,7 +10,7 @@ from nmmo.io import action
 
 from feature_extractor.entity_helper import EntityHelper
 
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col

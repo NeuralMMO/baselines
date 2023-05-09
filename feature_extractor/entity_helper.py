@@ -8,7 +8,7 @@ from nmmo.entity.entity import EntityState
 from team_helper import TeamHelper
 
 from model.util import one_hot_generator
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 EntityAttr = EntityState.State.attr_name_to_col
 

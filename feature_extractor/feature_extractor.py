@@ -7,7 +7,7 @@ from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
 from feature_extractor.stat_helper import StatHelper
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 from team_helper import TeamHelper
 

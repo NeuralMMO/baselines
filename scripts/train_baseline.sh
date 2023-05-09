@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python -u -O -m main \
+python -u -O -m tools.train \
 --rollout.num_envs=4 \
 --rollout.num_buffers=4  \
 --rollout.num_steps=32 \

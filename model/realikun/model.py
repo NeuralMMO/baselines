@@ -4,13 +4,13 @@ from attr import dataclass
 from collections import OrderedDict
 
 import torch
-from .resnet import ResNet
-from .mlp import MLPEncoder
+from ..resnet import ResNet
+from ..mlp import MLPEncoder
 import torch.nn as nn
 
 def sort_dict_by_key(dict):
   return OrderedDict((key, dict[key]) for key in sorted(dict.keys()))
-  
+
 # Gather the model-related constants here
 @dataclass
 class ModelArchitecture:
@@ -34,7 +34,7 @@ class ModelArchitecture:
   #MARKET_NUM_LISTINGS_CONSIDERED = 20
 
   # Actions
-  # NOTE: The order of policy heads are the same as here, 
+  # NOTE: The order of policy heads are the same as here,
   #   but gym.spaces.Dict sorts the keys, so the orders can be different
   #   So, sort_dict_by_key func was used to match these.
   ACTION_NUM_DIM = sort_dict_by_key({

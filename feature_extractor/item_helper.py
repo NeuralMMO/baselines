@@ -9,7 +9,7 @@ from nmmo.lib import material
 from nmmo.systems import item as Item
 from nmmo.systems.item import ItemState
 
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 from feature_extractor.entity_helper import EntityHelper
 

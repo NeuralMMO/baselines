@@ -3,7 +3,7 @@ import nmmo
 import numpy as np
 
 from model.util import multi_hot_generator
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 
 class GameState:

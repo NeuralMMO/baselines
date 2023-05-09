@@ -8,14 +8,14 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from model.policy_pool import ModelPool, PolicyPool
-from agent_env import AgentEnv
+from lib.agent.agent_pool import ModelPool, PolicyPool
+from lib.agent.agent_env import AgentEnv
 
-import cleanrl_ppo_lstm
-from model.policy import BaselinePolicy
+import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
+from model.realikun.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
-from nmmo_team_env import NMMOTeamEnv
-from team_helper import TeamHelper
+from env.nmmo_team_env import NMMOTeamEnv
+from lib.team.team_helper import TeamHelper
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
@@ -124,26 +124,26 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  policy_pool = PolicyPool.from_dir(args.model_pool_dir)
+  policy_pool = AgentPool()
 
   def make_env():
     return AgentEnv(
       NMMOTeamEnv(config, team_helper), {
-        id: policy_pool.agent()
+        id: policy_pool.make_agent(id)
           for id in range(args.num_learners, team_helper.num_teams)
       })
 
   binding = pufferlib.emulation.Binding(
-    env_creator=BaselinePolicy.env_creator(config, team_helper),
+    env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
   )
-  agent = BaselinePolicy.create_policy()(binding)
+  learner_agent = BaselinePolicy.create_policy()(binding)
 
   if args.model_init_from_path is not None:
     print(f"Initializing model from {args.model_init_from_path}...")
     cleanrl_ppo_lstm.load_matching_state_dict(
-      agent,
+      learner_agent,
       torch.load(args.model_init_from_path)["agent_state_dict"]
     )
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
   try:
     cleanrl_ppo_lstm.train(
       binding,
-      agent,
+      learner_agent,
       run_name = args.experiment_name,
 
       cuda=torch.cuda.is_available(),
@@ -183,7 +183,7 @@ if __name__ == "__main__":
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
 
-      num_agents=policy_cls.num_agents(team_helper),
+      num_agents=args.num_learners,
       num_steps=args.num_steps,
       bptt_horizon=args.bptt_horizon,
 

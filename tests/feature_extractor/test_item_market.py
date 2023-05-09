@@ -9,7 +9,7 @@ from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
 from feature_extractor.entity_helper import EntityHelper
 
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 from tests.feature_extractor.testhelpers import FeaturizerTestTemplate, provide_item
 

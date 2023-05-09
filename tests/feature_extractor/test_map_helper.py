@@ -7,7 +7,7 @@ from feature_extractor.map_helper import MapHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.entity_helper import EntityHelper
 
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 from tests.feature_extractor.testhelpers import FeaturizerTestTemplate
 

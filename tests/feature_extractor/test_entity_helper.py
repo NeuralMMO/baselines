@@ -12,7 +12,7 @@ from feature_extractor.map_helper import MapHelper
 
 from team_helper import TeamHelper
 
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 EntityAttr = EntityState.State.attr_name_to_col
 

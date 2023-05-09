@@ -5,7 +5,7 @@ import nmmo
 
 # pylint: disable=import-error
 from feature_extractor.game_state import GameState
-from model.model import ModelArchitecture
+from model.realikun.model import ModelArchitecture
 
 
 class TestGameState(unittest.TestCase):

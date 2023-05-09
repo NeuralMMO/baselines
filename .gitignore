@@ -1,8 +1,10 @@
-experiments/
-maps/
-wandb*
-runs/
-replay*
+experiments
+maps
+runs
+replay
+checkpoints
+wandb
+maps
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -136,5 +138,3 @@ dmypy.json
 # IDEs
 .idea/
 .vscode/
-checkpoints/
-wandb/

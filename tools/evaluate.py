@@ -19,10 +19,10 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import pufferlib.vectorization.serial
 
-import cleanrl_ppo_lstm
-from model.policy import BaselinePolicy
+import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
+from model.realikun.policy import BaselinePolicy
 from model.simple.simple_policy import SimplePolicy
-from team_helper import TeamHelper
+from lib.team.team_helper import TeamHelper
 
 
 def replay_config(num_teams, team_size):

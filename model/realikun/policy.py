@@ -1,8 +1,8 @@
 import torch
 import pufferlib
 
-from model.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
-from nmmo_team_env import NMMOTeamEnv
+from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
+from env.nmmo_team_env import NMMOTeamEnv
 from team_helper import TeamHelper
 
 class BaselinePolicy(pufferlib.models.Policy):

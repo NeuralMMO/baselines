@@ -13,7 +13,7 @@ import nmmo
 
 from nmmo.entity.entity import EntityState
 
-from nmmo_env import NMMOEnv
+from env.nmmo_env import NMMOEnv
 from team_helper import TeamHelper
 EntityId = EntityState.State.attr_name_to_col["id"]
 
