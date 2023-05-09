@@ -106,6 +106,25 @@ def calc_tool_price(level):
 def calc_ammo_price(level):
   return max(1, int(level) - 1)
 
+ITEM_TO_PRICE_FN = {
+  Item.Hat.ITEM_TYPE_ID: calc_armor_price,
+  Item.Top.ITEM_TYPE_ID: calc_armor_price,
+  Item.Bottom.ITEM_TYPE_ID: calc_armor_price,
+  Item.Sword.ITEM_TYPE_ID: calc_weapon_price,
+  Item.Bow.ITEM_TYPE_ID: calc_weapon_price,
+  Item.Wand.ITEM_TYPE_ID: calc_weapon_price,
+  Item.Scrap.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Shaving.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Shard.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Rod.ITEM_TYPE_ID: calc_tool_price,
+  Item.Gloves.ITEM_TYPE_ID: calc_tool_price,
+  Item.Pickaxe.ITEM_TYPE_ID: calc_tool_price,
+  Item.Chisel.ITEM_TYPE_ID: calc_tool_price,
+  Item.Arcane.ITEM_TYPE_ID: calc_tool_price,
+  Item.Ration.ITEM_TYPE_ID: calc_armor_price, # arbitrary
+  Item.Poultice.ITEM_TYPE_ID: calc_weapon_price, # arbitrary
+}
+
 # legal use/sell consumables-related
 # CHECK ME: how this goes along with _force_use/sell?
 N_USE = 2
@@ -147,7 +166,6 @@ class ItemHelper:
 
     self.force_use_idx = [None] * self._team_size
     self.force_sell_idx = [None] * self._team_size
-    self.force_sell_price = [None] * self._team_size
     self.force_buy_idx = [None] * self._team_size
 
     self.best_hats = [None] * self._team_size
@@ -155,6 +173,7 @@ class ItemHelper:
     self.best_bottoms = [None] * self._team_size
     self.best_weapons = [None] * self._team_size
     self.best_tools = [None] * self._team_size
+
     self.best_items = {
       Item.Hat.ITEM_TYPE_ID: self.best_hats,
       Item.Top.ITEM_TYPE_ID: self.best_tops,
@@ -175,6 +194,9 @@ class ItemHelper:
 
     self._reset_obs_best_force()
     self._evaluate_best_item(obs)
+
+    # CHECK ME: to heuristically generate use actions
+    #   DO WE NEED THIS?
     self._equip_best_item(obs)
 
     for agent_id, agent_obs in obs.items():
@@ -188,6 +210,56 @@ class ItemHelper:
                       self._sell_weapons_armors_profession]:
         if self.force_sell_idx[member_pos] is None:
           sell_fn(member_pos, agent_obs['Inventory'])
+
+  def in_inventory(self, member_pos, inv_idx):
+    agent_id = self._entity_helper.pos_to_agent_id(member_pos)
+    if agent_id not in self._obs_inv or \
+       not self._config.ITEM_SYSTEM_ENABLED or \
+       inv_idx is None or \
+       inv_idx >= self._config.ITEM_INVENTORY_CAPACITY:
+      return False
+
+    item_id = self._obs_inv[agent_id][inv_idx,ItemAttr["id"]]
+    return item_id > 0
+
+  # pylint: disable=unused-argument
+  def legal_inventory(self, obs, action):
+    assert self._config.PROVIDE_ACTION_TARGETS,\
+      "config.PROVIDE_ACTION_TARGETS must be set True"
+    assert action in [nmmo.action.Use, nmmo.action.Sell, nmmo.action.Destroy],\
+      f"action {action} not valid"
+
+    targets = np.zeros((self._team_size,
+                        ModelArchitecture.INVENTORY_CAPACITY+1), dtype=np.float32)
+
+    if not self._config.ITEM_SYSTEM_ENABLED:
+      return targets
+
+    for member_pos in range(self._team_size):
+      ent_id = self._entity_helper.pos_to_agent_id(member_pos)
+      if ent_id in obs:
+        targets[member_pos][:ModelArchitecture.INVENTORY_CAPACITY] = \
+          obs[ent_id]["ActionTargets"][action][nmmo.action.InventoryItem]
+
+        # do not sell/destroy my best items
+        if action in [nmmo.action.Sell, nmmo.action.Destroy]:
+          for team_best in self.best_items.values():
+            my_best = team_best[member_pos]
+            if my_best is not None:
+              inv_idx = self._get_inv_idx(my_best[ItemAttr['id']], obs[ent_id]['Inventory'])
+              targets[member_pos][inv_idx] = 0 # mask the item
+
+    return targets
+
+  def get_price(self, member_pos, inv_idx):
+    agent_id = self._entity_helper.pos_to_agent_id(member_pos)
+    if agent_id not in self._obs_inv or \
+       not self._config.EXCHANGE_SYSTEM_ENABLED or \
+       inv_idx >= self._config.ITEM_INVENTORY_CAPACITY:
+      return np.nan
+
+    item = ItemState.parse_array(self._obs_inv[agent_id][inv_idx])
+    return ITEM_TO_PRICE_FN[item.type_id](item.level)
 
   #########################################
   # equip/sell helper functions
@@ -258,13 +330,12 @@ class ItemHelper:
   #########################################
   # sell helper functions
   #########################################
-  def _mark_sell_idx(self, member_pos, item, obs_inv, calc_price_fn):
+  def _mark_sell_idx(self, member_pos, item, obs_inv):
     # what to sell is already determined
     # CHECK ME: it should be the lowest level-item
     item_id = item[ItemAttr["id"]]
     inv_idx = np.argwhere(obs_inv[:,ItemAttr["id"]] == item_id).item()
     self.force_sell_idx[member_pos] = inv_idx
-    self.force_sell_price[member_pos] = calc_price_fn(item[ItemAttr["level"]])
 
   def _concat_types(self, obs_inv, types):
     # cannot use/sell the listed items, cannot sell the equipped items
@@ -278,20 +349,20 @@ class ItemHelper:
       return np.stack(sorted_items)
     return []
 
-  def _sell_type(self, member_pos, obs_inv, sell_type, calc_price_fn):
+  def _sell_type(self, member_pos, obs_inv, sell_type):
     sorted_items = self._concat_types(obs_inv, sell_type)
     if len(sorted_items):
       # items are sorted by level (ascending), so selling the lowest-level items first
-      self._mark_sell_idx(member_pos, sorted_items[0], obs_inv, calc_price_fn)
+      self._mark_sell_idx(member_pos, sorted_items[0], obs_inv)
 
   def _sell_ammos(self, member_pos, obs_inv) -> int:
     # NOTE: realikun doesn't think ammos seriously
-    self._sell_type(member_pos, obs_inv, AMMOS, calc_ammo_price)
+    self._sell_type(member_pos, obs_inv, AMMOS)
 
   def _sell_weapons(self, member_pos, obs_inv) -> int:
     agent_weapon = ATK_TO_WEAPON[self._entity_helper.member_professions[member_pos]]
     not_my_weapon = [w for w in WEAPONS if w != agent_weapon]
-    self._sell_type(member_pos, obs_inv, not_my_weapon, calc_weapon_price)
+    self._sell_type(member_pos, obs_inv, not_my_weapon)
 
   def _sell_tools(self, member_pos, obs_inv) -> int:
     sorted_items = self._concat_types(obs_inv, TOOLS)
@@ -302,7 +373,7 @@ class ItemHelper:
       best_tool_id = self.best_tools[member_pos][ItemAttr["id"]]
       sorted_items = sorted_items[sorted_items[:,ItemAttr["id"]] != best_tool_id]
     if len(sorted_items):
-      self._mark_sell_idx(member_pos, sorted_items[0], obs_inv, calc_tool_price)
+      self._mark_sell_idx(member_pos, sorted_items[0], obs_inv)
 
   def _sell_weapons_armors_profession(self, member_pos, obs_inv) -> None:
     # sell armors and weapons of my profession
@@ -334,9 +405,7 @@ class ItemHelper:
         # sell worst first
         sorted_items = sorted(items, key=lambda x: x[ItemAttr["level"]])
         sell_item = sorted_items[0]
-        self._mark_sell_idx(member_pos, sell_item, obs_inv,
-                            calc_weapon_price if sell_item[ItemAttr["type_id"]] in WEAPONS
-                            else calc_armor_price)
+        self._mark_sell_idx(member_pos, sell_item, obs_inv)
         break # stop here
 
   def legal_use_consumables(self):

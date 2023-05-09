@@ -95,7 +95,8 @@ class BaselinePolicy(pufferlib.models.Policy):
                for a in actions]
 
     team_actions = []
-    for action in [actions[2], actions[0], actions[1]]:
+    # action ordering fixed. see ModelArchitecture.ACTION_NUM_DIM
+    for action in actions:
       for player in range(ModelArchitecture.NUM_PLAYERS_PER_TEAM):
         team_actions.append(action[:, player, :])
 

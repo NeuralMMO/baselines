@@ -1,8 +1,6 @@
 import nmmo
 import numpy as np
 
-import pufferlib.emulation
-
 from feature_extractor.entity_helper import EntityHelper
 from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
@@ -31,6 +29,10 @@ class FeatureExtractor():
 
     self.item_helper = ItemHelper(config, self.entity_helper)
     self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
+
+    # force_action = True overrides the policy outputs with the featurizer's decisions
+    # TODO: check if using featurizer's decisions is actually better
+    self.force_action = True
 
   def reset(self, init_obs):
     self.game_state.reset(init_obs)
@@ -65,22 +67,6 @@ class FeatureExtractor():
     # game dim: (GAME_NUM_FEATURES)
     game = self.game_state.extract_game_feature(obs)
 
-    legal_moves = {
-      action: np.zeros((self.team_size, dim)) for action, dim in ModelArchitecture.ACTION_NUM_DIM.items()
-    }
-
-    if "move" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["move"] = self.map_helper.legal_moves(obs)
-
-    # target dim: (team_size, 19 = NUM_NPCS_CONSIDERED + NUM_ENEMIES_CONSIDERED)
-    if "target" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["target"] = self.entity_helper.legal_target()
-    if "style" in ModelArchitecture.ACTION_NUM_DIM:
-      legal_moves["style"] = np.ones((self.team_size, ModelArchitecture.ACTION_NUM_DIM["style"]))
-
-    # 'use': self.item_helper.legal_use_consumables(), # dim: (team_size, 3)
-    # 'sell': self.item_helper.legal_sell_consumables(), # dim: (team_size, 3)
-
     state = {
       'tile': tile,
 
@@ -101,28 +87,107 @@ class FeatureExtractor():
       'enemy_mask': self.entity_helper.enemy_mask,
 
       'game': game,
-      'legal': legal_moves,
+      'legal': self._make_legal_moves(obs),
       'prev_act': self.game_state.previous_actions(),
       'reset': np.array([self.game_state.curr_step == 0]),  # for resetting RNN hidden,
     }
 
     return state
 
+  def _make_legal_moves(self, obs):
+    legal_moves = {
+      action: np.zeros((self.team_size, dim), dtype=np.float32)
+        for action, dim in ModelArchitecture.ACTION_NUM_DIM.items()
+    }
+
+    # move
+    legal_moves["move"] = self.map_helper.legal_moves(obs)
+
+    # attack
+    legal_moves["style"] = np.ones((self.team_size,
+                                       ModelArchitecture.ACTION_NUM_DIM["style"]))
+    legal_moves["target"] = self.entity_helper.legal_target()
+
+    # use, destroy
+    if self._config.ITEM_SYSTEM_ENABLED:
+      legal_moves["use"] = self.item_helper.legal_inventory(obs, nmmo.action.Use)
+      legal_moves["destroy"] = self.item_helper.legal_inventory(obs, nmmo.action.Destroy)
+
+    if self._config.EXCHANGE_SYSTEM_ENABLED:
+      legal_moves["sell"] = self.item_helper.legal_inventory(obs, nmmo.action.Sell)
+      # legal_moves["buy"] = self.market_helper.legal_buy(obs)
+
+    # TODO: give, give-gold
+    #   give-gold and sell should benefit from a continuous price policy head
+    #   rather than a discrete action head (e.g., one-hot encoding out of 100 discrete prices)
+
+    return legal_moves
+
+  # pylint: disable=unsubscriptable-object
   def translate_actions(self, actions):
+    # save actions to game_state.prev_atns, assuming this fn is called at the step
+    self.game_state.prev_atns = actions
+
+    key_to_action = {
+      "use": nmmo.action.Use,
+      "destroy": nmmo.action.Destroy,
+      'sell': nmmo.action.Sell, }
     trans_actions = {}
-    for position in range(self.team_size):
-      trans_actions[position] = {
-        nmmo.action.Move: {
-          nmmo.action.Direction: nmmo.action.Direction.edges[actions['move'][position]]
-        },
-      }
+    for member_pos in range(self.team_size):
+      # NOTE: these keys are defined in ModelArchitecture.ACTION_NUM_DIM
+      # 'move': nmmo.action.Move
+      if "move" in actions:
+        trans_actions[member_pos] = {
+          nmmo.action.Move: {
+            nmmo.action.Direction:
+              nmmo.action.Direction.edges[actions['move'][member_pos]] }}
+
+      # 'target', 'style': nmmo.action.Attack
       if "target" in actions:
-        target_id = self.entity_helper.set_attack_target(position, actions['target'][position])
+        target_id = self.entity_helper.set_attack_target(member_pos,
+                                                         actions['target'][member_pos])
         if target_id != 0:
-          trans_actions[position][nmmo.action.Attack] = {
+          trans_actions[member_pos][nmmo.action.Attack] = {
             nmmo.action.Target: target_id,
-            nmmo.action.Style: nmmo.action.Style.edges[actions['style'][position]]
-          }
+            nmmo.action.Style: nmmo.action.Style.edges[actions['style'][member_pos]] }
 
+      # 'use': is overrided by item_helper.force_use_idx, if force_action = True
+      # 'destroy': is entirely from the policy
+      if self._config.ITEM_SYSTEM_ENABLED:
+        for key in ['use', 'destroy']:
+          if key in actions:
+            inv_idx = actions[key][member_pos]
+            if self.item_helper.in_inventory(member_pos, inv_idx):
+              trans_actions[member_pos][key_to_action[key]] = {
+                nmmo.action.InventoryItem: inv_idx }
 
+        # TODO: test if using force_use actually helps
+        #   this can be disabled by setting force_action to False
+        force_use = self.item_helper.force_use_idx[member_pos]
+        if self.force_action and force_use is not None:
+          trans_actions[member_pos][nmmo.action.Use] = {
+            nmmo.action.InventoryItem: force_use }
+
+      # 'sell' is overrided by item_helper.force_sell_idx, if force_action = True
+      if self._config.EXCHANGE_SYSTEM_ENABLED and 'sell' in actions:
+        # TODO: test if using force_sell actually helps
+        inv_idx = self.item_helper.force_sell_idx[member_pos] if self.force_action \
+                    else actions['sell'][member_pos]
+        if self.item_helper.in_inventory(member_pos, inv_idx):
+          trans_actions[member_pos][nmmo.action.Sell] = {
+            nmmo.action.InventoryItem: inv_idx,
+            nmmo.action.Price: self.item_helper.get_price(member_pos, inv_idx) }
+
+      # 'buy' is entirely from the item_helper (TODO: let the policy decide)
+      if self._config.EXCHANGE_SYSTEM_ENABLED and 'buy' in actions:
+        buy_idx = self.item_helper.force_buy_idx[member_pos]
+        if buy_idx is not None:
+          trans_actions[member_pos][nmmo.action.Buy] = {
+            nmmo.action.MarketItem: buy_idx }
+
+    # TODO: give, give-gold
+
+    # TODO: prioritize when there are multiple actions on the same item
+    #   currently, the actions will be executed in the order of
+    #   Use -> Give -> Destroy -> Sell
     return trans_actions
