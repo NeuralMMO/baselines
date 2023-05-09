@@ -106,10 +106,10 @@ if __name__ == "__main__":
     nmmo.config.Resource,
     nmmo.config.NPC,
     nmmo.config.Progression,
-    # nmmo.config.Equipment,
-    # nmmo.config.Item,
-    # nmmo.config.Exchange,
-    # nmmo.config.Profession,
+    nmmo.config.Equipment,
+    nmmo.config.Item,
+    nmmo.config.Exchange,
+    nmmo.config.Profession,
     nmmo.config.Combat,
   ):
     PROVIDE_ACTION_TARGETS = True
