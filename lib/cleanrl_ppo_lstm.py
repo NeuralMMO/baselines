@@ -20,6 +20,8 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.vectorization.multiprocessing
 import pufferlib.vectorization.serial
 
+from lib.agent.util import load_matching_state_dict
+
 
 def train(
         binding,
