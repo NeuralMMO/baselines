@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 import gym
 from pettingzoo.utils.env import AgentID, ParallelEnv
+from wandb import agent
 
 from lib.agent.agent import Agent
 
@@ -14,6 +15,7 @@ class AgentEnv(ParallelEnv):
     self._env = env
     self._agents = agents
     self._agent_keys = set(agents.keys())
+    self._rewards = {}
 
     assert set(self._agents.keys()) < set(self._env.possible_agents), \
       "Agents must be a subset of the environment's possible agents" \
@@ -29,6 +31,7 @@ class AgentEnv(ParallelEnv):
     return self._env.observation_space(agent_id)
 
   def reset(self, **kwargs) -> Dict[int, Any]:
+    self._rewards = {id: 0 for id in self._agent_keys}
     self._obs = self._env.reset(**kwargs)
     return self._obs
 
@@ -36,9 +39,12 @@ class AgentEnv(ParallelEnv):
     actions = {
       **actions,
       **{agent_id: agent.act(self._obs.get(agent_id))
-         for agent_id, agent in self._agents.items()}
+         for agent_id, agent in self._agents.items() if agent is not None }
     }
     self._obs, rewards, dones, infos = self._env.step(actions)
+
+    for agent_id in self._agent_keys:
+      self._rewards[agent_id] += rewards.get(agent_id, 0)
 
     return self._filter(self._obs), self._filter(rewards), self._filter(dones), self._filter(infos)
 

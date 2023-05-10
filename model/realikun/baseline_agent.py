@@ -2,7 +2,7 @@
 import torch
 from lib import cleanrl_ppo_lstm
 from lib.agent.agent import Agent
-from lib.agent.agent_pool import AgentPool
+from lib.agent.policy_pool import PolicyPool
 from model.realikun.policy import BaselinePolicy
 
 class BaselineAgent(Agent):

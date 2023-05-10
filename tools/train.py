@@ -10,8 +10,8 @@ import pufferlib.registry.nmmo
 import torch
 
 from model.realikun.baseline_agent import BaselineAgent
-from lib.agent.agent_pool import DirAgentPool
-from lib.agent.agent_pool_env import AgentPoolEnv
+from lib.agent.policy_pool import DirAgentPool, PolicyPool
+from lib.agent.agent_pool_env import OpponentPoolEnv
 
 import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from model.realikun.policy import BaselinePolicy
@@ -39,8 +39,11 @@ if __name__ == "__main__":
     "--env.num_learners", dest="num_learners", type=int, default=16,
     help="number of agents running he learner policy (default: 16)")
   parser.add_argument(
-    "--env.policy_pool_dir", dest="policy_pool_dir", type=str,
-    help="directory containing policies to use for non-learner agents")
+    "--env.opponent_pool", dest="opponent_pool", type=str, default=None,
+    help="json file containing the opponent pool (default: None)")
+  parser.add_argument(
+    "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
+    help="number of steps per episode (default: 1024)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -103,6 +106,7 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
+  # Configure NMMO Environment
   class TrainConfig(
     nmmo.config.Medium,
     nmmo.config.Terrain,
@@ -118,32 +122,47 @@ if __name__ == "__main__":
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = args.num_teams * args.team_size
     NPC_N = args.num_npcs
+    HORIZON = args.max_episode_length
 
   config = TrainConfig()
+
+  # Set up the teams
   team_helper = TeamHelper({
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
     for i in range(args.num_teams)}
   )
 
-  agent_pool = DirAgentPool(args.policy_pool_dir)
+  # Create a pool of opponents
+  opponent_pool = PolicyPool(args.opponent_pool)
+
+  binding = None
+
+  # Create an environment factory that uses the opponent pool
+  # for some of the agents, while letting the rest be learners
+  def make_agent(model_weights):
+    if binding is None:
+      return None
+    return BaselineAgent(model_weights, binding)
 
   def make_env():
-    return AgentPoolEnv(
+    return OpponentPoolEnv(
       NMMOTeamEnv(config, team_helper),
       range(args.num_learners, team_helper.num_teams),
-      agent_pool
+      opponent_pool,
+      make_agent
     )
 
+  # Create a pufferlib binding, and use it to initialize the
+  # opponent pool and create the learner agent
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
   )
+  opponent_pool.binding = binding
   learner_agent = BaselinePolicy.create_policy()(binding)
 
-  agent_pool.make_agent = lambda path: BaselineAgent(path, binding)
-  agent_pool.poll_dir()
-
+  # Initialize the learner agent from a pretrained model
   if args.model_init_from_path is not None:
     print(f"Initializing model from {args.model_init_from_path}...")
     cleanrl_ppo_lstm.load_matching_state_dict(
@@ -151,6 +170,7 @@ if __name__ == "__main__":
       torch.load(args.model_init_from_path)["agent_state_dict"]
     )
 
+  # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
   if args.experiment_name is None:
     prefix = f"{args.num_teams}x{args.team_size}_"
