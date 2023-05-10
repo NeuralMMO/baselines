@@ -10,8 +10,8 @@ import pufferlib.registry.nmmo
 import torch
 
 from model.realikun.baseline_agent import BaselineAgent
-from lib.agent.policy_pool import DirAgentPool, PolicyPool
-from lib.agent.agent_pool_env import OpponentPoolEnv
+from lib.agent.policy_pool import PolicyPool
+from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 
 import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from model.realikun.policy import BaselinePolicy
@@ -133,7 +133,10 @@ if __name__ == "__main__":
   )
 
   # Create a pool of opponents
-  opponent_pool = PolicyPool(args.opponent_pool)
+  if args.opponent_pool is None or args.num_learners == args.num_teams:
+    opponent_pool = PolicyPool()
+  else:
+    opponent_pool = PolicyPool(args.opponent_pool)
 
   binding = None
 
@@ -189,6 +192,16 @@ if __name__ == "__main__":
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
 
+  def epoch_end_callback(state):
+    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 0:
+        save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
+        temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
+        print(f'Saving checkpoint to {save_path}')
+        torch.save(state, temp_path)
+        os.rename(temp_path, save_path)
+        print(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
+        opponent_pool.add_policy(save_path, state["mean_reward"])
+
   try:
     cleanrl_ppo_lstm.train(
       binding,
@@ -214,8 +227,7 @@ if __name__ == "__main__":
       wandb_project_name=args.wandb_project,
       wandb_entity=args.wandb_entity,
 
-      checkpoint_dir=experiment_dir,
-      checkpoint_interval=args.checkpoint_interval,
+      epoch_end_callback=epoch_end_callback,
       resume_from_path=resume_from_path,
 
       # PPO

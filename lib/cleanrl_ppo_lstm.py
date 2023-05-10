@@ -51,8 +51,7 @@ def train(
         vf_coef=0.5,
         max_grad_norm=0.5,
         target_kl=None,
-        checkpoint_dir=None,
-        checkpoint_interval=1,
+        epoch_end_callback=None,
         resume_from_path=None,
         run_name=None,
         use_serial_vecenv=False,
@@ -385,20 +384,16 @@ def train(
         for k, v in prof_deltas.items():
             writer.add_scalar(f'performance/env/{k}', np.mean(v), global_step)
 
-        if checkpoint_dir is not None and update % checkpoint_interval == 0:
-            save_path = os.path.join(checkpoint_dir, f'{update:06d}.pt')
-            temp_path = os.path.join(checkpoint_dir, f'.{update:06d}.pt.tmp')
-            print(f'Saving checkpoint to {save_path}')
-            state = {
+        if epoch_end_callback is not None:
+            epoch_end_callback({
                 'update': update,
                 'global_step': global_step,
                 'agent_step': agent_step,
                 'optimizer_state_dict': optimizer.state_dict(),
                 'agent_state_dict': agent.state_dict(),
-                'wandb_run_id': wandb_run_id
-            }
-            torch.save(state, temp_path)
-            os.rename(temp_path, save_path)
+                'wandb_run_id': wandb_run_id,
+                "mean_reward": mean_reward * num_steps,
+            })
 
     envs.close()
     writer.close()
@@ -406,19 +401,3 @@ def train(
     if track:
         wandb.finish()
 
-# TODO: move this to a utils file
-def load_matching_state_dict(model, state_dict):
-    upgrade_required = False
-    model_state_dict = model.state_dict()
-    for name, param in state_dict.items():
-        if name in model_state_dict:
-            if model_state_dict[name].shape == param.shape:
-                model_state_dict[name].copy_(param)
-            else:
-                upgrade_required = True
-                print(f"Skipping {name} due to shape mismatch. Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}")
-        else:
-            upgrade_required = True
-            print(f"Skipping {name} as it is not found in the model's state_dict")
-    model.load_state_dict(model_state_dict, strict=False)
-    return upgrade_required
