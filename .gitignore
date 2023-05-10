@@ -1,7 +1,7 @@
 experiments
 maps
 runs
-replay
+replay*/
 checkpoints
 wandb
 maps
