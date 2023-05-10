@@ -1,6 +1,4 @@
 from collections import defaultdict
-from random import Random
-from traitlets import default
 from lib.agent.agent import NoopAgent
 from lib.agent.agent_env import AgentEnv
 from pettingzoo.utils.env import AgentID, ParallelEnv
