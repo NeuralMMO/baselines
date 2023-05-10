@@ -4,9 +4,10 @@ from attr import dataclass
 from collections import OrderedDict
 
 import torch
-from ..resnet import ResNet
-from ..mlp import MLPEncoder
 import torch.nn as nn
+
+from lib.model.mlp import MLPEncoder
+from lib.model.resnet import ResNet
 
 def sort_dict_by_key(dict):
   return OrderedDict((key, dict[key]) for key in sorted(dict.keys()))

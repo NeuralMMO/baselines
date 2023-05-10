@@ -1,8 +1,8 @@
 
 import nmmo
 import numpy as np
+from lib.model.util import multi_hot_generator
 
-from model.util import multi_hot_generator
 from model.realikun.model import ModelArchitecture
 
 

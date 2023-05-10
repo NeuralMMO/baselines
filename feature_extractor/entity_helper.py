@@ -4,10 +4,10 @@ import numpy as np
 
 import nmmo
 from nmmo.entity.entity import EntityState
+from lib.model.util import one_hot_generator
+from lib.team.team_helper import TeamHelper
 
-from team_helper import TeamHelper
 
-from model.util import one_hot_generator
 from model.realikun.model import ModelArchitecture
 
 EntityAttr = EntityState.State.attr_name_to_col

@@ -8,12 +8,13 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from lib.agent.agent_pool import ModelPool, PolicyPool
-from lib.agent.agent_env import AgentEnv
+
+from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.agent_pool import DirAgentPool
+from lib.agent.agent_pool_env import AgentPoolEnv
 
 import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from model.realikun.policy import BaselinePolicy
-from model.simple.simple_policy import SimplePolicy
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 
@@ -124,14 +125,14 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  policy_pool = AgentPool()
+  agent_pool = DirAgentPool(args.policy_pool_dir)
 
   def make_env():
-    return AgentEnv(
-      NMMOTeamEnv(config, team_helper), {
-        id: policy_pool.make_agent(id)
-          for id in range(args.num_learners, team_helper.num_teams)
-      })
+    return AgentPoolEnv(
+      NMMOTeamEnv(config, team_helper),
+      range(args.num_learners, team_helper.num_teams),
+      agent_pool
+    )
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
@@ -139,6 +140,9 @@ if __name__ == "__main__":
     suppress_env_prints=False,
   )
   learner_agent = BaselinePolicy.create_policy()(binding)
+
+  agent_pool.make_agent = lambda path: BaselineAgent(path, binding)
+  agent_pool.poll_dir()
 
   if args.model_init_from_path is not None:
     print(f"Initializing model from {args.model_init_from_path}...")
@@ -149,7 +153,7 @@ if __name__ == "__main__":
 
   os.makedirs(args.experiments_dir, exist_ok=True)
   if args.experiment_name is None:
-    prefix = f"{args.model_arch}_{args.num_teams}x{args.team_size}_"
+    prefix = f"{args.num_teams}x{args.team_size}_"
     existing = os.listdir(args.experiments_dir)
     prefix_pattern = re.compile(f'^{prefix}(\\d{{4}})$')
     existing_numbers = [int(match.group(1)) for name in existing for match in [prefix_pattern.match(name)] if match]

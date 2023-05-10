@@ -7,9 +7,8 @@ from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
 from feature_extractor.stat_helper import StatHelper
+from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
-
-from team_helper import TeamHelper
 
 class FeatureExtractor():
   def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):

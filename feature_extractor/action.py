@@ -11,6 +11,8 @@ from nmmo.io import action
 from nmmo.systems import item
 from nmmo.systems.item import ItemState
 
+from feature_extractor.item_helper import PROF_TO_ATK_TYPE
+
 
 EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
