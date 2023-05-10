@@ -8,9 +8,10 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
+from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
 from model.realikun.baseline_agent import BaselineAgent
-from lib.agent.policy_pool import PolicyPool
+from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 
 import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
@@ -136,7 +137,7 @@ if __name__ == "__main__":
   if args.opponent_pool is None or args.num_learners == args.num_teams:
     opponent_pool = PolicyPool()
   else:
-    opponent_pool = PolicyPool(args.opponent_pool)
+    opponent_pool = JsonPolicyPool(args.opponent_pool)
 
   binding = None
 
