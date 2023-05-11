@@ -52,15 +52,15 @@ class BaselinePolicy(pufferlib.models.Policy):
       return self.value_head(hidden.mean(dim=1))
 
   def encode_observations(self, env_outputs):
-    x = pufferlib.emulation.unpack_batched_obs(
-      self.observation_space,
-      #self.single_observation_space,
-      env_outputs
+    x = env_outputs
+    if isinstance(env_outputs, torch.Tensor):
+      x = pufferlib.emulation.unpack_batched_obs(
+        self.observation_space,
+        env_outputs
     )
 
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]
-
 
     x = self._preprocess(x)
 
