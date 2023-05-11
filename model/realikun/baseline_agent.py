@@ -35,6 +35,9 @@ class BaselineAgent(Agent):
   def act(self, observation, done=None):
     assert self._next_lstm_state is not None, "Must call reset() before act()"
 
+    if observation is None:
+       return {}
+
     # observation dim: (num_batch, num_features), done dim: (num_batch)
     t_obs = torch.Tensor(self._pack_unbatched_obs(observation)).to(self._device)
 
