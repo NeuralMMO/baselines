@@ -18,7 +18,7 @@ class BaselineAgent(Agent):
     self._binding = binding
     self._load()
 
-    self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    self._device = torch.device("cpu")
     self._policy = self._policy.to(self._device)
 
     self._next_lstm_state = None
