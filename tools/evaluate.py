@@ -19,12 +19,12 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import pufferlib.vectorization.serial
 
-import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
-from model.realikun.policy import BaselinePolicy
+from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
+from model.realikun.baseline_agent import BaselineAgent
 
 
-def replay_config(num_teams, team_size):
+def replay_config(num_teams, team_size, num_npcs):
   class ReplayConfig(
     nmmo.config.Medium,
     nmmo.config.Terrain,
@@ -40,10 +40,10 @@ def replay_config(num_teams, team_size):
     SAVE_REPLAY = True
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = num_teams * team_size
-    NPC_N = 256
+    NPC_N = num_npcs
 
-    # MAP_PREVIEW_DOWNSCALE        = 5
-    # MAP_CENTER                   = 40
+    MAP_PREVIEW_DOWNSCALE        = 8
+    MAP_CENTER                   = 64
 
   return ReplayConfig()
 
@@ -77,35 +77,28 @@ def np_encoder(obj):
     return obj.item()
 
 def save_replay(
-      model_arch,
       model_checkpoint,
       seed=1,
       num_teams=16,
       team_size=8,
+      num_npcs=0,
       save_dir=None):
 
-  config = replay_config(num_teams, team_size)
+  config = replay_config(num_teams, team_size, num_npcs)
   team_helper = TeamHelper({
     i: [i*team_size+j+1 for j in range(team_size)]
     for i in range(num_teams)}
   )
 
-  policy_cls = BaselinePolicy # realikun
-
   binding = pufferlib.emulation.Binding(
-    env_creator=policy_cls.env_creator(config, team_helper),
-    env_name="Neural MMO",
+    env_creator=lambda: NMMOTeamEnv(config, team_helper),
+    env_name="Neural Team MMO",
     suppress_env_prints=False,
   )
-  agent = policy_cls.create_policy()(binding)
 
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-  print(f"Initializing model from {model_checkpoint}...")
-  cleanrl_ppo_lstm.load_matching_state_dict(
-    agent,
-    torch.load(model_checkpoint, map_location=device)["agent_state_dict"]
-  )
+  agent_list = []
+  for _ in range(num_teams):
+    agent_list.append(BaselineAgent(model_checkpoint, binding))
 
   # TRY NOT TO MODIFY: seeding
   random.seed(seed)
@@ -113,87 +106,34 @@ def save_replay(
   torch.manual_seed(seed)
   torch.backends.cudnn.deterministic = True
 
+  team_env = binding.raw_env_creator()  # NMMOTeamEnv
 
-  ####################################################
-  # some constants, keeping the same as train()
-  # NOT using buffers, using only single env to make the replay
-  num_cores = 1
-  envs_per_worker = 1
-  num_envs = num_cores * envs_per_worker
-  num_agents = num_teams
-
-  envs = pufferlib.vectorization.serial.VecEnv(
-    binding,
-    num_workers=num_cores,
-    envs_per_worker=int(envs_per_worker),
-  )
-  agent = agent.to(device)
-
-  # ALGO Logic: Storage setup, to cross-examine with the replay. for one env only
-  #   CHECK ME: num_agents is 16 .. is this for one team only?
-  actions = [] # dim: (steps, num_agents, action_space_dim)
-  logprobs = [] # dim: (steps, num_agents)
-  rewards = [] #torch.zeros(num_agents).to(device)
-  dones = [] #torch.zeros(num_agents).to(device)
-  values = [] #torch.zeros(num_agents).to(device)
-
-  next_obs, next_done, next_lstm_state = [], [], []
-  envs.async_reset()
-  o, _, _, _ = envs.recv()
-  next_obs = torch.Tensor(o).to(device)
-  next_done = torch.zeros((num_envs * num_agents,)).to(device)
-  next_lstm_state = (
-      torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
-      torch.zeros(agent.lstm.num_layers, num_envs * num_agents, agent.lstm.hidden_size).to(device),
-  )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
-
-  epoch_lengths = []
-  epoch_returns = []
-
-  puffer_env = envs.envs_lists[0].envs[0]
   step = 0
-  while puffer_env.done is False:
-    # TRY NOT TO MODIFY: Receive from game and log data
+  actions = {}
+  while True:
     if step == 0:
-      dones.append(next_done.cpu())
+      team_obs = team_env.reset(seed=seed)
     else:
-      o, r, d, i = envs.recv()
+      team_obs, _, _, _ = team_env.step(actions)
 
-      next_obs = torch.Tensor(o).to(device)
-      next_done = torch.Tensor(d).to(device)
-
-      dones.append(next_done.cpu())
-      rewards.append(torch.tensor(r).float().view(-1).cpu()) # CHECK if this is correct
-
-      for item in i:
-        if "episode" in item.keys():
-          epoch_lengths.append(item["episode"]["l"])
-          epoch_returns.append(item["episode"]["r"])
-
-    # ALGO LOGIC: action logic
-    with torch.no_grad():
-      action, logprob, _, value, next_lstm_state = \
-        agent.get_action_and_value(next_obs, next_lstm_state, next_done)
-      values.append(value.flatten().cpu())
-
-    actions.append(action.cpu())
-    logprobs.append(logprob.cpu())
-
-    # TRY NOT TO MODIFY: execute the game
-    envs.send(action.cpu().numpy(), None)
-
-    step += 1
+    if len(team_obs):
+      # get actions for the next tick
+      actions = { team_id: agent_list[team_id].act(obs)
+                    for team_id, obs in team_obs.items() }
+      step += 1
+    else:
+      break
 
   print('Seed', seed, 'roll-out complete after', step-1, 'steps.')
 
   # CHECK ME: other way to get to the env realm?
   #   puffer_env -> team_env -> nmmo_env -> realm
-  replay = apply_team_color(puffer_env.env._env.realm.get_replay(),
+  replay = apply_team_color(team_env._env.realm.get_replay(),
                             team_helper)
 
   # check save_dir, create file name
   if save_dir is None:
-    save_dir = f"replay_{model_arch}"
+    save_dir = "replays"
   os.makedirs(save_dir, exist_ok=True)
   checkpoint_name = os.path.basename(model_checkpoint).split('.')[0]
   filename_body = f"{checkpoint_name}_{seed:04d}_{int(time.time())}"
@@ -209,7 +149,9 @@ def save_replay(
   # save additional info: teams, event_log
   replay_info = {}
   replay_info['teams'] = team_helper.teams
-  replay_info['event_log'] = puffer_env.env._env.realm.event_log.get_data()
+  replay_info['event_log'] = team_env._env.realm.event_log.get_data()
+  replay_info['event_attr_col'] = team_env._env.realm.event_log.attr_to_col
+
   with open(os.path.join(save_dir, 'supplement_' + filename_body + '.pkl'), 'wb') as out:
     pickle.dump(replay_info, out)
 
@@ -220,7 +162,7 @@ if __name__ == "__main__":
   parser.add_argument(
     "--model.checkpoint",
     dest="model_checkpoint", type=str,
-    default="model_weights/realikun.001470.pt", # "model_weights/simple.049500.pt",
+    default="model_weights/realikun.001470.pt",
     help="path to model checkpoint to load")
 
   parser.add_argument(
@@ -228,10 +170,14 @@ if __name__ == "__main__":
     help="random seed to initialize the env (default: 1)")
   parser.add_argument(
     "--env.num_teams", dest="num_teams", type=int, default=16,
-    help="number of teams to use for training (default: 16)")
+    help="number of teams to use for replay (default: 16)")
   parser.add_argument(
     "--env.team_size", dest="team_size", type=int, default=8,
-    help="number of agents per team to use for training (default: 8)")
+    help="number of agents per team to use for replay (default: 8)")
+  parser.add_argument(
+    "--env.num_npcs", dest="num_npcs", type=int, default=0,
+    help="number of NPCs to use for replay (default: 0)")
+
 
   parser.add_argument(
     "--eval.num_rounds", dest="num_rounds", type=int, default=1,
@@ -245,10 +191,10 @@ if __name__ == "__main__":
   for ri in range(args.num_rounds):
     print('Generating the replay for round', ri+1, 'with seed', args.seed+ri)
     save_replay(
-      model_arch="realikun",
       model_checkpoint=args.model_checkpoint,
       seed=args.seed+ri,
       num_teams=args.num_teams,
       team_size=args.team_size,
+      num_npcs=args.num_npcs,
       save_dir=args.save_dir,
     )
