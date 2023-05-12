@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
   parser.add_argument(
     "--file", dest="file_name", type=str,
-    help="path to the replay file to render")
+    help="path to the replay file to render", required=True)
 
   args = parser.parse_args()
 

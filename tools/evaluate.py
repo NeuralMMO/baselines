@@ -21,7 +21,6 @@ import pufferlib.vectorization.serial
 
 import lib.cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from model.realikun.policy import BaselinePolicy
-from model.simple.simple_policy import SimplePolicy
 from lib.team.team_helper import TeamHelper
 
 
@@ -30,16 +29,21 @@ def replay_config(num_teams, team_size):
     nmmo.config.Medium,
     nmmo.config.Terrain,
     nmmo.config.Resource,
+    nmmo.config.NPC,
     nmmo.config.Progression,
-    # nmmo.config.Profession
-    nmmo.config.Combat
+    nmmo.config.Equipment,
+    nmmo.config.Item,
+    nmmo.config.Exchange,
+    nmmo.config.Profession,
+    nmmo.config.Combat,
   ):
     SAVE_REPLAY = True
     PROVIDE_ACTION_TARGETS = True
     PLAYER_N = num_teams * team_size
+    NPC_N = 256
 
-    MAP_PREVIEW_DOWNSCALE        = 5
-    MAP_CENTER                   = 40
+    # MAP_PREVIEW_DOWNSCALE        = 5
+    # MAP_CENTER                   = 40
 
   return ReplayConfig()
 
@@ -87,8 +91,6 @@ def save_replay(
   )
 
   policy_cls = BaselinePolicy # realikun
-  if model_arch == "simple":
-    policy_cls = SimplePolicy
 
   binding = pufferlib.emulation.Binding(
     env_creator=policy_cls.env_creator(config, team_helper),
@@ -97,10 +99,12 @@ def save_replay(
   )
   agent = policy_cls.create_policy()(binding)
 
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
   print(f"Initializing model from {model_checkpoint}...")
   cleanrl_ppo_lstm.load_matching_state_dict(
     agent,
-    torch.load(model_checkpoint)["agent_state_dict"]
+    torch.load(model_checkpoint, map_location=device)["agent_state_dict"]
   )
 
   # TRY NOT TO MODIFY: seeding
@@ -109,7 +113,6 @@ def save_replay(
   torch.manual_seed(seed)
   torch.backends.cudnn.deterministic = True
 
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
   ####################################################
   # some constants, keeping the same as train()
@@ -117,7 +120,7 @@ def save_replay(
   num_cores = 1
   envs_per_worker = 1
   num_envs = num_cores * envs_per_worker
-  num_agents = policy_cls.num_agents(team_helper)
+  num_agents = num_teams
 
   envs = pufferlib.vectorization.serial.VecEnv(
     binding,
@@ -198,7 +201,7 @@ def save_replay(
   # save replay
   data = json.dumps(replay, default=np_encoder).encode('utf8')
   data = lzma.compress(data, format=lzma.FORMAT_ALONE)
-  save_file = os.path.join(save_dir, 'replay_' + filename_body + '.7z')
+  save_file = os.path.join(save_dir, 'replay_' + filename_body + '.lz')
   with open(save_file, 'wb') as out:
     out.write(data)
     print(f'Saved the replay {seed:04d} to {save_file}...')
@@ -213,12 +216,6 @@ def save_replay(
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-
-  parser.add_argument(
-    "--model.arch",
-    dest="model_arch", choices=["realikun", "simple"],
-    default="realikun",
-    help="model architecture (default: realikun)")
 
   parser.add_argument(
     "--model.checkpoint",
@@ -248,7 +245,7 @@ if __name__ == "__main__":
   for ri in range(args.num_rounds):
     print('Generating the replay for round', ri+1, 'with seed', args.seed+ri)
     save_replay(
-      model_arch=args.model_arch,
+      model_arch="realikun",
       model_checkpoint=args.model_checkpoint,
       seed=args.seed+ri,
       num_teams=args.num_teams,

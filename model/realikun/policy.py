@@ -79,25 +79,28 @@ class BaselinePolicy(pufferlib.models.Policy):
     batch_size, num_agents, num_features = h_inter.shape
     h_inter = h_inter.view(batch_size, num_agents*num_features)
 
-    return h_inter, None # (batch_size, num_agents * num_feature)
+    return h_inter, x["legal"] # (batch_size, num_agents * num_feature)
 
   def decode_actions(self, hidden, lookup, concat=True):
     batch_size = hidden.shape[0]
 
     # reshape the batch so that we compute actions per-agent
     hidden = hidden.view(-1, 512)
-    actions = self.policy_head(hidden)
+    action_logits = self.policy_head(hidden)
     if concat:
-      actions = torch.cat(actions, dim=-1)
+      action_logits = torch.cat(action_logits, dim=-1)
 
-    actions = [a.view(batch_size, ModelArchitecture.NUM_PLAYERS_PER_TEAM, -1)
-               for a in actions]
+    action_logits = [
+      a.view(batch_size, ModelArchitecture.NUM_PLAYERS_PER_TEAM, -1)
+      for a in action_logits]
 
     team_actions = []
     # action ordering fixed. see ModelArchitecture.ACTION_NUM_DIM
-    for action in actions:
+    for logits, at in zip(action_logits, lookup.keys()):
+      mask = lookup[at]
+      masked_action = logits + (1-mask)*torch.finfo(logits.dtype).min
       for player in range(ModelArchitecture.NUM_PLAYERS_PER_TEAM):
-        team_actions.append(action[:, player, :])
+        team_actions.append(masked_action[:, player, :])
 
     return team_actions
 
