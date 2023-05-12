@@ -365,6 +365,7 @@ class ItemHelper:
     self._sell_type(member_pos, obs_inv, not_my_weapon)
 
   def _sell_tools(self, member_pos, obs_inv) -> int:
+    return # xcxc
     sorted_items = self._concat_types(obs_inv, TOOLS)
     # filter out the best tool, if the agent has no weapons,
     #   which means if the agent already has a weapon, then it can sell tools
