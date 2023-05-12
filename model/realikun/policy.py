@@ -57,7 +57,7 @@ class BaselinePolicy(pufferlib.models.Policy):
       x = pufferlib.emulation.unpack_batched_obs(
         self.observation_space,
         env_outputs
-    )
+      )[0]
 
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]

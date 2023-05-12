@@ -212,8 +212,14 @@ def train(
                         if "episode" in item.keys():
                             epoch_lengths.append(item["episode"]["l"])
                             epoch_returns.append(item["episode"]["r"])
-                            writer.add_scalar("charts/episodic_return", item["episode"]["r"], global_step)
-                            writer.add_scalar("charts/episodic_length", item["episode"]["l"], global_step)
+                            writer.add_scalar(
+                                "charts/episodic_return",
+                                sum(item["episode"]["r"]) / len(item["episode"]["r"]),
+                                global_step)
+                            writer.add_scalar(
+                                "charts/episodic_length",
+                                sum(item["episode"]["l"]) / len(item["episode"]["l"]),
+                                global_step)
 
                 if step == num_steps:
                     continue
