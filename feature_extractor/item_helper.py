@@ -365,12 +365,12 @@ class ItemHelper:
     self._sell_type(member_pos, obs_inv, not_my_weapon)
 
   def _sell_tools(self, member_pos, obs_inv) -> int:
-    return # xcxc
     sorted_items = self._concat_types(obs_inv, TOOLS)
     # filter out the best tool, if the agent has no weapons,
     #   which means if the agent already has a weapon, then it can sell tools
     if self.best_weapons[member_pos] is None \
-       and self.best_tools[member_pos] is not None:
+       and self.best_tools[member_pos] is not None \
+       and len(sorted_items) > 0:
       best_tool_id = self.best_tools[member_pos][ItemAttr["id"]]
       sorted_items = sorted_items[sorted_items[:,ItemAttr["id"]] != best_tool_id]
     if len(sorted_items):
@@ -388,19 +388,20 @@ class ItemHelper:
     for item_type in arms_types:
       items = self._filter_inventory_obs(obs_inv, item_type, to_sell=True)
 
-      # filter out the best items
-      best_item = self.best_items[item_type][member_pos]
-      if best_item is not None:
-        items = items[items[:,ItemAttr["id"]] != best_item[ItemAttr["id"]]]
+      if len(items):
+        # filter out the best items
+        best_item = self.best_items[item_type][member_pos]
+        if best_item is not None:
+          items = items[items[:,ItemAttr["id"]] != best_item[ItemAttr["id"]]]
 
-      # also reserve items (that are not equippable now but) for future use
-      #   so the level doesn't have to be high
-      reserves = items[items[:,ItemAttr["level"]] <= MAX_RESERVE_LEVEL]
-      if len(reserves):
-        # the best one to reserve
-        reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]
-        # filter out the reserved
-        items = items[items[:,ItemAttr["id"]] != reserve[ItemAttr["id"]]]
+        # also reserve items (that are not equippable now but) for future use
+        #   so the level doesn't have to be high
+        reserves = items[items[:,ItemAttr["level"]] <= MAX_RESERVE_LEVEL]
+        if len(reserves):
+          # the best one to reserve
+          reserve = sorted(reserves, key=lambda x: x[ItemAttr["level"]])[-1]
+          # filter out the reserved
+          items = items[items[:,ItemAttr["id"]] != reserve[ItemAttr["id"]]]
 
       if len(items):
         # sell worst first
