@@ -45,6 +45,10 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
+  parser.add_argument(
+    "--env.disable_symlog_rewards", dest="symlog_rewards",
+    action="store_false", default=True,
+    help="disable symlog rewards (default: True)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -150,7 +154,7 @@ if __name__ == "__main__":
 
   def make_env():
     return OpponentPoolEnv(
-      NMMOTeamEnv(config, team_helper),
+      NMMOTeamEnv(config, team_helper, symlog_rewards=args.symlog_rewards),
       range(args.num_learners, team_helper.num_teams),
       opponent_pool,
       make_agent

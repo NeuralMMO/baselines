@@ -6,6 +6,10 @@ from pettingzoo.utils.env import AgentID
 import numpy as np
 
 class NMMOEnv(nmmo.Env):
+  def __init__(self, config, symlog_rewards=False):
+    super().__init__(config)
+    self._symlog_rewards = symlog_rewards
+
   def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
     infos = {}
     rewards = { eid: -1 for eid in dones }
@@ -31,7 +35,8 @@ class NMMOEnv(nmmo.Env):
       if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.6:
         rewards[agent_id] += 0.5
 
-      rewards[agent_id] = _symlog(rewards[agent_id])
+      if self._symlog_rewards:
+        rewards[agent_id] = _symlog(rewards[agent_id])
 
     return rewards, infos
 

@@ -13,8 +13,8 @@ from env.nmmo_env import NMMOEnv
 
 
 class NMMOTeamEnv(TeamEnv):
-  def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper):
-    super().__init__(NMMOEnv(config), team_helper)
+  def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper, symlog_rewards: bool = False):
+    super().__init__(NMMOEnv(config, symlog_rewards), team_helper)
 
     self._config = config
     self._feature_extractors = [
