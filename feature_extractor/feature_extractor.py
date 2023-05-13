@@ -11,9 +11,10 @@ from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
 
 class FeatureExtractor():
-  def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems):
+  def __init__(self, teams, team_id: int, config: nmmo.config.AllGameSystems, moves_only: bool = False):
     # super().__init__(teams, team_id)
     self._config = config
+    self._moves_only = moves_only
 
     self._team_helper = TeamHelper(teams)
     self._team_id = team_id
@@ -140,6 +141,9 @@ class FeatureExtractor():
           nmmo.action.Move: {
             nmmo.action.Direction:
               nmmo.action.Direction.edges[actions['move'][member_pos]] }}
+
+      if self._moves_only:
+        continue
 
       # 'target', 'style': nmmo.action.Attack
       if "target" in actions:

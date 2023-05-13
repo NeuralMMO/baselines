@@ -38,6 +38,7 @@ class NMMOEnv(nmmo.Env):
       if self._symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
+    infos[agent_id]["food"] = agent.food.val
     return rewards, infos
 
 def _symlog(value):

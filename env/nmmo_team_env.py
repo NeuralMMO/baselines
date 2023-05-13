@@ -13,12 +13,14 @@ from env.nmmo_env import NMMOEnv
 
 
 class NMMOTeamEnv(TeamEnv):
-  def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper, symlog_rewards: bool = False):
+  def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper,
+               symlog_rewards: bool = False,
+               moves_only: bool = False):
     super().__init__(NMMOEnv(config, symlog_rewards), team_helper)
 
     self._config = config
     self._feature_extractors = [
-      FeatureExtractor(team_helper.teams, tid, config) for tid in team_helper.teams
+      FeatureExtractor(team_helper.teams, tid, config, moves_only=moves_only) for tid in team_helper.teams
     ]
 
   def _box(self, *shape):
