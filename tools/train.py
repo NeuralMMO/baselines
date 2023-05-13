@@ -49,6 +49,10 @@ if __name__ == "__main__":
     "--env.disable_symlog_rewards", dest="symlog_rewards",
     action="store_false", default=True,
     help="disable symlog rewards (default: True)")
+  parser.add_argument(
+    "--env.moves_only", dest="moves_only",
+    action="store_true", default=False,
+    help="only allow moves (default: False)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -154,7 +158,9 @@ if __name__ == "__main__":
 
   def make_env():
     return OpponentPoolEnv(
-      NMMOTeamEnv(config, team_helper, symlog_rewards=args.symlog_rewards),
+      NMMOTeamEnv(config, team_helper,
+                  symlog_rewards=args.symlog_rewards,
+                  moves_only=args.moves_only),
       range(args.num_learners, team_helper.num_teams),
       opponent_pool,
       make_agent
