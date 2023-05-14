@@ -23,17 +23,17 @@ class NMMOEnv(nmmo.Env):
       if agent.food.val / self.config.RESOURCE_BASE > 0.4:
         rewards[agent_id] += 0.1
       if agent.food.val / self.config.RESOURCE_BASE > 0.6:
-        rewards[agent_id] += 0.5
+        rewards[agent_id] += 0.05
 
       if agent.water.val / self.config.RESOURCE_BASE > 0.4:
         rewards[agent_id] += 0.1
       if agent.water.val / self.config.RESOURCE_BASE > 0.6:
-        rewards[agent_id] += 0.5
+        rewards[agent_id] += 0.05
 
       if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.4:
         rewards[agent_id] += 0.1
       if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.6:
-        rewards[agent_id] += 0.5
+        rewards[agent_id] += 0.05
 
       if self._symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
@@ -46,7 +46,9 @@ class NMMOEnv(nmmo.Env):
 
       infos[agent_id]["cod/starved"] = agent.food.val == 0
       infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
-      infos[agent_id]["lifespan"] = self.realm.current_tick
+      infos[agent_id]["lifespan"] = self.realm.tick
+      if agent_id == 1:
+        print("Agent 1 died at tick", self.realm.tick, "with", agent.food.val, "food and", agent.water.val, "water")
 
     return rewards, infos
 
