@@ -224,7 +224,6 @@ def train(
                                     writer.add_scalar("charts/info/{}/sum".format(name), stat["sum"], global_step)
                                     writer.add_scalar("charts/info/{}/count".format(name), stat["count"], global_step)
                                     print("charts/info/{}/sum".format(name), stat["sum"], global_step)
-                            print(f"xcxc agent_info {agent_info.values()}")
 
                 if step == num_steps:
                     continue

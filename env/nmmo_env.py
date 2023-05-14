@@ -41,6 +41,7 @@ class NMMOEnv(nmmo.Env):
       if dones.get(agent_id, False):
         infos[agent_id]["cod/starved"] = agent.food.val == 0
         infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
+        print("xcxc dead agent", agent_id, agent.food.val, agent.water.val, agent.health.val)
 
     return rewards, infos
 
