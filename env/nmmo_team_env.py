@@ -90,17 +90,16 @@ class NMMOTeamEnv(TeamEnv):
     # Aggregate per-team infos
     for tid, team_info in infos.items():
       team_info["stats"] = {}
-      stats = team_info["stats"]
       for pid in range(self._team_helper.team_size[tid]):
         player_info = team_info.get(pid, {})
         for key, value in player_info.items():
-          if key not in stats:
-            stats[key] = {
+          if key not in team_info["stats"]:
+            team_info["stats"][key] = {
               "sum": 0,
               "count": 0,
             }
-            stats[key]["sum"] += float(value)
-            stats[key]["count"] += 1
+            team_info["stats"][key]["sum"] += float(value)
+            team_info["stats"][key]["count"] += 1
 
     return obs, rewards, dones, infos
 
