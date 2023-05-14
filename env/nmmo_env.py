@@ -38,7 +38,10 @@ class NMMOEnv(nmmo.Env):
       if self._symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
-      infos[agent_id]["food"] = agent.food.val
+      if dones.get(agent_id, False):
+        infos[agent_id]["env.cod.starved"] = agent.food.val == 0
+        infos[agent_id]["env.cod.dehydrated"] = agent.water.val == 0
+
     return rewards, infos
 
 def _symlog(value):

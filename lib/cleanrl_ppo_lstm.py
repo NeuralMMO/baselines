@@ -217,6 +217,12 @@ def train(
                             writer.add_scalar("charts/episodic_return", er, global_step)
                             writer.add_scalar("charts/episodic_length", el, global_step)
 
+                        for agent_info in item.values():
+                            if "stats" in agent_info.keys():
+                                for name, stat in agent_info["stats"].items():
+                                    writer.add_scalar("env/{}/sum".format(name), stat["sum"], global_step)
+                                    writer.add_scalar("env/{}/count".format(name), stat["count"], global_step)
+
                 if step == num_steps:
                     continue
 

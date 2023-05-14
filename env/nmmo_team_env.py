@@ -87,6 +87,21 @@ class NMMOTeamEnv(TeamEnv):
     #   dones[winner] = True
     #   self._num_alive[winner] = 0
 
+    # Aggregate per-team infos
+    for tid, team_info in infos.items():
+      team_info["stats"] = {}
+      stats = team_info["stats"]
+      for pid in range(self._team_helper.team_size[tid]):
+        player_info = team_info[pid]
+        for key, value in player_info.items():
+          if key not in stats:
+            stats[key] = {
+              "sum": 0,
+              "count": 0,
+            }
+            stats[key]["sum"] += float(value)
+            stats[key]["count"] += 1
+
     return obs, rewards, dones, infos
 
   def _convert_team_obs_to_agent_ids(self, team_id, team_obs):
