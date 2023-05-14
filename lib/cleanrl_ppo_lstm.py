@@ -222,6 +222,7 @@ def train(
                                 for name, stat in agent_info["stats"].items():
                                     writer.add_scalar("charts/info/{}/sum".format(name), stat["sum"], global_step)
                                     writer.add_scalar("charts/info/{}/count".format(name), stat["count"], global_step)
+                                    print("charts/info/{}/sum".format(name), stat["sum"], global_step)
 
                 if step == num_steps:
                     continue
