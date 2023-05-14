@@ -216,7 +216,7 @@ def train(
                             epoch_lengths.append(el)
                             writer.add_scalar("charts/episodic_return", er, global_step)
                             writer.add_scalar("charts/episodic_length", el, global_step)
-                            print(f"xcxc end of episode. {er} {el} {item.keys()}")
+                            print(f"xcxc end of episode. {er} {el} {item.values()}")
 
                         for agent_info in item.values():
                             if "stats" in agent_info.keys():
