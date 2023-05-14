@@ -220,7 +220,6 @@ def train(
                         for agent_info in item.values():
                             if "stats" in agent_info.keys():
                                 for name, stat in agent_info["stats"].items():
-                                    print("charts/info/{}/{}".format(name, stat["sum"]))
                                     writer.add_scalar("charts/info/{}/sum".format(name), stat["sum"], global_step)
                                     writer.add_scalar("charts/info/{}/count".format(name), stat["count"], global_step)
 
