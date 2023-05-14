@@ -92,7 +92,7 @@ class NMMOTeamEnv(TeamEnv):
       team_info["stats"] = {}
       stats = team_info["stats"]
       for pid in range(self._team_helper.team_size[tid]):
-        player_info = team_info[pid]
+        player_info = team_info.get(pid, {})
         for key, value in player_info.items():
           if key not in stats:
             stats[key] = {
