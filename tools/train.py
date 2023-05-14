@@ -172,6 +172,7 @@ if __name__ == "__main__":
     env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
+    emulate_const_horizon=args.max_episode_length,
   )
   opponent_pool.binding = binding
   learner_agent = BaselinePolicy.create_policy()(binding)
