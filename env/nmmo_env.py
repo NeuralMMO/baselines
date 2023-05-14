@@ -38,10 +38,12 @@ class NMMOEnv(nmmo.Env):
       if self._symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
-      if dones.get(agent_id, False):
-        infos[agent_id]["cod/starved"] = agent.food.val == 0
-        infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
-        print("xcxc dead agent", agent_id, agent.food.val, agent.water.val, agent.health.val)
+    for agent_id in dones.keys():
+      assert dones[agent_id], f'Agent {agent_id} is not done'
+      if agent_id not in infos:
+        infos[agent_id] = {}
+      infos[agent_id]["cod/starved"] = agent.food.val == 0
+      infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
 
     return rewards, infos
 
