@@ -41,6 +41,7 @@ class NMMOEnv(nmmo.Env):
     for agent_id in dones.keys():
       assert dones[agent_id], f'Agent {agent_id} is not done'
       agent = self.realm.players.get(agent_id)
+      assert agent is not None, f'Agent {agent_id} not found'
       if agent_id not in infos:
         infos[agent_id] = {}
 
