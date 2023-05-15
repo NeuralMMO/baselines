@@ -54,9 +54,8 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="only allow moves (default: False)")
   parser.add_argument(
-    "--env.regenerate_maps", dest="regenerate_maps",
-    action="store_true", default=False,
-    help="regenerate maps during env reset (default: False)"
+    "--env.num_maps", dest="num_maps", type=int, default=5,
+    help="number of maps to use for training (default: 1)"
   )
 
   parser.add_argument(
@@ -137,7 +136,7 @@ if __name__ == "__main__":
     PLAYER_N = args.num_teams * args.team_size
     NPC_N = args.num_npcs
     HORIZON = args.max_episode_length
-    MAP_FORCE_GENERATION = args.regenerate_maps
+    MAP_N = args.num_maps
 
   config = TrainConfig()
 
