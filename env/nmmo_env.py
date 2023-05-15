@@ -59,6 +59,9 @@ class NMMOEnv(nmmo.Env):
         if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.4:
           rewards[agent_id] -= 0.1
 
+      if self._rewards_config.achievements:
+        rewards[agent_id] += score_unique_events(self.realm, agent_id)
+
       if self._rewards_config.symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
@@ -136,7 +139,7 @@ def score_unique_events(realm, agent_id, score_diff=True):
 
     score_diff = True gives the difference score for the current tick
     score_diff = False gives the number of all unique events in the episode
-  
+
     EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
       because the details of these events are not recorded at all
 
