@@ -22,6 +22,7 @@ class NMMOEnv(nmmo.Env):
       assert agent is not None, f'Agent {agent_id} not found'
 
       rewards[agent_id] = 0.1
+
       if agent.food.val / self.config.RESOURCE_BASE > 0.4:
         rewards[agent_id] += 0.1
       if agent.food.val / self.config.RESOURCE_BASE > 0.6:
@@ -42,7 +43,14 @@ class NMMOEnv(nmmo.Env):
 
     for agent_id in dones.keys():
       assert dones[agent_id], f'Agent {agent_id} is not done'
-      agent = self.realm.players.dead[agent_id]
+      agent = self.realm.players.dead.get(agent_id)
+      if agent is None:
+        print("Agent", agent_id, "is not found in dead")
+        agent = self.realm.players.get(agent_id)
+        if agent is None:
+          print("Agent", agent_id, "is not found in players")
+          continue
+
       if agent_id not in infos:
         infos[agent_id] = {}
 
