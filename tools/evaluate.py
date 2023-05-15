@@ -19,6 +19,7 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import pufferlib.vectorization.serial
 
+from env.nmmo_env import RewardsConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.baseline_agent import BaselineAgent
@@ -82,7 +83,8 @@ def save_replay(
       num_teams=16,
       team_size=8,
       num_npcs=0,
-      save_dir=None):
+      save_dir=None,
+    ):
 
   config = replay_config(num_teams, team_size, num_npcs)
   team_helper = TeamHelper({
@@ -90,8 +92,10 @@ def save_replay(
     for i in range(num_teams)}
   )
 
+  reward_config = RewardsConfig()
+
   binding = pufferlib.emulation.Binding(
-    env_creator=lambda: NMMOTeamEnv(config, team_helper),
+    env_creator=lambda: NMMOTeamEnv(config, team_helper, reward_config),
     env_name="Neural Team MMO",
     suppress_env_prints=False,
   )
