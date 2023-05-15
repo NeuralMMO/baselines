@@ -8,4 +8,12 @@ python -u -O -m tools.train \
 --wandb.project=nmmo \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=10000000000 \
+--reward.hunger \
+--reward.thirst \
+--reward.health \
+--env.team_size=8 \
+--env.num_teams=16 \
+--env.num_npcs=256 \
+--env.num_maps=40 \
+--env.num_learners=16 \
 "${@}"

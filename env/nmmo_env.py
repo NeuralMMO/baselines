@@ -1,5 +1,8 @@
 
+from re import T
+import resource
 from typing import Dict, List
+from attr import dataclass
 
 import nmmo
 from pettingzoo.utils.env import AgentID
@@ -7,10 +10,27 @@ import numpy as np
 
 from nmmo.lib.log import EventCode
 
+@dataclass
+class RewardsConfig:
+  symlog_rewards: bool = True
+  hunger: bool = True
+  thirst: bool = True
+  health: bool = True
+  achievements: bool = True
 class NMMOEnv(nmmo.Env):
-  def __init__(self, config, symlog_rewards=False):
+  def __init__(
+      self, config,
+      rewards_config: RewardsConfig
+    ):
     super().__init__(config)
-    self._symlog_rewards = symlog_rewards
+    self._rewards_config = rewards_config
+    self._achievements = {}
+
+  def reset(self, map_id=None, seed=None, options=None):
+    self._achievements = {
+      id: {} for id in self.possible_agents
+    }
+    return super().reset(map_id, seed, options)
 
   def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
     infos = {}
@@ -21,35 +41,29 @@ class NMMOEnv(nmmo.Env):
       agent = self.realm.players.get(agent_id)
       assert agent is not None, f'Agent {agent_id} not found'
 
-      rewards[agent_id] = 0.1
+      rewards[agent_id] = 1
 
-      if agent.food.val / self.config.RESOURCE_BASE > 0.4:
-        rewards[agent_id] += 0.1
-      if agent.food.val / self.config.RESOURCE_BASE > 0.6:
-        rewards[agent_id] += 0.05
+      if self._rewards_config.hunger:
+        if agent.food.val / self.config.RESOURCE_BASE < 0.4:
+          rewards[agent_id] -= 0.1
 
-      if agent.water.val / self.config.RESOURCE_BASE > 0.4:
-        rewards[agent_id] += 0.1
-      if agent.water.val / self.config.RESOURCE_BASE > 0.6:
-        rewards[agent_id] += 0.05
+      if self._rewards_config.thirst:
+        if agent.water.val / self.config.RESOURCE_BASE < 0.4:
+          rewards[agent_id] -= 0.1
 
-      if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.4:
-        rewards[agent_id] += 0.1
-      if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.6:
-        rewards[agent_id] += 0.05
+      if self._rewards_config.health:
+        if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.4:
+          rewards[agent_id] -= 0.1
 
-      if self._symlog_rewards:
+      if self._rewards_config.symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
     for agent_id in dones.keys():
       assert dones[agent_id], f'Agent {agent_id} is not done'
-      agent = self.realm.players.dead.get(agent_id)
-      if agent is None:
-        print("Agent", agent_id, "is not found in dead")
-        agent = self.realm.players.get(agent_id)
-        if agent is None:
-          print("Agent", agent_id, "is not found in players")
-          continue
+      # TODO: sometimes dead agents haven't been culled yet
+      agent = self.realm.players.dead.get(
+        agent_id, self.realm.players.get(agent_id))
+      assert agent is not None, f'Agent {agent_id} not found'
 
       if agent_id not in infos:
         infos[agent_id] = {}
@@ -60,11 +74,7 @@ class NMMOEnv(nmmo.Env):
       infos[agent_id]["lifespan"] = self.realm.tick
 
       infos[agent_id]["latest_combat_tick"] = agent.latest_combat_tick.val
-      infos[agent_id].update(get_player_history(self.realm, agent_id))
-
-      if agent_id == 1:
-        print("Agent 1 died at tick", self.realm.tick, "with", agent.food.val, "food and", agent.water.val, "water")
-        print(infos[agent_id])
+      infos[agent_id].update(get_player_history(self.realm, agent_id, agent))
 
     return rewards, infos
 
@@ -85,8 +95,7 @@ def _symlog(value):
 INFO_KEY_TO_EVENT_CODE = { 'event/'+evt.lower(): val for evt, val in EventCode.__dict__.items()
                            if isinstance(val, int) }
 
-def get_player_history(realm, agent_id):
-  agent = realm.players.dead[agent_id]
+def get_player_history(realm, agent_id, agent):
   log = realm.event_log.get_data(agents = [agent_id])
   attr_to_col = realm.event_log.attr_to_col
 

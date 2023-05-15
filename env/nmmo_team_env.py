@@ -9,14 +9,15 @@ from feature_extractor.feature_extractor import FeatureExtractor
 from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
-from env.nmmo_env import NMMOEnv
+from env.nmmo_env import NMMOEnv, RewardsConfig
 
 
 class NMMOTeamEnv(TeamEnv):
   def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper,
-               symlog_rewards: bool = False,
+               rewards_config: RewardsConfig,
                moves_only: bool = False):
-    super().__init__(NMMOEnv(config, symlog_rewards), team_helper)
+
+    super().__init__(NMMOEnv(config, rewards_config), team_helper)
 
     self._config = config
     self._feature_extractors = [

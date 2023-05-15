@@ -8,6 +8,7 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
+from env.nmmo_env import RewardsConfig
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
 from model.realikun.baseline_agent import BaselineAgent
@@ -45,10 +46,7 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
-  parser.add_argument(
-    "--env.disable_symlog_rewards", dest="symlog_rewards",
-    action="store_false", default=True,
-    help="disable symlog rewards (default: True)")
+
   parser.add_argument(
     "--env.moves_only", dest="moves_only",
     action="store_true", default=False,
@@ -57,6 +55,28 @@ if __name__ == "__main__":
     "--env.num_maps", dest="num_maps", type=int, default=5,
     help="number of maps to use for training (default: 1)"
   )
+
+  parser.add_argument(
+    "--reward.hunger", dest="rewards_hunger",
+    action="store_true", default=False,
+    help="enable hunger rewards (default: False)")
+  parser.add_argument(
+    "--reward.thirst", dest="rewards_thirst",
+    action="store_true", default=False,
+    help="enable thirst rewards (default: False)")
+  parser.add_argument(
+    "--reward.health", dest="rewards_health",
+    action="store_true", default=False,
+    help="enable health rewards (default: False)")
+  parser.add_argument(
+    "--reward.achievements", dest="rewards_achievements",
+    action="store_true", default=False,
+    help="enable achievement rewards (default: False)")
+
+  parser.add_argument(
+    "--reward.disable_symlog", dest="symlog_rewards",
+    action="store_false", default=True,
+    help="disable symlog rewards (default: True)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -164,7 +184,13 @@ if __name__ == "__main__":
   def make_env():
     return OpponentPoolEnv(
       NMMOTeamEnv(config, team_helper,
-                  symlog_rewards=args.symlog_rewards,
+                  RewardsConfig(
+                    symlog_rewards=args.symlog_rewards,
+                    hunger=args.rewards_hunger,
+                    thirst=args.rewards_thirst,
+                    health=args.rewards_health,
+                    achievements=args.rewards_achievements
+                  ),
                   moves_only=args.moves_only),
       range(args.num_learners, team_helper.num_teams),
       opponent_pool,
