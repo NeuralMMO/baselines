@@ -17,6 +17,7 @@ class RewardsConfig:
   thirst: bool = True
   health: bool = True
   achievements: bool = True
+
 class NMMOEnv(nmmo.Env):
   def __init__(
       self, config,
@@ -40,6 +41,9 @@ class NMMOEnv(nmmo.Env):
       infos[agent_id] = {}
       agent = self.realm.players.get(agent_id)
       assert agent is not None, f'Agent {agent_id} not found'
+
+      # CHECK ME: unique event-based scoring
+      # rewards[agent_id] = score_unique_events(realm, agent_id)
 
       rewards[agent_id] = 1
 
@@ -70,10 +74,9 @@ class NMMOEnv(nmmo.Env):
 
       infos[agent_id]["cod/starved"] = agent.food.val == 0
       infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
-      infos[agent_id]["cod/attacked"] = (agent.latest_combat_tick.val == self.realm.tick)
+      infos[agent_id]["cod/attacked"] = agent.damage.val > 0
       infos[agent_id]["lifespan"] = self.realm.tick
 
-      infos[agent_id]["latest_combat_tick"] = agent.latest_combat_tick.val
       infos[agent_id].update(get_player_history(self.realm, agent_id, agent))
 
     return rewards, infos
@@ -112,6 +115,7 @@ def get_player_history(realm, agent_id, agent):
     key = 'event/' + evt
     history[key] = event_cnt[key] > 0 # interested in whether the agent did this or not
 
+  history['achieved/unique_events'] = score_unique_events(realm, agent_id, score_diff=False)
   history['achieved/exploration'] = agent.history.exploration
   history['achieved/player_kills'] = event_cnt['event/player_kill']
 
@@ -126,3 +130,48 @@ def get_player_history(realm, agent_id, agent):
   # TODO: consume ration/poultice?
 
   return history
+
+def score_unique_events(realm, agent_id, score_diff=True):
+  """Calculate score by counting unique events.
+
+    score_diff = True gives the difference score for the current tick
+    score_diff = False gives the number of all unique events in the episode
+  
+    EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
+      because the details of these events are not recorded at all
+
+    Count all PLAYER_KILL, EARN_GOLD, LEVEL_UP events
+  """
+  log = realm.event_log.get_data(agents = [agent_id])
+  attr_to_col = realm.event_log.attr_to_col
+
+  if len(log) == 0: # no event logs
+    return 0
+
+  if score_diff:
+    # TODO: nmmo event_log tick should be fixed in the env
+    curr_idx = log[:,attr_to_col['tick']] == (realm.tick - 1) # xcxc
+    if sum(curr_idx) == 0: # no new logs
+      return 0
+
+  # mask some columns to make the event redundant
+  cols_to_ignore = {
+    EventCode.SCORE_HIT: ['combat_style', 'damage'],
+    EventCode.CONSUME_ITEM: ['quantity'], # treat each (item, level) differently
+    EventCode.HARVEST_ITEM: ['quantity'], # but, count each (item, level) only once
+    EventCode.LIST_ITEM: ['quantity', 'price'],
+    EventCode.BUY_ITEM: ['quantity', 'price'], }
+
+  for code, attrs in cols_to_ignore.items():
+    idx = log[:,attr_to_col['event']] == code
+    for attr in attrs:
+      log[idx,attr_to_col[attr]] = 0
+
+  unique_all = np.unique(log[:,attr_to_col['event']:], axis=0)
+  score = len(unique_all)
+
+  if score_diff:
+    unique_prev = np.unique(log[~curr_idx,attr_to_col['event']:], axis=0)
+    return score - len(unique_prev)
+
+  return score
