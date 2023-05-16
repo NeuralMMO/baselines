@@ -143,7 +143,7 @@ def score_unique_events(realm, agent_id, score_diff=True):
     EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
       because the details of these events are not recorded at all
 
-    Count all PLAYER_KILL, EARN_GOLD, LEVEL_UP events
+    Count all PLAYER_KILL, EARN_GOLD (sold item), LEVEL_UP events
   """
   log = realm.event_log.get_data(agents = [agent_id])
   attr_to_col = realm.event_log.attr_to_col
@@ -152,8 +152,7 @@ def score_unique_events(realm, agent_id, score_diff=True):
     return 0
 
   if score_diff:
-    # TODO: nmmo event_log tick should be fixed in the env
-    curr_idx = log[:,attr_to_col['tick']] == (realm.tick - 1) # xcxc
+    curr_idx = log[:,attr_to_col['tick']] == realm.tick
     if sum(curr_idx) == 0: # no new logs
       return 0
 
@@ -162,6 +161,7 @@ def score_unique_events(realm, agent_id, score_diff=True):
     EventCode.SCORE_HIT: ['combat_style', 'damage'],
     EventCode.CONSUME_ITEM: ['quantity'], # treat each (item, level) differently
     EventCode.HARVEST_ITEM: ['quantity'], # but, count each (item, level) only once
+    EventCode.EQUIP_ITEM: ['quantity'],
     EventCode.LIST_ITEM: ['quantity', 'price'],
     EventCode.BUY_ITEM: ['quantity', 'price'], }
 
@@ -170,6 +170,11 @@ def score_unique_events(realm, agent_id, score_diff=True):
     for attr in attrs:
       log[idx,attr_to_col[attr]] = 0
 
+  # make every EARN_GOLD events unique
+  idx = log[:,attr_to_col['event']] == EventCode.EARN_GOLD
+  log[idx,attr_to_col['number']] = log[idx,attr_to_col['id']].copy() # this is a hack
+
+  # remove redundant events after masking
   unique_all = np.unique(log[:,attr_to_col['event']:], axis=0)
   score = len(unique_all)
 
