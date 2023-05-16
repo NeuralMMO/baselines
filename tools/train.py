@@ -153,6 +153,7 @@ if __name__ == "__main__":
     nmmo.config.Combat,
   ):
     PROVIDE_ACTION_TARGETS = True
+    MAP_FORCE_GENERATION = False
     PLAYER_N = args.num_teams * args.team_size
     NPC_N = args.num_npcs
     HORIZON = args.max_episode_length
