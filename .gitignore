@@ -1,6 +1,10 @@
-experiments/
-maps/
-wandb*
+experiments
+maps
+runs
+replay*/
+checkpoints
+wandb
+maps
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -18,7 +22,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -108,9 +111,8 @@ celerybeat.pid
 # Environments
 .env
 .venv
-env/
 venv/
-ENV/
+# ENV/
 env.bak/
 venv.bak/
 
@@ -131,3 +133,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# IDEs
+.idea/
+.vscode/
