@@ -168,7 +168,7 @@ if __name__ == "__main__":
   )
 
   # Create a pool of opponents
-  if args.opponent_pool is None or args.num_learners == args.num_teams:
+  if args.opponent_pool is None:
     opponent_pool = PolicyPool()
   else:
     opponent_pool = JsonPolicyPool(args.opponent_pool)
