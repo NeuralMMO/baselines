@@ -41,15 +41,11 @@ if __name__ == "__main__":
     "--env.num_learners", dest="num_learners", type=int, default=16,
     help="number of agents running he learner policy (default: 16)")
   parser.add_argument(
-    "--env.opponent_pool", dest="opponent_pool", type=str, default=None,
-    help="json file containing the opponent pool (default: None)")
-  parser.add_argument(
     "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
   parser.add_argument(
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
     help="number of ticks before death fog starts (default: None)")
-
   parser.add_argument(
     "--env.moves_only", dest="moves_only",
     action="store_true", default=False,
@@ -114,6 +110,9 @@ if __name__ == "__main__":
     "--train.use_serial_vecenv",
     dest="use_serial_vecenv", action="store_true",
     help="use serial vecenv impl (default: False)")
+  parser.add_argument(
+    "--train.opponent_pool", dest="opponent_pool", type=str, default=None,
+    help="json file containing the opponent pool (default: None)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
