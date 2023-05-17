@@ -46,6 +46,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
+  parser.add_argument(
+    "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
+    help="number of ticks before death fog starts (default: None)")
 
   parser.add_argument(
     "--env.moves_only", dest="moves_only",
@@ -158,6 +161,7 @@ if __name__ == "__main__":
     NPC_N = args.num_npcs
     HORIZON = args.max_episode_length
     MAP_N = args.num_maps
+    PLAYER_DEATH_FOG = args.death_fog_tick
 
   config = TrainConfig()
 
