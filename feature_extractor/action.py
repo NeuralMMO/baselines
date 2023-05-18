@@ -40,7 +40,6 @@ class Action:
                           .repeat(self.team_size, axis=0)  # init as idle
 
 
-  # xcxc read this
   def trans_action(self, actions):
     actions = np.array(actions)
     self.prev_actions = actions.T.copy()
