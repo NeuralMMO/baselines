@@ -36,7 +36,7 @@ if __name__ == "__main__":
     help="number of agents per team to use for training (default: 8)")
   parser.add_argument(
     "--env.num_npcs", dest="num_npcs", type=int, default=0,
-    help="number of NPCs to use for training (default: 0)")
+    help="number of NPCs to use for training (default: 256)")
   parser.add_argument(
     "--env.num_learners", dest="num_learners", type=int, default=16,
     help="number of agents running he learner policy (default: 16)")
@@ -81,13 +81,13 @@ if __name__ == "__main__":
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
       help="number of cores to use for training (default: num_envs)")
   parser.add_argument(
-    "--rollout.num_envs", dest="num_envs", type=int, default=1,
+    "--rollout.num_envs", dest="num_envs", type=int, default=4,
     help="number of environments to use for training (default: 1)")
   parser.add_argument(
     "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
     help="number of buffers to use for training (default: 4)")
   parser.add_argument(
-    "--rollout.num_steps", dest="num_steps", type=int, default=16,
+    "--rollout.num_steps", dest="num_steps", type=int, default=128,
     help="number of steps to rollout (default: 16)")
 
   parser.add_argument(
@@ -122,13 +122,13 @@ if __name__ == "__main__":
       help="wandb entity name (default: None)")
 
   parser.add_argument(
-    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=16,
+    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=8,
     help="train on bptt_horizon steps of a rollout at a time. "
      "use this to reduce GPU memory (default: 16)")
 
   parser.add_argument(
     "--ppo.num_minibatches",
-    dest="ppo_num_minibatches", type=int, default=None,
+    dest="ppo_num_minibatches", type=int, default=16,
     help="number of minibatches to use for training")
   parser.add_argument(
     "--ppo.update_epochs",
@@ -249,6 +249,7 @@ if __name__ == "__main__":
         print(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
         opponent_pool.add_policy(save_path, state["mean_reward"])
 
+  print("Starting training...")
   try:
     cleanrl_ppo_lstm.train(
       binding,
