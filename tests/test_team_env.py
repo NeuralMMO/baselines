@@ -4,9 +4,9 @@ from typing import Any, Dict
 import gym
 import numpy as np
 from pettingzoo.utils.env import ParallelEnv
+from lib.team.team_env import TeamEnv
 
-from team_env import TeamEnv
-from team_helper import TeamHelper
+from lib.team.team_helper import TeamHelper
 
 class TestEnv(ParallelEnv):
   # pylint: disable=abstract-method,unused-argument

@@ -6,7 +6,7 @@ from nmmo.core.realm import Realm
 
 from scripted import baselines
 
-from team_helper import TeamHelper
+from lib.team.team_helper import TeamHelper
 
 class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
   RENDER = False

@@ -9,8 +9,7 @@ from nmmo.datastore.numpy_datastore import NumpyDatastore
 # pylint: disable=import-error
 from feature_extractor.entity_helper import EntityHelper, ATK_TYPE
 from feature_extractor.map_helper import MapHelper
-
-from team_helper import TeamHelper
+from lib.team.team_helper import TeamHelper
 
 from model.realikun.model import ModelArchitecture
 
