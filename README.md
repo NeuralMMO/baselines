@@ -1,10 +1,10 @@
-# Baselines
-Baselines for Neural MMO (neuralmmo.github.io) -- new users should treat this repo as a starter project
+![figure](https://neuralmmo.github.io/_static/banner.png)
 
-[![Discord Chat](https://img.shields.io/discord/569049269051457537.svg)](https://discord.gg/BkMmFUC)
-<a href="https://twitter.com/jsuarez5341?ref_src=twsrc%5Etfw" target="_blank">
-  <img src="http://jpillora.com/github-twitter-button/img/tweet.png"
-       alt="tweet button" title="Follow"></img>
-</a>
+# ![icon](https://neuralmmo.github.io/_build/html/_images/icon.png) Welcome to the Platform!
 
-[Documentation](https://neuralmmo.github.io "Neural MMO Documentation") is hosted by github.io.
+[![](https://dcbadge.vercel.app/api/server/BkMmFUC?style=plastic)](https://discord.gg/BkMmFUC)
+[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40jsuarez5341)](https://twitter.com/jsuarez5341)
+
+Baselines repository for Neural MMO. New users should treat this as a starter project. The project is under active development with [Documentation](https://neuralmmo.github.io "Neural MMO Documentation") hosted by github.io.
+
+![figure](https://neuralmmo.github.io/_build/html/_images/poster.png)
