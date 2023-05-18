@@ -23,7 +23,6 @@ class SimplePolicy(pufferlib.models.Policy):
     self.observation_space = binding.featurized_single_observation_space
     self.action_space = binding._single_action_space
 
-    # xcxc Do these belong here?
     self.state_handler_dict = {}
     torch.set_num_threads(1)
 
