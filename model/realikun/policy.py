@@ -8,7 +8,7 @@ class BaselinePolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
     super().__init__(binding, input_size, hidden_size)
 
-    # xcxc Do these belong here?
+    # CHECK: Do these belong here?
     self.state_handler_dict = {}
     torch.set_num_threads(1)
 
@@ -42,13 +42,12 @@ class BaselinePolicy(pufferlib.models.Policy):
     self.observation_space = binding.featurized_single_observation_space
     self.single_observation_space = binding.single_observation_space
 
-
     self.policy_head = PolicyHead(
         ModelArchitecture.LSTM_HIDDEN, ModelArchitecture.ACTION_NUM_DIM)
 
   def critic(self, hidden):
-      # xcxc 512 is hardcoded here
-      hidden = hidden.view(-1, ModelArchitecture.NUM_PLAYERS_PER_TEAM, 512)
+      hidden = hidden.view(
+        -1, ModelArchitecture.NUM_PLAYERS_PER_TEAM, ModelArchitecture.LSTM_HIDDEN)
       return self.value_head(hidden.mean(dim=1))
 
   def encode_observations(self, env_outputs):
