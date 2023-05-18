@@ -1,10 +1,7 @@
 import torch
 
-from prioritized_level_replay.level import Level
-from prioritized_level_replay.replay import (
-    PrioritizedReplayDistribution,
-    PrioritizedReplay
-)
+from lib.prioritized_level_replay.level import Level
+from lib.prioritized_level_replay.replay import PrioritizedReplay, PrioritizedReplayDistribution
 
 def test_prioritized_replay_distribution():
     level_1 = Level("level_1")
