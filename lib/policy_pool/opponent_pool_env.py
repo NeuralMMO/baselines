@@ -44,7 +44,8 @@ class OpponentPoolEnv(AgentEnv):
         self._policy_ids[agent_id] = policy_id
         self._agents[agent_id] = self._make_agent_fn(self._policy_pool.model_path(policy_id))
 
-    print("OpponentPoolEnv: Selected policies", self._policy_ids)
+    if len(self._policy_ids) > 0:
+      print("OpponentPoolEnv: Selected policies", self._policy_ids)
 
     return super().reset(**kwargs)
 

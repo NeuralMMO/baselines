@@ -50,7 +50,7 @@ class EntityHelper:
     # NPC_CONSIDERED + ENEMY_CONSIDERED
     self._entity_targets = None
 
-    # xcxc: the num_teams is hardcoded to 16
+    # TODO: the num_teams is hardcoded to 16
     #   if num_team > 16, this will cause an error
     self._team_feature = one_hot_generator(
       ModelArchitecture.NUM_TEAMS, int(self._team_id))

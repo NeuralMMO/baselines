@@ -60,7 +60,7 @@ class NMMOEnv(nmmo.Env):
           rewards[agent_id] -= 0.1
 
       if self._rewards_config.achievements:
-        rewards[agent_id] += score_unique_events(self.realm, agent_id)
+        rewards[agent_id] += 10*score_unique_events(self.realm, agent_id)
 
       if self._rewards_config.symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
