@@ -6,7 +6,6 @@ from feature_extractor.game_state import GameState
 from feature_extractor.map_helper import MapHelper
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
-from feature_extractor.stat_helper import StatHelper
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
 
@@ -21,12 +20,8 @@ class FeatureExtractor():
     self.team_size = self._team_helper.team_size[team_id]
 
     self.game_state = GameState(config, self.team_size)
-
     self.entity_helper = EntityHelper(config, self._team_helper, team_id)
-    self.stat_helper = StatHelper(config, self.entity_helper)
-
     self.map_helper = MapHelper(config, self.entity_helper)
-
     self.item_helper = ItemHelper(config, self.entity_helper)
     self.market_helper = MarketHelper(config, self.entity_helper, self.item_helper)
 
@@ -37,7 +32,6 @@ class FeatureExtractor():
   def reset(self, init_obs):
     self.game_state.reset(init_obs)
     self.map_helper.reset()
-    self.stat_helper.reset()
     self.entity_helper.reset(init_obs)
     self.item_helper.reset()
     self.market_helper.reset()
@@ -50,9 +44,6 @@ class FeatureExtractor():
 
     self.item_helper.update(obs) # use & sell
     self.market_helper.update(obs, self.game_state.curr_step) # buy
-
-    # CHECK ME: we can get better stat from the event log. Do we need stat_helper?
-    self.stat_helper.update(obs)
 
     # tile dim: (team_size, TILE_NUM_CHANNELS, *TILE_IMG_SIZE)
     tile = self.map_helper.extract_tile_feature()

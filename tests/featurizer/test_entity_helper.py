@@ -30,8 +30,8 @@ class TestEntityHelper(unittest.TestCase):
     self.config = nmmo.config.Medium()
 
     self.num_npcs = 4
-    self.num_team = 2
-    self.team_size = 4
+    self.num_team = ModelArchitecture.NUM_TEAMS
+    self.team_size = ModelArchitecture.NUM_PLAYERS_PER_TEAM
     teams = { tid: list(range(1+tid*self.team_size, 1+(tid+1)*self.team_size))
               for tid in range(self.num_team) }
 
@@ -93,40 +93,30 @@ class TestEntityHelper(unittest.TestCase):
     team_features, team_mask = \
       self.entity_helper.team_features_and_mask(self.map_helper)
 
-    n_feat = ModelArchitecture.ENTITY_NUM_FEATURES + \
-             self.num_team + self.team_size + \
-             ModelArchitecture.NUM_PROFESSIONS + \
-             ModelArchitecture.NEARBY_NUM_FEATURES
-
-    self.assertEqual(team_features.shape, (self.team_size, n_feat))
+    self.assertEqual(team_features.shape, (self.team_size,
+                                           ModelArchitecture.TEAM_NUM_FEATURES))
     self.assertEqual(team_mask.shape, (self.team_size,))
 
   def test_npcs_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    npc_features, npc_mask, npc_target = self.entity_helper.npcs_features_and_mask()
 
-    self.assertEqual(npc_features.shape, (self.team_size,
+    self.assertEqual(self.entity_helper.npc_features.shape, (self.team_size,
                                           ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED,
                                           ModelArchitecture.ENTITY_NUM_FEATURES))
-    self.assertEqual(npc_mask.shape, (self.team_size,
+    self.assertEqual(self.entity_helper.npc_mask.shape, (self.team_size,
                                       ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
-    self.assertEqual(npc_target.shape, (self.team_size,
-                                        ModelArchitecture.ENTITY_NUM_NPCS_CONSIDERED))
 
 
   def test_enemies_features_and_mask(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
     self.entity_helper.reset(obs)
-    enemy_features, enemy_mask, enemy_target = self.entity_helper.enemies_features_and_mask()
 
-    self.assertEqual(enemy_features.shape, (self.team_size,
+    self.assertEqual(self.entity_helper.enemy_features.shape, (self.team_size,
                                             ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED,
                                             ModelArchitecture.ENTITY_NUM_FEATURES))
-    self.assertEqual(enemy_mask.shape, (self.team_size,
+    self.assertEqual(self.entity_helper.enemy_mask.shape, (self.team_size,
                                         ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
-    self.assertEqual(enemy_target.shape, (self.team_size,
-                                          ModelArchitecture.ENTITY_NUM_ENEMIES_CONSIDERED))
 
   def test_choose_professions(self):
     # pylint: disable=protected-access
