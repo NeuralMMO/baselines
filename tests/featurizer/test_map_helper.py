@@ -9,7 +9,7 @@ from feature_extractor.entity_helper import EntityHelper
 
 from model.realikun.model import ModelArchitecture
 
-from tests.feature_extractor.testhelpers import FeaturizerTestTemplate
+from tests.featurizer.testhelpers import FeaturizerTestTemplate
 
 TEST_HORIZON = 5
 RANDOM_SEED = 0 # random.randint(0, 10000)
@@ -35,7 +35,6 @@ class TestMapHelper(FeaturizerTestTemplate):
     entity_helper.reset(team_obs)
 
     # execute step and update the featurizers
-    game_state.advance()
     obs, _, _, _ = env.step({})
     team_obs = self._filter_obs(obs, team_id)
     game_state.update(team_obs)

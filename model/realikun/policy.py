@@ -1,5 +1,7 @@
 import torch
 import pufferlib
+import pufferlib.models
+import pufferlib.frameworks.cleanrl
 
 from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
 from env.nmmo_team_env import NMMOTeamEnv

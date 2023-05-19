@@ -19,7 +19,7 @@ class GameState:
 
   def reset(self, init_obs):
     self.curr_step = 0
-    self.prev_obs = init_obs
+    self.curr_obs = init_obs
 
   def update(self, obs):
     self.prev_obs = self.curr_obs

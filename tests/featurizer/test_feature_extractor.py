@@ -5,7 +5,7 @@ import nmmo
 
 from feature_extractor.feature_extractor import FeatureExtractor
 
-from tests.feature_extractor.testhelpers import FeaturizerTestTemplate
+from tests.featurizer.testhelpers import FeaturizerTestTemplate
 
 RANDOM_SEED = 0 # random.randint(0, 10000)
 

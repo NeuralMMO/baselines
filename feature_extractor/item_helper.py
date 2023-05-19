@@ -21,19 +21,19 @@ ITEM_TO_PROF_LEVEL = {
   Item.Hat.ITEM_TYPE_ID: "level",
   Item.Top.ITEM_TYPE_ID: "level",
   Item.Bottom.ITEM_TYPE_ID: "level",
-  Item.Sword.ITEM_TYPE_ID: "melee_level",
+  Item.Spear.ITEM_TYPE_ID: "melee_level",
   Item.Bow.ITEM_TYPE_ID: "range_level",
   Item.Wand.ITEM_TYPE_ID: "mage_level",
-  Item.Scrap.ITEM_TYPE_ID: "melee_level",
-  Item.Shaving.ITEM_TYPE_ID: "range_level",
-  Item.Shard.ITEM_TYPE_ID: "mage_level",
+  Item.Whetstone.ITEM_TYPE_ID: "melee_level",
+  Item.Arrow.ITEM_TYPE_ID: "range_level",
+  Item.Runes.ITEM_TYPE_ID: "mage_level",
   Item.Rod.ITEM_TYPE_ID: "fishing_level",
   Item.Gloves.ITEM_TYPE_ID: "herbalism_level",
   Item.Pickaxe.ITEM_TYPE_ID: "prospecting_level",
-  Item.Chisel.ITEM_TYPE_ID: "carving_level",
-  Item.Arcane.ITEM_TYPE_ID: "alchemy_level",
+  Item.Axe.ITEM_TYPE_ID: "carving_level",
+  Item.Chisel.ITEM_TYPE_ID: "alchemy_level",
   Item.Ration.ITEM_TYPE_ID: "level",
-  Item.Poultice.ITEM_TYPE_ID: "level",
+  Item.Potion.ITEM_TYPE_ID: "level",
 }
 
 ARMORS = {
@@ -43,7 +43,7 @@ ARMORS = {
 }
 
 WEAPONS = {
-  Item.Sword.ITEM_TYPE_ID,
+  Item.Spear.ITEM_TYPE_ID,
   Item.Wand.ITEM_TYPE_ID,
   Item.Bow.ITEM_TYPE_ID,
 }
@@ -52,31 +52,31 @@ TOOLS = {
   Item.Rod.ITEM_TYPE_ID,
   Item.Gloves.ITEM_TYPE_ID,
   Item.Pickaxe.ITEM_TYPE_ID,
+  Item.Axe.ITEM_TYPE_ID,
   Item.Chisel.ITEM_TYPE_ID,
-  Item.Arcane.ITEM_TYPE_ID,
 }
 
 AMMOS = {
-  Item.Scrap.ITEM_TYPE_ID,
-  Item.Shaving.ITEM_TYPE_ID,
-  Item.Shard.ITEM_TYPE_ID,
+  Item.Whetstone.ITEM_TYPE_ID,
+  Item.Arrow.ITEM_TYPE_ID,
+  Item.Runes.ITEM_TYPE_ID,
 }
 
 CONSUMABLES = {
   Item.Ration.ITEM_TYPE_ID,
-  Item.Poultice.ITEM_TYPE_ID,
+  Item.Potion.ITEM_TYPE_ID,
 }
 
 ATK_TO_WEAPON = {
-  'Melee': Item.Sword.ITEM_TYPE_ID,
+  'Melee': Item.Spear.ITEM_TYPE_ID,
   'Range': Item.Bow.ITEM_TYPE_ID,
   'Mage': Item.Wand.ITEM_TYPE_ID
 }
 
 ATK_TO_TOOL = {
   'Melee': Item.Pickaxe.ITEM_TYPE_ID,
-  'Range': Item.Chisel.ITEM_TYPE_ID,
-  'Mage': Item.Arcane.ITEM_TYPE_ID
+  'Range': Item.Axe.ITEM_TYPE_ID,
+  'Mage': Item.Chisel.ITEM_TYPE_ID
 }
 
 ATK_TO_TILE = {
@@ -110,19 +110,19 @@ ITEM_TO_PRICE_FN = {
   Item.Hat.ITEM_TYPE_ID: calc_armor_price,
   Item.Top.ITEM_TYPE_ID: calc_armor_price,
   Item.Bottom.ITEM_TYPE_ID: calc_armor_price,
-  Item.Sword.ITEM_TYPE_ID: calc_weapon_price,
+  Item.Spear.ITEM_TYPE_ID: calc_weapon_price,
   Item.Bow.ITEM_TYPE_ID: calc_weapon_price,
   Item.Wand.ITEM_TYPE_ID: calc_weapon_price,
-  Item.Scrap.ITEM_TYPE_ID: calc_ammo_price,
-  Item.Shaving.ITEM_TYPE_ID: calc_ammo_price,
-  Item.Shard.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Whetstone.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Arrow.ITEM_TYPE_ID: calc_ammo_price,
+  Item.Runes.ITEM_TYPE_ID: calc_ammo_price,
   Item.Rod.ITEM_TYPE_ID: calc_tool_price,
   Item.Gloves.ITEM_TYPE_ID: calc_tool_price,
   Item.Pickaxe.ITEM_TYPE_ID: calc_tool_price,
+  Item.Axe.ITEM_TYPE_ID: calc_tool_price,
   Item.Chisel.ITEM_TYPE_ID: calc_tool_price,
-  Item.Arcane.ITEM_TYPE_ID: calc_tool_price,
   Item.Ration.ITEM_TYPE_ID: calc_armor_price, # arbitrary
-  Item.Poultice.ITEM_TYPE_ID: calc_weapon_price, # arbitrary
+  Item.Potion.ITEM_TYPE_ID: calc_weapon_price, # arbitrary
 }
 
 # legal use/sell consumables-related
@@ -159,7 +159,7 @@ class ItemHelper:
     self.force_buy_idx = None
 
   def reset(self):
-    pass
+    self._reset_obs_best_force()
 
   def _reset_obs_best_force(self):
     self._obs_inv: Dict = {}
@@ -178,14 +178,14 @@ class ItemHelper:
       Item.Hat.ITEM_TYPE_ID: self.best_hats,
       Item.Top.ITEM_TYPE_ID: self.best_tops,
       Item.Bottom.ITEM_TYPE_ID: self.best_bottoms,
-      Item.Sword.ITEM_TYPE_ID: self.best_weapons,
+      Item.Spear.ITEM_TYPE_ID: self.best_weapons,
       Item.Bow.ITEM_TYPE_ID: self.best_weapons,
       Item.Wand.ITEM_TYPE_ID: self.best_weapons,
       Item.Rod.ITEM_TYPE_ID: self.best_tools,
       Item.Gloves.ITEM_TYPE_ID: self.best_tools,
       Item.Pickaxe.ITEM_TYPE_ID: self.best_tools,
+      Item.Axe.ITEM_TYPE_ID: self.best_tools,
       Item.Chisel.ITEM_TYPE_ID: self.best_tools,
-      Item.Arcane.ITEM_TYPE_ID: self.best_tools,
     }
 
   def update(self, obs: Dict[int, Any]):
@@ -410,61 +410,61 @@ class ItemHelper:
         self._mark_sell_idx(member_pos, sell_item, obs_inv)
         break # stop here
 
-  def legal_use_consumables(self):
-    # NOTE: this function only considers ration and poultice,
-    #   so it's definitely different from the ActionTargets
-    # CHECK ME: how the network actually combines this and _force_use_idx???
-    _legal_use = np.zeros((self._team_size, N_USE + 1), dtype=np.float32)
-    _legal_use[:, -1] = 1
+  # def legal_use_consumables(self):
+  #   # NOTE: this function only considers ration and poultice,
+  #   #   so it's definitely different from the ActionTargets
+  #   # CHECK ME: how the network actually combines this and _force_use_idx???
+  #   _legal_use = np.zeros((self._team_size, N_USE + 1), dtype=np.float32)
+  #   _legal_use[:, -1] = 1
 
-    for agent_id, obs_inv in self._obs_inv.items():
-      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
-      agent = self._entity_helper.agent_or_none(agent_id)
+  #   for agent_id, obs_inv in self._obs_inv.items():
+  #     member_pos = self._entity_helper.agent_id_to_pos(agent_id)
+  #     agent = self._entity_helper.agent_or_none(agent_id)
 
-      if self.force_use_idx[member_pos] is None:
-        flt_poultice = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
-                       (obs_inv[:,ItemAttr["type_id"]] == Item.Poultice.ITEM_TYPE_ID)
-        if agent.health <= 60 and len(obs_inv[flt_poultice]) > 0:
-          _legal_use[member_pos][LEGAL_POULTICE] = 1
-          # CHECK ME: added the below line, is it right?
-          _legal_use[member_pos][-1] = 0
+  #     if self.force_use_idx[member_pos] is None:
+  #       flt_poultice = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
+  #                      (obs_inv[:,ItemAttr["type_id"]] == Item.Potion.ITEM_TYPE_ID)
+  #       if agent.health <= 60 and len(obs_inv[flt_poultice]) > 0:
+  #         _legal_use[member_pos][LEGAL_POULTICE] = 1
+  #         # CHECK ME: added the below line, is it right?
+  #         _legal_use[member_pos][-1] = 0
 
-        flt_ration = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
-                     (obs_inv[:,ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
-        if (agent.food < 50 or agent.water < 50) and len(obs_inv[flt_ration]) > 0:
-          _legal_use[member_pos][LEGAL_RATION] = 1
-          # CHECK ME: added the below line, is it right?
-          _legal_use[member_pos][-1] = 0
+  #       flt_ration = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
+  #                    (obs_inv[:,ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
+  #       if (agent.food < 50 or agent.water < 50) and len(obs_inv[flt_ration]) > 0:
+  #         _legal_use[member_pos][LEGAL_RATION] = 1
+  #         # CHECK ME: added the below line, is it right?
+  #         _legal_use[member_pos][-1] = 0
 
-    return _legal_use
+  #   return _legal_use
 
-  def legal_sell_consumables(self):
-    # NOTE: this function only considers ration and poultice,
-    #   so it's definitely different from the ActionTargets
-    # CHECK ME: how the network actually combines this and _force_sell_idx???
-    #   a similar logic can be used to force destroy/give
-    _legal_sell = np.zeros((self._team_size, N_SELL + 1), dtype=np.float32)
-    _legal_sell[:, -1] = 1
-    n_keep_consumable = 1
+  # def legal_sell_consumables(self):
+  #   # NOTE: this function only considers ration and poultice,
+  #   #   so it's definitely different from the ActionTargets
+  #   # CHECK ME: how the network actually combines this and _force_sell_idx???
+  #   #   a similar logic can be used to force destroy/give
+  #   _legal_sell = np.zeros((self._team_size, N_SELL + 1), dtype=np.float32)
+  #   _legal_sell[:, -1] = 1
+  #   n_keep_consumable = 1
 
-    for agent_id, obs_inv in self._obs_inv.items():
-      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
-      item_type = obs_inv[:,ItemAttr["type_id"]]
+  #   for agent_id, obs_inv in self._obs_inv.items():
+  #     member_pos = self._entity_helper.agent_id_to_pos(agent_id)
+  #     item_type = obs_inv[:,ItemAttr["type_id"]]
 
-      # full inventory, so should get an item out
-      if sum(item_type > 0) > N_ITEM_LIMIT and \
-         self.force_sell_idx[member_pos] is None:
-        poultices = obs_inv[item_type == Item.Poultice.ITEM_TYPE_ID]
-        if len(poultices) > n_keep_consumable:
-          _legal_sell[member_pos][LEGAL_POULTICE] = 1
-          _legal_sell[member_pos][-1] = 0
+  #     # full inventory, so should get an item out
+  #     if sum(item_type > 0) > N_ITEM_LIMIT and \
+  #        self.force_sell_idx[member_pos] is None:
+  #       poultices = obs_inv[item_type == Item.Potion.ITEM_TYPE_ID]
+  #       if len(poultices) > n_keep_consumable:
+  #         _legal_sell[member_pos][LEGAL_POULTICE] = 1
+  #         _legal_sell[member_pos][-1] = 0
 
-        rations = obs_inv[item_type == Item.Ration.ITEM_TYPE_ID]
-        if len(rations) > n_keep_consumable:
-          _legal_sell[member_pos][LEGAL_RATION] = 1
-          _legal_sell[member_pos][-1] = 0
+  #       rations = obs_inv[item_type == Item.Ration.ITEM_TYPE_ID]
+  #       if len(rations) > n_keep_consumable:
+  #         _legal_sell[member_pos][LEGAL_RATION] = 1
+  #         _legal_sell[member_pos][-1] = 0
 
-    return _legal_sell
+  #   return _legal_sell
 
   def extract_item_feature(self):
     if not self._config.ITEM_SYSTEM_ENABLED:

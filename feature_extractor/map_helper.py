@@ -30,7 +30,7 @@ HOSTILE_REPR = 1.
 POISON_CLIP = 20.
 
 DEPLETION_MAP = {
-  material.Forest.index: material.Scrub.index,
+  material.Foilage.index: material.Scrub.index,
   material.Tree.index: material.Stump.index,
   material.Ore.index: material.Slag.index,
   material.Crystal.index: material.Fragment.index,
@@ -174,7 +174,7 @@ class MapHelper:
       for j in range(nearby_dist):
         # (i,j) = (4,4) is the provided (row, col)
         if abs(i-nearby_dist//2) + abs(j-nearby_dist//2) <= nearby_dist//2:
-          feat_arr.append(near_tile_map[i, j] == material.Forest.index) # food_arr
+          feat_arr.append(near_tile_map[i, j] == material.Foilage.index) # food_arr
           feat_arr.append(near_tile_map[i, j] == material.Water.index) # water_arr
           feat_arr.append(near_tile_map[i, j] == material.Herb.index) # herb_arr
           feat_arr.append(near_tile_map[i, j] == material.Fish.index) # fish_arr
