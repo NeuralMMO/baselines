@@ -66,11 +66,13 @@ class MapHelper:
 
   def update(self, obs: Dict[int, Any], curr_step: int):
     # obs for this team, key: ent_id
-    if curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
-      self.poison_map += 1  # poison shrinking
-
     self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
     self.visit_map = np.clip(self.visit_map - 1, 0, VISITATION_MEMORY)  # decay
+
+    poison_start = self.config.PLAYER_DEATH_FOG
+    if poison_start is not None:
+      if (curr_step - poison_start) % self.config.PLAYER_DEATH_FOG_SPEED == 0:
+        self.poison_map += 1  # poison shrinking
 
     entity_map = np.zeros((5, self.map_size+1, self.map_size+1))
 
@@ -214,6 +216,12 @@ class MapHelper:
       arr[l:r, l:r] = -i
     # positive value represents the poison strength
     # negative value represents the shortest distance to poison area
+
+    # mark the safe area
+    center = self.map_size // 2
+    safe = self.config.PLAYER_DEATH_FOG_FINAL_SIZE
+    arr[center-safe:center+safe+1, center-safe:center+safe+1] = -np.inf
+
     return arr
 
   def _mark_point(self, arr_2d, index_arr, value, clip=False):

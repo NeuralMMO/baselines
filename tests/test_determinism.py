@@ -13,6 +13,7 @@ from model.realikun.model import ModelArchitecture
 from model.realikun.baseline_agent import BaselineAgent
 
 HORIZON = 30
+MODEL_WEIGHTS = '../model_weights/achievements_4x10_new.200.pt'
 
 class ReplayConfig(
   nmmo.config.Medium,
@@ -53,7 +54,7 @@ def rollout_with_saved_actions(team_env, seed, saved_actions):
   # return the event log for comparison
   return team_env._env.realm.event_log.get_data()
 
-def test_determinism(model_weights, seed):
+def test_determinism(seed, model_weights=MODEL_WEIGHTS):
   config = ReplayConfig()
   reward_config = RewardsConfig()
 
@@ -84,9 +85,6 @@ def test_determinism(model_weights, seed):
 
 
 if __name__ == '__main__':
-  model_weights = '../model_weights/achievements_4x10_new.200.pt'
   seed = random.randint(0, 100000)
-  
-  test_determinism(model_weights, seed)
-
+  test_determinism(seed)
   print(f"Test passed with seed {seed}")
