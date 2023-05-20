@@ -6,7 +6,6 @@ from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 from nmmo.lib import material
 from nmmo.systems.item import ItemState
-from nmmo.io import action
 
 from feature_extractor.entity_helper import EntityHelper
 
@@ -191,11 +190,11 @@ class MapHelper:
   def legal_moves(self, obs):
     assert self.config.PROVIDE_ACTION_TARGETS,\
       "config.PROVIDE_ACTION_TARGETS must be set True"
-    moves = np.zeros((self._team_size, len(action.Direction.edges)), dtype=np.float32)
+    moves = np.zeros((self._team_size, len(nmmo.action.Direction.edges)), dtype=np.float32)
     for member_pos in range(self._team_size):
       ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
-        moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
+        moves[member_pos] = obs[ent_id]["ActionTargets"][nmmo.action.Move][nmmo.action.Direction]
 
     return moves
 
