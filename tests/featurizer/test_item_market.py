@@ -2,7 +2,6 @@ import unittest
 
 import nmmo
 from nmmo.systems import item as Item
-import nmmo.io.action as Action
 from nmmo.systems.item import ItemState
 
 # pylint: disable=import-error
