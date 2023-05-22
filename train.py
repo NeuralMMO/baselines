@@ -8,6 +8,7 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
+from env.nmmo_config import NmmoConfig
 from env.nmmo_env import RewardsConfig
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
@@ -21,6 +22,8 @@ from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 
 if __name__ == "__main__":
+  logging.basicConfig(level=logging.INFO)
+
   parser = argparse.ArgumentParser()
 
   parser.add_argument(
@@ -141,28 +144,14 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
-  # Configure NMMO Environment
-  class TrainConfig(
-    nmmo.config.Medium,
-    nmmo.config.Terrain,
-    nmmo.config.Resource,
-    nmmo.config.NPC,
-    nmmo.config.Progression,
-    nmmo.config.Equipment,
-    nmmo.config.Item,
-    nmmo.config.Exchange,
-    nmmo.config.Profession,
-    nmmo.config.Combat,
-  ):
-    PROVIDE_ACTION_TARGETS = True
-    MAP_FORCE_GENERATION = False
-    PLAYER_N = args.num_teams * args.team_size
-    NPC_N = args.num_npcs
-    HORIZON = args.max_episode_length
-    MAP_N = args.num_maps
-    PLAYER_DEATH_FOG = args.death_fog_tick
-
-  config = TrainConfig()
+  config = NmmoConfig(
+    num_teams=args.num_teams,
+    team_size=args.team_size,
+    num_npcs=args.num_npcs,
+    num_maps=args.num_maps,
+    max_episode_length=args.max_episode_length,
+    death_fog_tick=args.death_fog_tick
+  )
 
   # Historic self play is not yet working, so we require
   # all the players to be learners

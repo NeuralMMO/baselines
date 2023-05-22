@@ -17,7 +17,6 @@ class RewardsConfig:
   thirst: bool = True
   health: bool = True
   achievements: bool = True
-
 class NMMOEnv(nmmo.Env):
   def __init__(
       self, config,

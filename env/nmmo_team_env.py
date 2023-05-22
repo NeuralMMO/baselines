@@ -1,4 +1,5 @@
 
+from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 import gym
@@ -10,7 +11,6 @@ from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
 from env.nmmo_env import NMMOEnv, RewardsConfig
-
 
 class NMMOTeamEnv(TeamEnv):
   def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper,
@@ -80,12 +80,6 @@ class NMMOTeamEnv(TeamEnv):
     for tid, team_obs in obs.items():
       obs[tid] = self._feature_extractors[tid](
         self._convert_team_obs_to_agent_ids(tid, team_obs))
-
-    # # End the game when there is one team standing
-    # if len(self.agents) == 1:
-    #   winner = self.agents[0]
-    #   dones[winner] = True
-    #   self._num_alive[winner] = 0
 
     # Aggregate per-team infos
     for tid, team_info in infos.items():
