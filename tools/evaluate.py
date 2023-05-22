@@ -87,7 +87,7 @@ if __name__ == "__main__":
     print("Episode reward", agent_rewards)
     print("Model reward", model_rewards)
     replay_helper.save(
-      os.path.join(args.replay_save_dir, f"replay_{ri}"))
+      os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
 
 
 
