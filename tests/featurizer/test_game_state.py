@@ -26,7 +26,7 @@ class TestGameState(unittest.TestCase):
     init_obs = {"player_1": "obs_1", "player_2": "obs_2"}
     self.game_state.reset(init_obs)
     self.assertEqual(self.game_state.curr_step, 0)
-    self.assertEqual(self.game_state.prev_obs, init_obs)
+    self.assertEqual(self.game_state.curr_obs, init_obs)
 
   def test_update_advance(self):
     init_obs = {"player_1": "obs_1", "player_2": "obs_2"}
@@ -36,8 +36,7 @@ class TestGameState(unittest.TestCase):
     self.game_state.update(obs)
     self.assertEqual(self.game_state.curr_obs, obs)
 
-    self.game_state.advance()
-    self.assertEqual(self.game_state.prev_obs, obs)
+    self.assertEqual(self.game_state.prev_obs, init_obs)
     self.assertEqual(self.game_state.curr_step, 1)
 
   def test_extract_game_feature(self):

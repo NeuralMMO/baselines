@@ -9,7 +9,6 @@ from scripted import baselines
 from lib.team.team_helper import TeamHelper
 
 class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
-  RENDER = False
   SPECIALIZE = True
   # config.Medium's PLAYER_N = 128
   # make 16 teams, so that there are 8 agents per team

@@ -11,11 +11,11 @@ from feature_extractor.entity_helper import EntityHelper
 
 from model.realikun.model import ModelArchitecture
 
-from tests.feature_extractor.testhelpers import FeaturizerTestTemplate, provide_item
+from tests.featurizer.testhelpers import FeaturizerTestTemplate, provide_item
 
 ItemAttr = ItemState.State.attr_name_to_col
 
-RANDOM_SEED = 0 # random.randint(0, 10000)
+RANDOM_SEED = 0
 
 
 class TestItemHelper(FeaturizerTestTemplate):
@@ -97,8 +97,8 @@ class TestItemHelper(FeaturizerTestTemplate):
     for member_pos in range(self.team_size):
       agent_id = entity_helper.pos_to_agent_id(member_pos)
       if member_pos < 4:
-        provide_item(env.realm, agent_id, Item.Sword, 4) # melee
-        provide_item(env.realm, agent_id, Item.Sword, 9) # melee
+        provide_item(env.realm, agent_id, Item.Spear, 4) # melee
+        provide_item(env.realm, agent_id, Item.Spear, 9) # melee
         provide_item(env.realm, agent_id, Item.Bow, 5) # range
         provide_item(env.realm, agent_id, Item.Wand, 6) # mage
       provide_item(env.realm, agent_id, Item.Hat, 4)
@@ -107,7 +107,7 @@ class TestItemHelper(FeaturizerTestTemplate):
       if member_pos == 4: # test _sell_weapons_armors_profession, hat
         provide_item(env.realm, agent_id, Item.Hat, 2)
         provide_item(env.realm, agent_id, Item.Hat, 1)
-        provide_item(env.realm, agent_id, Item.Sword, 6, list_price=5)
+        provide_item(env.realm, agent_id, Item.Spear, 6, list_price=5)
       if member_pos == 5: # test _sell_weapons_armors_profession, top
         provide_item(env.realm, agent_id, Item.Top, 2)
         provide_item(env.realm, agent_id, Item.Top, 1)
@@ -116,13 +116,13 @@ class TestItemHelper(FeaturizerTestTemplate):
         provide_item(env.realm, agent_id, Item.Bottom, 0)
         provide_item(env.realm, agent_id, Item.Bottom, 0, list_price=5)
       if member_pos == 7: # test _sell_ammos
-        provide_item(env.realm, agent_id, Item.Scrap, 2)
-        provide_item(env.realm, agent_id, Item.Shard, 3)
+        provide_item(env.realm, agent_id, Item.Whetstone, 2)
+        provide_item(env.realm, agent_id, Item.Runes, 3)
 
     # set levels
     env.realm.players[entity_helper.pos_to_agent_id(0)].skills.melee.level.update(10)
     env.realm.players[entity_helper.pos_to_agent_id(1)].skills.melee.level.update(7)
-    env.realm.players[entity_helper.pos_to_agent_id(1)].gold.update(10) # to buy level-6 sword
+    env.realm.players[entity_helper.pos_to_agent_id(1)].gold.update(10) # to buy level-6 spear
     env.realm.players[entity_helper.pos_to_agent_id(2)].skills.range.level.update(7)
     env.realm.players[entity_helper.pos_to_agent_id(3)].skills.mage.level.update(7)
     for pos in range(4, self.team_size):
@@ -141,7 +141,7 @@ class TestItemHelper(FeaturizerTestTemplate):
     market_helper.update(team_obs, 1) # 1 = curr_step
 
     # check the values
-    exp_items = { 0: (Item.Sword, 9), 1: (Item.Sword, 4), 2: (Item.Bow, 5),
+    exp_items = { 0: (Item.Spear, 9), 1: (Item.Spear, 4), 2: (Item.Bow, 5),
       3: (Item.Wand, 6), 4: (Item.Hat, 4), 5: (Item.Top, 3), 6:(Item.Bottom, 2) }
 
     for pos, (bw, bh, bt, bb) in enumerate(zip(item_helper.best_weapons,
@@ -155,17 +155,17 @@ class TestItemHelper(FeaturizerTestTemplate):
       obs_mkt = team_obs[agent_id]['Market']
       force_buy_idx = item_helper.force_buy_idx[pos]
 
-      # market_helper._buy_weapons_armors(): sword, the highest priority
+      # market_helper._buy_weapons_armors(): spear, the highest priority
       if pos == 1:
-        self._assert_same_item((Item.Sword, 6), obs_mkt[force_buy_idx])
+        self._assert_same_item((Item.Spear, 6), obs_mkt[force_buy_idx])
 
       if pos < 4:
         self._assert_same_item(exp_items[pos], bw)
         # test _sell_weapons
         if pos < 2: # melee
-          self._assert_same_item((Item.Bow, 5), obs_inv[force_sell_idx]) # must not be sword
+          self._assert_same_item((Item.Bow, 5), obs_inv[force_sell_idx]) # must not be spear
         else: # sell the lowest level weapon
-          self._assert_same_item((Item.Sword, 4), obs_inv[force_sell_idx])
+          self._assert_same_item((Item.Spear, 4), obs_inv[force_sell_idx])
       else:
         self.assertTrue(bw is None)
 
@@ -186,7 +186,7 @@ class TestItemHelper(FeaturizerTestTemplate):
 
       if pos == 7: # only has ammos, and not using any of these
         self.assertTrue(force_use_idx is None)
-        self._assert_same_item((Item.Scrap, 2), obs_inv[force_sell_idx]) # _sell_ammos
+        self._assert_same_item((Item.Whetstone, 2), obs_inv[force_sell_idx]) # _sell_ammos
         # market_helper._buy_weapons_armors(): bottom, the highest priority
         self._assert_same_item((Item.Bottom, 0), obs_mkt[force_buy_idx])
 
@@ -204,8 +204,8 @@ class TestItemHelper(FeaturizerTestTemplate):
 
     # provide items: weapons, tools
     item_level = 6
-    item_list = [Item.Sword, Item.Bow, Item.Wand, Item.Rod,
-                 Item.Gloves, Item.Pickaxe, Item.Chisel, Item.Arcane]
+    item_list = [Item.Spear, Item.Bow, Item.Wand, Item.Rod,
+                 Item.Gloves, Item.Pickaxe, Item.Axe, Item.Chisel]
     for member_pos in range(self.team_size):
       agent_id = entity_helper.pos_to_agent_id(member_pos)
       for itm in item_list:
@@ -257,9 +257,9 @@ class TestItemHelper(FeaturizerTestTemplate):
     entity_helper.member_professions = ['Melee', 'Range'] + ['Mage']*6
 
     # provide items: tools, rations, poultice
-    item_list = [(Item.Rod, 1), (Item.Gloves, 1), (Item.Pickaxe, 0)]
+    item_list = [(Item.Rod, 2), (Item.Gloves, 2), (Item.Pickaxe, 1)]
     arms_list = [(Item.Hat, 6), (Item.Wand, 3)]
-    consume_list = [(Item.Ration, 0), (Item.Poultice, 1)]
+    consume_list = [(Item.Ration, 1), (Item.Potion, 2)]
     for member_pos in range(self.team_size):
       agent_id = entity_helper.pos_to_agent_id(member_pos)
       if member_pos < 2:
@@ -271,16 +271,16 @@ class TestItemHelper(FeaturizerTestTemplate):
           provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1]+1)
           provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1])
           provide_item(env.realm, agent_id, arms_list[i][0], arms_list[i][1]-1)
-      elif member_pos in [4, 5, 6]: # testing legal_use_consumables
+      elif member_pos in [4, 5, 6]: # testing market_helper._restore_score
         for itm, lvl in consume_list:
           provide_item(env.realm, agent_id, itm, lvl)
-      elif member_pos == 7: # testing legal_sell_consumables: ration
+      elif member_pos == 7: # testing market_helper._emergency_buy_poultice()
         for i in range(6):
-          provide_item(env.realm, agent_id, Item.Ration, 0)
+          provide_item(env.realm, agent_id, Item.Ration, 1)
           if i < 2:
-            provide_item(env.realm, agent_id, Item.Poultice, 0)
+            provide_item(env.realm, agent_id, Item.Potion, 1)
           else:
-            provide_item(env.realm, agent_id, Item.Poultice, 0, list_price=i)
+            provide_item(env.realm, agent_id, Item.Potion, 1, list_price=i)
 
     # set agent attributes
     env.realm.players[entity_helper.pos_to_agent_id(0)].skills.fishing.level.update(5)
@@ -303,13 +303,9 @@ class TestItemHelper(FeaturizerTestTemplate):
 
     # this scenario tests
     #   item_helper._sell_tools(), _sell_weapons_armors_profession()
-    #   item_helper.legal_use_consumables(), legal_sell_consumables()
     #   market_helper._calculate_restore_score(), _emergency_buy_poultice()
     item_helper.update(team_obs)
     market_helper.update(team_obs, 1) # 1 = curr_step
-
-    legal_use = item_helper.legal_use_consumables()
-    legal_sell = item_helper.legal_sell_consumables()
 
     for pos, (bt, bh, fb) in enumerate(zip(item_helper.best_tools,
                                            item_helper.best_hats,
@@ -329,11 +325,11 @@ class TestItemHelper(FeaturizerTestTemplate):
         # market_helper._buy_consumables()
         self.assertTrue(fb == 0) # buying the cheapest poultice
 
-      if pos == 1: # cannot use level-1 tools
+      if pos == 1: # cannot use level-2 tools
         # best tool to use, given skill
         self._assert_same_item(item_list[2], bt) # Item.Pickaxe
         self._assert_same_item(item_list[2], obs_inv[force_use_idx]) # Item.Pickaxe
-        # lowest-level tool (lvl=1), min id Item.Rod is for sale
+        # lowest-level tool (lvl=2), min id Item.Rod is for sale
         self._assert_same_item(item_list[0], obs_inv[force_sell_idx])
 
       if pos == 2:
@@ -348,27 +344,11 @@ class TestItemHelper(FeaturizerTestTemplate):
 
       # check market_helper._emergency_buy_poultice()
       if pos == 4:
-        self._assert_same_item((Item.Poultice, 0), obs_mkt[fb])
-
-      # check legal_use
-      if pos == 5: # pos == 4 cannot use poultice due to low level
-        self.assertListEqual(list(legal_use[pos]), [1, 0, 0])
-      elif pos == 6:
-        self.assertListEqual(list(legal_use[pos]), [0, 1, 0])
-      else:
-        self.assertListEqual(list(legal_use[pos]), [0, 0, 1])
-
-      # check legal sell
-      if pos == 7:
-        self.assertListEqual(list(legal_sell[pos]), [1, 1, 0])
-      else:
-        self.assertListEqual(list(legal_sell[pos]), [0, 0, 1])
+        self._assert_same_item((Item.Potion, 1), obs_mkt[fb])
 
     # check market_helper
     self.assertListEqual(list(market_helper._restore_score),
                          [0, 0, 0, 0, 2, 6, 2, 10])
-    self.assertListEqual(list(market_helper._agent_health),
-                         [100, 100, 100, 100, 30, 30, 100, 100])
 
     # DONE
 
