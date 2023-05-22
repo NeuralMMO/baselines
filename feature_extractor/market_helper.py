@@ -88,7 +88,7 @@ class MarketHelper:
       # usable items: within the level & not listed
       flt_level = (obs_inv[:,ItemAttr["level"]] <= agent.level) & \
                   (obs_inv[:,ItemAttr["listed_price"]] == 0)
-      flt_poultice = (obs_inv[:,ItemAttr["type_id"]] == Item.Poultice.ITEM_TYPE_ID)
+      flt_poultice = (obs_inv[:,ItemAttr["type_id"]] == Item.Potion.ITEM_TYPE_ID)
       flt_ration = (obs_inv[:,ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
 
       poultice_score = min(2, sum(flt_poultice & flt_level)) * POULTICE_SCORE
@@ -124,7 +124,7 @@ class MarketHelper:
 
       # this agent should get one
       obs_mkt = obs[agent_id]['Market']
-      listings = self._filter_market_obs(agent, obs_mkt, Item.Poultice.ITEM_TYPE_ID)
+      listings = self._filter_market_obs(agent, obs_mkt, Item.Potion.ITEM_TYPE_ID)
       if len(listings) > 0:
         # randomly selecting a listing
         #   and NOT going for only the cheapest one, because others will also want it
@@ -177,7 +177,7 @@ class MarketHelper:
 
   def _buy_consumables(self, obs):
     # trying to have at least two poultices, at least one ration
-    buy_goal = [ (Item.Ration.ITEM_TYPE_ID, 1), (Item.Poultice.ITEM_TYPE_ID, 2) ]
+    buy_goal = [ (Item.Ration.ITEM_TYPE_ID, 1), (Item.Potion.ITEM_TYPE_ID, 2) ]
     proc_order = np.argsort(self._restore_score)
     for member_pos in proc_order: # start from lowest restore score
       agent_id = self._entity_helper.pos_to_agent_id(member_pos)

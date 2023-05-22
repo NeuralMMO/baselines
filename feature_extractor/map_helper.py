@@ -6,7 +6,6 @@ from nmmo.core.tile import TileState
 from nmmo.entity.entity import EntityState
 from nmmo.lib import material
 from nmmo.systems.item import ItemState
-from nmmo.io import action
 
 from feature_extractor.entity_helper import EntityHelper
 
@@ -30,7 +29,7 @@ HOSTILE_REPR = 1.
 POISON_CLIP = 20.
 
 DEPLETION_MAP = {
-  material.Forest.index: material.Scrub.index,
+  material.Foilage.index: material.Scrub.index,
   material.Tree.index: material.Stump.index,
   material.Ore.index: material.Slag.index,
   material.Crystal.index: material.Fragment.index,
@@ -66,11 +65,13 @@ class MapHelper:
 
   def update(self, obs: Dict[int, Any], curr_step: int):
     # obs for this team, key: ent_id
-    if curr_step % ModelArchitecture.PROGRESS_NUM_FEATURES == 15:
-      self.poison_map += 1  # poison shrinking
-
     self.fog_map = np.clip(self.fog_map - 1, 0, DEFOGGING_VALUE)  # decay
     self.visit_map = np.clip(self.visit_map - 1, 0, VISITATION_MEMORY)  # decay
+
+    poison_start = self.config.PLAYER_DEATH_FOG
+    if poison_start is not None:
+      if (curr_step - poison_start) % self.config.PLAYER_DEATH_FOG_SPEED == 0:
+        self.poison_map += 1  # poison shrinking
 
     entity_map = np.zeros((5, self.map_size+1, self.map_size+1))
 
@@ -174,7 +175,7 @@ class MapHelper:
       for j in range(nearby_dist):
         # (i,j) = (4,4) is the provided (row, col)
         if abs(i-nearby_dist//2) + abs(j-nearby_dist//2) <= nearby_dist//2:
-          feat_arr.append(near_tile_map[i, j] == material.Forest.index) # food_arr
+          feat_arr.append(near_tile_map[i, j] == material.Foilage.index) # food_arr
           feat_arr.append(near_tile_map[i, j] == material.Water.index) # water_arr
           feat_arr.append(near_tile_map[i, j] == material.Herb.index) # herb_arr
           feat_arr.append(near_tile_map[i, j] == material.Fish.index) # fish_arr
@@ -189,11 +190,11 @@ class MapHelper:
   def legal_moves(self, obs):
     assert self.config.PROVIDE_ACTION_TARGETS,\
       "config.PROVIDE_ACTION_TARGETS must be set True"
-    moves = np.zeros((self._team_size, len(action.Direction.edges)), dtype=np.float32)
+    moves = np.zeros((self._team_size, len(nmmo.action.Direction.edges)), dtype=np.float32)
     for member_pos in range(self._team_size):
       ent_id = self._entity_helper.pos_to_agent_id(member_pos)
       if ent_id in obs:
-        moves[member_pos] = obs[ent_id]["ActionTargets"][action.Move][action.Direction]
+        moves[member_pos] = obs[ent_id]["ActionTargets"][nmmo.action.Move][nmmo.action.Direction]
 
     return moves
 
@@ -214,6 +215,12 @@ class MapHelper:
       arr[l:r, l:r] = -i
     # positive value represents the poison strength
     # negative value represents the shortest distance to poison area
+
+    # mark the safe area
+    center = self.map_size // 2
+    safe = self.config.PLAYER_DEATH_FOG_FINAL_SIZE
+    arr[center-safe:center+safe+1, center-safe:center+safe+1] = -np.inf
+
     return arr
 
   def _mark_point(self, arr_2d, index_arr, value, clip=False):
