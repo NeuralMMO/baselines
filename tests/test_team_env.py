@@ -8,6 +8,9 @@ from lib.team.team_env import TeamEnv
 
 from lib.team.team_helper import TeamHelper
 
+def get_val(data: Dict):
+  return list(data.values())[0]
+
 class TestEnv(ParallelEnv):
   # pylint: disable=abstract-method,unused-argument
   def __init__(self):
@@ -34,8 +37,8 @@ class TestEnv(ParallelEnv):
 
   def step(self, actions: Dict[int, Any]):
     obs = self.reset()
-    rewards = {i: action * 0.5 for i, action in actions.items()}
-    dones = {i: action == self.action_space_map[i].n - 1 for i, action in actions.items()}
+    rewards = {i: get_val(action) for i, action in actions.items()}
+    dones = {i: get_val(action) == self.action_space_map[i].n - 1 for i, action in actions.items()}
     infos = {i: {} for i in actions.keys()}
     return obs, rewards, dones, infos
 
@@ -58,7 +61,7 @@ class TestTeamEnv(unittest.TestCase):
                             1: {0: np.array([0.6, 0.7]), 1: np.array([0.8, 0.9, 1.0])}})
 
     # Test step
-    team_actions = {0: {0: 1, 1: 2}, 1: {0: 1, 1: 1}}
+    team_actions = {0: {0: {1: 1}, 1: {2: 2}}, 1: {0: {1: 1}, 1: {1: 1}}}
     obs, rewards, dones, infos = team_env.step(team_actions)
 
     expected_obs = {0: {0: np.array([0.1, 0.2]), 1: np.array([0.3, 0.4, 0.5])},

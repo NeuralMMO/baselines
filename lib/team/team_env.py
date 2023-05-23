@@ -7,6 +7,7 @@ from pettingzoo.utils.env import AgentID, ParallelEnv
 from lib.team.team_helper import TeamHelper
 
 class TeamEnv(ParallelEnv):
+  # pylint: disable=arguments-renamed
   def __init__(self, env: ParallelEnv, team_helper: TeamHelper):
     self._env = env
     self._team_helper = team_helper
@@ -33,13 +34,13 @@ class TeamEnv(ParallelEnv):
       grouped_data[team_id][pos] = value
     return dict(grouped_data)
 
-  def _team_actions_to_agent_actions(self, team_actions: Dict[int, Dict[int, Any]]) -> Dict[int, Any]:
+  def _team_actions_to_agent_actions(self,
+                                     team_actions: Dict[int, Dict[int, Any]]) -> Dict[int, Any]:
     agent_actions = {}
     for team_id, team_action in team_actions.items():
-      # This was passing in action keys as positions before
-      for pos in range(len(team_action)):
+      for pos in team_action:
         agent_id = self._team_helper.agent_for_team_and_position[team_id, pos]
-        agent_actions[agent_id] = {k: v for k, v in team_action[pos].items()}
+        agent_actions[agent_id] = dict(team_action[pos].items())
     return agent_actions
 
   def reset(self, **kwargs) -> Dict[int, Any]:
@@ -61,9 +62,8 @@ class TeamEnv(ParallelEnv):
 
     merged_dones = {}
     for team_id, team_dones in self._group_by_team(dones).items():
-      self._num_alive[team_id] -= len(team_dones)
-      if self._num_alive[team_id] == 0:
-        merged_dones[team_id] = True
+      self._num_alive[team_id] -= sum(v for _, v in team_dones.items())
+      merged_dones[team_id] = self._num_alive[team_id] == 0
 
     return merged_obs, merged_rewards, merged_dones, merged_infos
 

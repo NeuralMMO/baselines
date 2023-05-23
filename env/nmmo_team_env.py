@@ -1,6 +1,5 @@
 
-from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import gym
 import nmmo
@@ -13,6 +12,7 @@ from model.realikun.model import ModelArchitecture
 from env.nmmo_env import NMMOEnv, RewardsConfig
 
 class NMMOTeamEnv(TeamEnv):
+  # pylint: disable=arguments-renamed
   def __init__(self, config: nmmo.config.Config(), team_helper: TeamHelper,
                rewards_config: RewardsConfig,
                moves_only: bool = False):
@@ -21,7 +21,8 @@ class NMMOTeamEnv(TeamEnv):
 
     self._config = config
     self._feature_extractors = [
-      FeatureExtractor(team_helper.teams, tid, config, moves_only=moves_only) for tid in team_helper.teams
+      FeatureExtractor(team_helper.teams, tid, config, moves_only=moves_only)
+      for tid in team_helper.teams
     ]
 
   def _box(self, *shape):
@@ -102,4 +103,3 @@ class NMMOTeamEnv(TeamEnv):
       self._team_helper.agent_id(team_id, pos): obs
       for pos, obs in team_obs.items()
     }
-
