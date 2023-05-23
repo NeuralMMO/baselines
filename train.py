@@ -54,10 +54,7 @@ if __name__ == "__main__":
     "--env.moves_only", dest="moves_only",
     action="store_true", default=False,
     help="only allow moves (default: False)")
-  parser.add_argument(
-    "--env.num_maps", dest="num_maps", type=int, default=5,
-    help="number of maps to use for training (default: 1)"
-  )
+
 
   parser.add_argument(
     "--reward.hunger", dest="rewards_hunger",
@@ -98,6 +95,9 @@ if __name__ == "__main__":
     "--train.num_steps",
     dest="train_num_steps", type=int, default=10_000_000,
     help="number of steps to train (default: 10_000_000)")
+  parser.add_argument(
+    "--train.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for training (default: 1)")
   parser.add_argument(
     "--train.checkpoint_interval",
     dest="checkpoint_interval", type=int, default=10,

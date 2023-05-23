@@ -54,6 +54,9 @@ if __name__ == "__main__":
     "--eval.num_rounds", dest="num_rounds", type=int, default=1,
     help="number of rounds to use for evaluation (default: 1)")
   parser.add_argument(
+    "--eval.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for evaluation (default: 128)")
+  parser.add_argument(
     "--eval.num_policies", dest="num_policies", type=int, default=2,
     help="number of policies to use for evaluation (default: 2)")
 
@@ -68,7 +71,8 @@ if __name__ == "__main__":
     team_size=args.team_size,
     num_npcs=args.num_npcs,
     max_episode_length=args.max_episode_length,
-    death_fog_tick=args.death_fog_tick
+    death_fog_tick=args.death_fog_tick,
+    num_maps=args.num_maps
   )
 
   config.MAP_PREVIEW_DOWNSCALE = 8
