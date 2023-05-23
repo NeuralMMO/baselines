@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
   for ri in range(args.num_rounds):
     models = list(set(
-       policy_pool.select_policies(args.num_policies*2)[:args.num_policies]))
+       policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
 
     if len(models) < 2:
        logger.warn("Not enough models to evaluate, skipping round")

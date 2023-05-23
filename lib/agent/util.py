@@ -17,7 +17,3 @@ def load_matching_state_dict(model, state_dict):
       print(f"Skipping {name} as it is not found in the model's state_dict")
   model.load_state_dict(model_state_dict, strict=False)
   return upgrade_required
-
-def softmax(x, temperature=1.0):
-    e_x = np.exp(x / temperature)
-    return e_x / e_x.sum(axis=0)
