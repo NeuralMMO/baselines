@@ -10,4 +10,4 @@ if __name__ == '__main__':
   pool = JsonPolicyPool(args.policy_pool)
   pool._load()
 
-  print(pool.to_table().to_string(max_rows=None))
+  print(pool.to_table().to_string(max_rows=None, index=False))
