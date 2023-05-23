@@ -226,8 +226,8 @@ if __name__ == "__main__":
 
   experiment_dir = os.path.join(args.experiments_dir, args.experiment_name)
 
-  logging.info("Experiment directory:", experiment_dir)
   os.makedirs(experiment_dir, exist_ok=True)
+  logging.info(f"Experiment directory {experiment_dir}")
   resume_from_path = None
   checkpoins = os.listdir(experiment_dir)
   if len(checkpoins) > 0:
