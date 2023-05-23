@@ -26,9 +26,13 @@ class JsonPolicyPool(PolicyPool):
     with self._persist():
       super().update_rewards(rewards)
 
-  def select_policies(self, num_to_select, temperature=1) -> PolicyPoolRecord:
+  def select_best_policies(self, num_to_select) -> PolicyPoolRecord:
     with self._persist():
-      return super().select_policies(num_to_select, temperature)
+      return super().select_best_policies(num_to_select)
+
+  def select_least_tested_policies(self, num_to_select) -> PolicyPoolRecord:
+    with self._persist():
+      return super().select_least_tested_policies(num_to_select)
 
   def _save(self):
     with open(self._file_path, 'w') as f:
