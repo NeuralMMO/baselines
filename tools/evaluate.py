@@ -1,12 +1,18 @@
 # pylint: disable=bad-builtin, no-member, protected-access
 import argparse
+from email.policy import Policy
 import logging
 import os
+from venv import logger
+
+import pandas as pd
 
 from env.nmmo_config import NmmoConfig
 from nmmo.render.replay_helper import DummyReplayHelper
 
 from env.nmmo_env import RewardsConfig
+from lib.policy_pool.json_policy_pool import JsonPolicyPool
+from lib.policy_pool.policy_pool import PolicyPool
 from lib.rollout import Rollout
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
@@ -19,8 +25,11 @@ if __name__ == "__main__":
   parser.add_argument(
     "--model.checkpoints",
     dest="model_checkpoints", type=str,
-    default="model_weights/realikun.001470.pt",
+    default=None,
     help="comma seperated list of paths to model checkpoints to load")
+  parser.add_argument(
+    "--model.policy_pool", dest="policy_pool", type=str, default=None,
+    help="path to policy pool to use for evaluation (default: None)")
 
   parser.add_argument(
     "--env.seed", dest="seed", type=int, default=1,
@@ -40,9 +49,13 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
     help="number of ticks before death fog starts (default: None)")
+
   parser.add_argument(
     "--eval.num_rounds", dest="num_rounds", type=int, default=1,
     help="number of rounds to use for evaluation (default: 1)")
+  parser.add_argument(
+    "--eval.num_policies", dest="num_policies", type=int, default=2,
+    help="number of policies to use for evaluation (default: 2)")
 
   parser.add_argument(
     "--replay.save_dir", dest="replay_save_dir", type=str, default=None,
@@ -61,7 +74,6 @@ if __name__ == "__main__":
   config.MAP_PREVIEW_DOWNSCALE = 8
   config.MAP_CENTER = 64
 
-
   team_helper = TeamHelper({
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
     for i in range(args.num_teams)}
@@ -75,19 +87,49 @@ if __name__ == "__main__":
 
   rewards_config = RewardsConfig()
 
-  rollout = Rollout(
-    config, team_helper, rewards_config,
-    args.model_checkpoints.split(","),
-    replay_helper
-  )
+  policy_pool = PolicyPool()
+  if args.policy_pool is not None:
+      policy_pool = JsonPolicyPool(args.policy_pool)
+
+  if args.model_checkpoints is not None:
+    for p in args.model_checkpoints.split(","):
+      policy_pool.add_policy(p)
+
 
   for ri in range(args.num_rounds):
-    print(f"Generating the replay for round {ri+1} with seed {args.seed+ri}")
+    models = list(set(
+       policy_pool.select_policies(args.num_policies*2)[:args.num_policies]))
+
+    if len(models) < 2:
+       logger.warn("Not enough models to evaluate, skipping round")
+       continue
+
+    rollout = Rollout(
+      config, team_helper, rewards_config,
+      models,
+      replay_helper
+    )
+
+    logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
     agent_rewards, model_rewards = rollout.run_episode(args.seed+ri)
-    print("Episode reward", agent_rewards)
-    print("Model reward", model_rewards)
-    replay_helper.save(
-      os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
+
+    if args.replay_save_dir is not None:
+      replay_helper.save(
+        os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
+
+    old_ranks = policy_pool._skill_rating.stats
+    policy_pool.update_rewards(model_rewards)
+    new_ranks = policy_pool._skill_rating.stats
+
+    table = pd.DataFrame(models, columns=["Model"])
+    table["Reward"] = [model_rewards[model] for model in table["Model"]]
+    table["Old Rank"] = [old_ranks[model] for model in table["Model"]]
+    table["New Rank"] = [new_ranks[model] for model in table["Model"]]
+    table["Delta"] = [new_ranks[model]-old_ranks[model] for model in table["Model"]]
+
+    table = table.sort_values(by='Reward')
+    logger.info("\n" + table.to_string(index=False))
+
 
 
 

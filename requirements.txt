@@ -6,3 +6,4 @@ stable_baselines3
 tensorboard
 wandb
 torchtyping
+pandas

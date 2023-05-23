@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import re
 import sys
@@ -207,7 +208,7 @@ if __name__ == "__main__":
 
   # Initialize the learner agent from a pretrained model
   if args.model_init_from_path is not None:
-    print(f"Initializing model from {args.model_init_from_path}...")
+    logging.info(f"Initializing model from {args.model_init_from_path}...")
     cleanrl_ppo_lstm.load_matching_state_dict(
       learner_agent,
       torch.load(args.model_init_from_path)["agent_state_dict"]
@@ -225,7 +226,7 @@ if __name__ == "__main__":
 
   experiment_dir = os.path.join(args.experiments_dir, args.experiment_name)
 
-  print("Experiment directory:", experiment_dir)
+  logging.info("Experiment directory:", experiment_dir)
   os.makedirs(experiment_dir, exist_ok=True)
   resume_from_path = None
   checkpoins = os.listdir(experiment_dir)
@@ -236,13 +237,13 @@ if __name__ == "__main__":
     if experiment_dir is not None and state["update"] % args.checkpoint_interval == 0:
         save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
         temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
-        print(f'Saving checkpoint to {save_path}')
+        logging.info(f'Saving checkpoint to {save_path}')
         torch.save(state, temp_path)
         os.rename(temp_path, save_path)
-        print(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
+        logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
         opponent_pool.add_policy(save_path, state["mean_reward"])
 
-  print("Starting training...")
+  logging.info("Starting training...")
   try:
     cleanrl_ppo_lstm.train(
       binding,
@@ -282,7 +283,7 @@ if __name__ == "__main__":
 
   except RuntimeError as e:
     if "CUDA out of memory" in str(e):
-        print("Exitting due to CUDA out of memory")
+        logging.info("Exitting due to CUDA out of memory")
         sys.exit(101)
     else:
       raise e

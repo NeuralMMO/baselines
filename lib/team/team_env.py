@@ -62,7 +62,7 @@ class TeamEnv(ParallelEnv):
 
     merged_dones = {}
     for team_id, team_dones in self._group_by_team(dones).items():
-      self._num_alive[team_id] -= sum(v for _, v in team_dones.items())
+      self._num_alive[team_id] -= sum(team_dones.values())
       merged_dones[team_id] = self._num_alive[team_id] == 0
 
     return merged_obs, merged_rewards, merged_dones, merged_infos

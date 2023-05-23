@@ -1,12 +1,5 @@
 # pylint: disable=bad-builtin, no-member, protected-access
-import argparse
 from collections import defaultdict
-import os
-import time
-import colorsys
-import json
-import lzma
-import pickle
 
 import random
 from typing import List
@@ -21,8 +14,6 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import pufferlib.vectorization.serial
 import tqdm
-from traitlets import default
-from env.nmmo_config import NmmoConfig
 from env.nmmo_env import RewardsConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
