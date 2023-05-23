@@ -11,7 +11,7 @@ python -u -O -m train \
 --train.opponent_pool=/fsx/home-daveey/experiments/pool.json \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=10000000000 \
---env.num_maps=100 \
+--train.num_maps=100 \
 --env.team_size=8 \
 --env.num_teams=16 \
 --env.num_npcs=256 \
