@@ -18,9 +18,9 @@ class JsonPolicyPool(PolicyPool):
     self._file_path = file_path
     self._open_skill_file_path = file_path + ".skill"
 
-  def add_policy(self, model_path, reward=0):
+  def add_policy(self, model_path):
     with self._persist():
-      super().add_policy(model_path, reward)
+      super().add_policy(model_path)
 
   def update_rewards(self, rewards: Dict[str, float]):
     with self._persist():
