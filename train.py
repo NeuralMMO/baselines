@@ -241,7 +241,7 @@ if __name__ == "__main__":
         torch.save(state, temp_path)
         os.rename(temp_path, save_path)
         logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
-        opponent_pool.add_policy(save_path, state["mean_reward"])
+        opponent_pool.add_policy(save_path)
 
   logging.info("Starting training...")
   try:
