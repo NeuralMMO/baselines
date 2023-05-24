@@ -102,6 +102,7 @@ if __name__ == "__main__":
 
   while len(policy_pool._policies) < args.num_policies:
     logger.warn("Not enough policies to evaluate, waiting...")
+    policy_pool._load()
     time.sleep(60)
 
   for ri in range(args.num_rounds):
