@@ -90,7 +90,9 @@ if __name__ == "__main__":
     replay_helper = TeamReplayHelper(team_helper)
 
 
-  rewards_config = RewardsConfig()
+  rewards_config = RewardsConfig(
+    achievements=True
+  )
 
   policy_pool = PolicyPool()
   if args.policy_pool is not None:

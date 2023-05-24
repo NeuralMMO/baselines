@@ -22,10 +22,16 @@ if __name__ == '__main__':
 
   if args.wandb_project:
     run_name = f"policy_pool.{args.policy_pool.split('/')[-1].split('.')[0]}"
+    table = pool.to_table()
 
     wandb.init(
       project=args.wandb_project,
       entity=args.wandb_entity,
       name=f"policy_pool.{args.policy_pool.split('/')[-1].split('.')[0]}",
     )
-    wandb.log({"policy_pool": wandb.Table(dataframe=pool.to_table())})
+    wandb.log({"policy_pool": wandb.Table(dataframe=table)})
+
+    for index, row in table.iterrows():
+      # Log metrics over time
+      wandb.log({"metric_name": row["metric_value"]})
+
