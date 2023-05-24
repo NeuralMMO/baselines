@@ -42,6 +42,9 @@ class PolicyPool():
   def update_rewards(self, rewards: Dict[str, float]):
     for id in rewards.keys():
       self._policies[id].record_sample()
+      if id not in self._skill_rating.stats.keys():
+        self._skill_rating.add_policy(id)
+
     self._skill_rating.update(rewards.keys(), scores=rewards.values())
 
   def to_table(self):
