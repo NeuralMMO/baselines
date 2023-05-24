@@ -49,5 +49,8 @@ class PolicyPool():
     table = pd.DataFrame(self._policies.keys(), columns=["Model"])
     table["Rank"] = [stats[model] for model in table["Model"]]
     table["Num Samples"] = [self._policies[model].num_samples() for model in table["Model"]]
+    table['Experiment'] = table['Model'].apply(lambda x: x.split('/')[-2])
+    table['Checkpoint'] = table['Model'].apply(lambda x: int(x.split('/')[-1].split('.')[0]))
+
     table = table.sort_values(by='Rank', ascending=False)
     return table
