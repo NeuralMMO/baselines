@@ -95,6 +95,7 @@ if __name__ == "__main__":
   policy_pool = PolicyPool()
   if args.policy_pool is not None:
       policy_pool = JsonPolicyPool(args.policy_pool)
+      policy_pool._load()
 
   if args.model_checkpoints is not None:
     for p in args.model_checkpoints.split(","):
