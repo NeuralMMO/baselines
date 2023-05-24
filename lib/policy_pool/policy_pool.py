@@ -49,5 +49,5 @@ class PolicyPool():
     table = pd.DataFrame(self._policies.keys(), columns=["Model"])
     table["Rank"] = [stats[model] for model in table["Model"]]
     table["Num Samples"] = [self._policies[model].num_samples() for model in table["Model"]]
-    table = table.sort_values(by='Rank', ascending=True)
+    table = table.sort_values(by='Rank')
     return table
