@@ -3,6 +3,7 @@ import argparse
 from email.policy import Policy
 import logging
 import os
+import time
 from venv import logger
 
 import pandas as pd
@@ -99,6 +100,9 @@ if __name__ == "__main__":
     for p in args.model_checkpoints.split(","):
       policy_pool.add_policy(p)
 
+  while len(policy_pool._policies) < args.num_policies:
+    logger.warn("Not enough policies to evaluate, waiting...")
+    time.sleep(60)
 
   for ri in range(args.num_rounds):
     models = list(set(
