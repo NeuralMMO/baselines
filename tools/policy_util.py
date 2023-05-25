@@ -33,5 +33,5 @@ if __name__ == '__main__':
 
     for index, row in table.iterrows():
       # Log metrics over time
-      wandb.log({"metric_name": row["metric_value"]})
+      wandb.log({row["metric_name"]: row["metric_value"]})
 
