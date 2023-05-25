@@ -21,6 +21,8 @@ from model.realikun.policy import BaselinePolicy
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 
+import logging
+
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
