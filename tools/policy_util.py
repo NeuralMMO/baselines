@@ -31,7 +31,7 @@ if __name__ == '__main__':
     )
     wandb.log({"policy_pool": wandb.Table(dataframe=table)})
 
-    for index, row in table.iterrows():
-      # Log metrics over time
-      wandb.log({row["metric_name"]: row["metric_value"]})
+    # for index, row in table.iterrows():
+    #   # Log metrics over time
+    #   wandb.log({row[]"metric_name": row["metric_value"]})
 

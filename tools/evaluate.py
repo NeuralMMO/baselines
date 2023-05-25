@@ -136,7 +136,7 @@ if __name__ == "__main__":
     table = pd.DataFrame(models, columns=["Model"])
     table["Reward"] = [model_rewards[model] for model in table["Model"]]
     table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
-    table["New Rank"] = [new_ranks,get[model] for model in table["Model"]]
+    table["New Rank"] = [new_ranks,get(model) for model in table["Model"]]
     table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
 
     table = table.sort_values(by='Reward')
