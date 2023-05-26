@@ -36,14 +36,14 @@ class NMMOEnv(nmmo.Env):
     return super().reset(map_id, seed, options)
 
   def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
-    infos = {}
-    rewards = { eid: -1 for eid in dones }
-
-    if self._rewards_config.environment:
-      rewards = super()._compute_rewards(agents, dones)
+    rewards, infos = super()._compute_rewards(agents, dones)
+    if not self._rewards_config.environment:
+      rewards = { id: 0 for id in agents }
 
     for agent_id in agents:
-      infos[agent_id] = {}
+      if agent_id not in infos:
+        infos[agent_id] = {}
+
       agent = self.realm.players.get(agent_id)
       assert agent is not None, f'Agent {agent_id} not found'
 

@@ -61,7 +61,6 @@ if __name__ == "__main__":
     "--env.maps_path", dest="maps_path", type=str, default="maps/train/medium",
     help="path to maps to use for training (default: None)")
 
-
   parser.add_argument(
     "--reward.hunger", dest="rewards_hunger",
     action="store_true", default=False,
