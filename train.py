@@ -190,7 +190,8 @@ if __name__ == "__main__":
     hunger=args.rewards_hunger,
     thirst=args.rewards_thirst,
     health=args.rewards_health,
-    achievements=args.rewards_achievements
+    achievements=args.rewards_achievements,
+    environment=args.rewards_environment
   )
 
   if args.model_type == "realikun":
