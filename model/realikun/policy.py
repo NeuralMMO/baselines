@@ -129,7 +129,3 @@ class RealikunPolicy(pufferlib.models.Policy):
       recurrent_args=[2048, 4096],
       recurrent_kwargs={'num_layers': 1},
     )
-
-  @staticmethod
-  def env_creator(config, team_helper):
-    return lambda: NMMOTeamEnv(config, team_helper)
