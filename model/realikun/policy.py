@@ -6,7 +6,7 @@ import pufferlib.frameworks.cleanrl
 from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
 from env.nmmo_team_env import NMMOTeamEnv
 
-class BaselinePolicy(pufferlib.models.Policy):
+class RealikunPolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
     super().__init__(binding, input_size, hidden_size)
 
@@ -124,7 +124,7 @@ class BaselinePolicy(pufferlib.models.Policy):
   @staticmethod
   def create_policy():
     return pufferlib.frameworks.cleanrl.make_policy(
-      BaselinePolicy,
+      RealikunPolicy,
       recurrent_cls=MemoryBlock,
       recurrent_args=[2048, 4096],
       recurrent_kwargs={'num_layers': 1},

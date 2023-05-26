@@ -13,7 +13,7 @@ from env.nmmo_config import NmmoConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
-from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.baseline_agent import BaselineAgent
 
 HORIZON = 30
 RANDOM_SEED = random.randint(0, 100000)

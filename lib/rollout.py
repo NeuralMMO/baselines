@@ -17,7 +17,7 @@ import tqdm
 from env.nmmo_env import RewardsConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
-from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.baseline_agent import BaselineAgent
 from nmmo.render.replay_helper import ReplayHelper
 
 class Rollout():

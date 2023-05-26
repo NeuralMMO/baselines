@@ -40,10 +40,16 @@ class PolicyPool():
     return self._policies[policy_id]._model_weights_path
 
   def update_rewards(self, rewards: Dict[str, float]):
-    for id in rewards.keys():
-      self._policies[id].record_sample()
-      if id not in self._skill_rating.stats.keys():
-        self._skill_rating.add_policy(id)
+    if len(rewards) == 0:
+      return
+
+    for policy_id in rewards.keys():
+      self._policies[policy_id].record_sample()
+      if policy_id not in self._skill_rating.stats:
+        if len(self._skill_rating.stats) == 0:
+          self._skill_rating.set_anchor(policy_id)
+        else:
+          self._skill_rating.add_policy(policy_id)
 
     self._skill_rating.update(rewards.keys(), scores=rewards.values())
 

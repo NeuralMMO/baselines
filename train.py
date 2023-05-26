@@ -10,15 +10,16 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
 from env.nmmo_config import NmmoConfig
-from env.nmmo_env import RewardsConfig
+from env.nmmo_env import NMMOEnv, RewardsConfig
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
-from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
-from model.realikun.policy import BaselinePolicy
+from model.basic.basic_agent import BasicPolicy
+from model.realikun.policy import RealikunPolicy
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 
@@ -31,6 +32,10 @@ if __name__ == "__main__":
     "--model.init_from_path",
     dest="model_init_from_path", type=str, default=None,
     help="path to model to load (default: None)")
+  parser.add_argument(
+    "--model.type",
+    dest="model_type", type=str, default="realikun",
+    help="model type (default: realikun)")
 
   parser.add_argument(
     "--env.num_teams", dest="num_teams", type=int, default=16,
@@ -179,14 +184,35 @@ if __name__ == "__main__":
 
   binding = None
 
+  rewards_config = RewardsConfig(
+    symlog_rewards=args.symlog_rewards,
+    hunger=args.rewards_hunger,
+    thirst=args.rewards_thirst,
+    health=args.rewards_health,
+    achievements=args.rewards_achievements
+  )
+
   # Create an environment factory that uses the opponent pool
   # for some of the agents, while letting the rest be learners
   def make_agent(model_weights):
     if binding is None:
       return None
-    return BaselineAgent(model_weights, binding)
+    if args.model_type == "realikun":
+      return BaselineAgent(model_weights, binding, RealikunPolicy.create_policy()(binding))
+    elif args.model_type == "basic":
+      return BaselineAgent(model_weights, binding, BasicPolicy.create_policy()(binding))
+    else:
+      raise ValueError(f"Unknown model type: {args.model_type}")
 
   def make_env():
+    if args.model_type == "realikun":
+      env = NMMOTeamEnv(
+        config, team_helper, rewards_config, moves_only=args.moves_only)
+    elif args.model_type == "basic":
+      env = NMMOEnv(config, rewards_config)
+    else:
+      raise ValueError(f"Unknown model type: {args.model_type}")
+
     return OpponentPoolEnv(
       NMMOTeamEnv(config, team_helper,
                   RewardsConfig(
@@ -212,7 +238,7 @@ if __name__ == "__main__":
     emulate_const_horizon=args.max_episode_length,
   )
   opponent_pool.binding = binding
-  learner_agent = BaselinePolicy.create_policy()(binding)
+  learner_agent = RealikunPolicy.create_policy()(binding)
 
   # Initialize the learner agent from a pretrained model
   if args.model_init_from_path is not None:
