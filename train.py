@@ -54,6 +54,12 @@ if __name__ == "__main__":
     "--env.moves_only", dest="moves_only",
     action="store_true", default=False,
     help="only allow moves (default: False)")
+  parser.add_argument(
+    "--env.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for training (default: 1)")
+  parser.add_argument(
+    "--env.maps_path", dest="maps_path", type=str, default="maps/train/medium",
+    help="path to maps to use for training (default: None)")
 
 
   parser.add_argument(
@@ -72,11 +78,15 @@ if __name__ == "__main__":
     "--reward.achievements", dest="rewards_achievements",
     action="store_true", default=False,
     help="enable achievement rewards (default: False)")
+  parser.add_argument(
+    "--reward.environment", dest="rewards_environment",
+    action="store_true", default=False,
+    help="enable environment rewards (default: False)")
 
   parser.add_argument(
-    "--reward.disable_symlog", dest="symlog_rewards",
-    action="store_false", default=True,
-    help="disable symlog rewards (default: True)")
+    "--reward.symlog", dest="symlog_rewards",
+    action="store_true", default=False,
+    help="symlog rewards (default: True)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -95,9 +105,6 @@ if __name__ == "__main__":
     "--train.num_steps",
     dest="train_num_steps", type=int, default=10_000_000,
     help="number of steps to train (default: 10_000_000)")
-  parser.add_argument(
-    "--train.num_maps", dest="num_maps", type=int, default=128,
-    help="number of maps to use for training (default: 1)")
   parser.add_argument(
     "--train.checkpoint_interval",
     dest="checkpoint_interval", type=int, default=10,
@@ -150,6 +157,7 @@ if __name__ == "__main__":
     team_size=args.team_size,
     num_npcs=args.num_npcs,
     num_maps=args.num_maps,
+    maps_path=args.maps_path,
     max_episode_length=args.max_episode_length,
     death_fog_tick=args.death_fog_tick
   )
@@ -187,7 +195,8 @@ if __name__ == "__main__":
                     hunger=args.rewards_hunger,
                     thirst=args.rewards_thirst,
                     health=args.rewards_health,
-                    achievements=args.rewards_achievements
+                    achievements=args.rewards_achievements,
+                    environment=args.rewards_environment
                   ),
                   moves_only=args.moves_only),
       range(args.num_learners, team_helper.num_teams),

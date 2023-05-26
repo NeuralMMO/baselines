@@ -16,8 +16,10 @@ class NmmoConfig(
       self,
       num_teams=16, team_size=8, num_npcs=256,
       num_maps=5,
+      maps_path=None,
       max_episode_length=1024,
-      death_fog_tick=None):
+      death_fog_tick=None,
+      ):
 
     super().__init__()
 
@@ -28,3 +30,5 @@ class NmmoConfig(
     self.HORIZON = max_episode_length
     self.MAP_N = num_maps
     self.PLAYER_DEATH_FOG = death_fog_tick
+    if maps_path is not None:
+      self.MAP_PATH = maps_path

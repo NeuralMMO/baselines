@@ -50,13 +50,17 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
     help="number of ticks before death fog starts (default: None)")
+  parser.add_argument(
+    "--env.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for evaluation (default: 128)")
+  parser.add_argument(
+    "--env.maps_path", dest="maps_path", type=str, default="maps/eval/medium",
+    help="path to maps to use for evaluation (default: None)")
 
   parser.add_argument(
     "--eval.num_rounds", dest="num_rounds", type=int, default=1,
     help="number of rounds to use for evaluation (default: 1)")
-  parser.add_argument(
-    "--eval.num_maps", dest="num_maps", type=int, default=128,
-    help="number of maps to use for evaluation (default: 128)")
+
   parser.add_argument(
     "--eval.num_policies", dest="num_policies", type=int, default=2,
     help="number of policies to use for evaluation (default: 2)")
@@ -73,7 +77,8 @@ if __name__ == "__main__":
     num_npcs=args.num_npcs,
     max_episode_length=args.max_episode_length,
     death_fog_tick=args.death_fog_tick,
-    num_maps=args.num_maps
+    num_maps=args.num_maps,
+    maps_path=args.maps_path
   )
 
   config.MAP_PREVIEW_DOWNSCALE = 8
@@ -91,7 +96,7 @@ if __name__ == "__main__":
 
 
   rewards_config = RewardsConfig(
-    achievements=True
+    environment=True
   )
 
   policy_pool = PolicyPool()

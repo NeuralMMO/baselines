@@ -1,4 +1,5 @@
 
+from os import environ
 from re import T
 import resource
 from typing import Dict, List
@@ -12,11 +13,13 @@ from nmmo.lib.log import EventCode
 
 @dataclass
 class RewardsConfig:
-  symlog_rewards: bool = True
-  hunger: bool = True
-  thirst: bool = True
-  health: bool = True
-  achievements: bool = True
+  symlog_rewards: bool = False
+  hunger: bool = False
+  thirst: bool = False
+  health: bool = False
+  achievements: bool = False
+  environment: bool = False
+
 class NMMOEnv(nmmo.Env):
   def __init__(
       self, config,
@@ -36,15 +39,13 @@ class NMMOEnv(nmmo.Env):
     infos = {}
     rewards = { eid: -1 for eid in dones }
 
+    if self._rewards_config.environment:
+      rewards = super()._compute_rewards(agents, dones)
+
     for agent_id in agents:
       infos[agent_id] = {}
       agent = self.realm.players.get(agent_id)
       assert agent is not None, f'Agent {agent_id} not found'
-
-      # CHECK ME: unique event-based scoring
-      # rewards[agent_id] = score_unique_events(realm, agent_id)
-
-      rewards[agent_id] = 1
 
       if self._rewards_config.hunger:
         if agent.food.val / self.config.RESOURCE_BASE < 0.4:
