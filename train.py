@@ -4,7 +4,6 @@ import os
 import re
 import sys
 
-import nmmo
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
