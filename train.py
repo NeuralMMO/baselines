@@ -196,12 +196,15 @@ if __name__ == "__main__":
   def make_agent(model_weights):
     if binding is None:
       return None
+
     if args.model_type == "realikun":
-      return BaselineAgent(model_weights, binding, RealikunPolicy.create_policy()(binding))
+      policy_cls = RealikunPolicy
     elif args.model_type == "basic":
-      return BaselineAgent(model_weights, binding, BasicPolicy.create_policy()(binding))
+      policy_cls = BasicPolicy
     else:
       raise ValueError(f"Unknown model type: {args.model_type}")
+
+    return BaselineAgent(model_weights, binding, policy_cls.create_policy()(binding))
 
   def make_env():
     if args.model_type == "realikun":
@@ -213,16 +216,7 @@ if __name__ == "__main__":
       raise ValueError(f"Unknown model type: {args.model_type}")
 
     return OpponentPoolEnv(
-      NMMOTeamEnv(config, team_helper,
-                  RewardsConfig(
-                    symlog_rewards=args.symlog_rewards,
-                    hunger=args.rewards_hunger,
-                    thirst=args.rewards_thirst,
-                    health=args.rewards_health,
-                    achievements=args.rewards_achievements,
-                    environment=args.rewards_environment
-                  ),
-                  moves_only=args.moves_only),
+      env,
       range(args.num_learners, team_helper.num_teams),
       opponent_pool,
       make_agent
