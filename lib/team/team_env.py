@@ -55,7 +55,7 @@ class TeamEnv(ParallelEnv):
     gym_obs, rewards, dones, infos = self._env.step(agent_actions)
     merged_obs = self._group_by_team(gym_obs)
     merged_rewards = {
-      tid: sum(vals.values()) / self._team_helper.team_size[tid]
+      tid: sum(vals.values())
       for tid, vals in self._group_by_team(rewards).items()
     }
     merged_infos = self._group_by_team(infos)

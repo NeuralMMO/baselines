@@ -242,7 +242,7 @@ if __name__ == "__main__":
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
 
   def epoch_end_callback(state):
-    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 0:
+    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 1:
         save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
         temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
         logging.info(f'Saving checkpoint to {save_path}')
