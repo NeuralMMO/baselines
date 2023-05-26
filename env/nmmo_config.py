@@ -31,4 +31,4 @@ class NmmoConfig(
     self.MAP_N = num_maps
     self.PLAYER_DEATH_FOG = death_fog_tick
     if maps_path is not None:
-      self.MAP_PATH = maps_path
+      self.PATH_MAPS = maps_path
