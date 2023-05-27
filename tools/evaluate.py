@@ -117,10 +117,6 @@ if __name__ == "__main__":
     models = list(set(
        policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
 
-    if len(models) < 2:
-       logger.warn("Not enough models to evaluate, skipping round")
-       continue
-
     rollout = Rollout(
       config, team_helper, rewards_config,
       models,

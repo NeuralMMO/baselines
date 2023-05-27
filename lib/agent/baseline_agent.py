@@ -7,18 +7,24 @@ import torch
 
 from lib.agent.agent import Agent
 from lib.agent.util import load_matching_state_dict
+from model.basic.basic_policy import BasicPolicy
 from model.realikun.policy import RealikunPolicy
+from model.realikun.policy_lstm import RealikunPolicyLSTM
 
 
 class BaselineAgent(Agent):
-  def __init__(self, weights_path, binding, policy):
+  def __init__(self, binding, weights_path=None, policy_cls=None):
     super().__init__()
     self._weights_path = weights_path
-    self._policy = policy
     self._binding = binding
-    self._load()
-
     self._device = torch.device("cpu")
+
+    assert policy_cls is not None or weights_path is not None, \
+      "Must provide either policy_cls or weights_path"
+    if weights_path:
+      self._load()
+    else:
+      self._policy = policy_cls(binding)
     self._policy = self._policy.to(self._device)
 
     self._next_lstm_state = None
@@ -50,13 +56,12 @@ class BaselineAgent(Agent):
     return unpacked
 
   def _load(self):
-    if not os.path.exists(self._weights_path):
-      return
-
     with open(self._weights_path, 'rb') as f:
+      model = torch.load(f, map_location=torch.device("cpu"))
+      self._policy = self.policy_class(model.get("model_type", "realikun"))(self._binding)
       load_matching_state_dict(
         self._policy,
-        torch.load(f, map_location=torch.device("cpu"))["agent_state_dict"]
+        model["agent_state_dict"]
       )
 
   def _unpack_actions(self, packed_actions):
@@ -92,3 +97,14 @@ class BaselineAgent(Agent):
       pack_recursive([], batched_obs)
 
       return np.concatenate(packed_obs)
+
+  @staticmethod
+  def policy_class(model_type: str):
+    if model_type == "realikun":
+      return RealikunPolicy.create_policy()
+    if model_type == "realikun-lstm":
+      return RealikunPolicyLSTM.create_policy()
+    elif model_type == "basic":
+      return BasicPolicy.create_policy()
+    else:
+      raise ValueError(f"Unsupported model type: {model_type}")

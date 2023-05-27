@@ -41,7 +41,7 @@ def init_team_env(model_weights):
 
   agent_list = []
   for _ in range(num_teams):
-    agent_list.append(BaselineAgent(model_weights, binding))
+    agent_list.append(BaselineAgent(binding, weights_path=model_weights))
 
   return team_env, agent_list
 

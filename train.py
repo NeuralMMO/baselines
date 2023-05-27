@@ -17,8 +17,6 @@ from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
-from model.basic.basic_policy import BasicPolicy
-from model.realikun.policy import RealikunPolicy
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 
@@ -194,22 +192,15 @@ if __name__ == "__main__":
     environment=args.rewards_environment
   )
 
-  if args.model_type == "realikun":
-    policy_cls = RealikunPolicy
-  elif args.model_type == "basic":
-    policy_cls = BasicPolicy
-  else:
-    raise ValueError(f"Unknown model type: {args.model_type}")
-
   # Create an environment factory that uses the opponent pool
   # for some of the agents, while letting the rest be learners
   def make_agent(model_weights):
     if binding is None:
       return None
-    return BaselineAgent(model_weights, binding, policy_cls.create_policy()(binding))
+    return BaselineAgent(binding, model_weights=model_weights)
 
   def make_env():
-    if args.model_type == "realikun":
+    if args.model_type in ["realikun", "realikun-lstm"]:
       env = NMMOTeamEnv(
         config, team_helper, rewards_config, moves_only=args.moves_only)
     elif args.model_type == "basic":
@@ -233,15 +224,20 @@ if __name__ == "__main__":
     emulate_const_horizon=args.max_episode_length,
   )
   opponent_pool.binding = binding
-  learner_agent = policy_cls.create_policy()(binding)
 
   # Initialize the learner agent from a pretrained model
+  learner_policy = None
   if args.model_init_from_path is not None:
     logging.info(f"Initializing model from {args.model_init_from_path}...")
+    model = torch.load(args.model_init_from_path)
+    learner_policy = BaselineAgent.policy_class(
+      model.get("model_type", "realikun"))(binding)
     cleanrl_ppo_lstm.load_matching_state_dict(
-      learner_agent,
-      torch.load(args.model_init_from_path)["agent_state_dict"]
+      learner_policy,
+      model["agent_state_dict"]
     )
+  else:
+    learner_policy = BaselineAgent.policy_class(args.model_type)(binding)
 
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
@@ -266,6 +262,7 @@ if __name__ == "__main__":
     if experiment_dir is not None and state["update"] % args.checkpoint_interval == 1:
         save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
         temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
+        state["model_type"] = args.model_type
         logging.info(f'Saving checkpoint to {save_path}')
         torch.save(state, temp_path)
         os.rename(temp_path, save_path)
@@ -276,7 +273,7 @@ if __name__ == "__main__":
   try:
     cleanrl_ppo_lstm.train(
       binding,
-      learner_agent,
+      learner_policy,
       run_name = args.experiment_name,
 
       cuda=torch.cuda.is_available(),
