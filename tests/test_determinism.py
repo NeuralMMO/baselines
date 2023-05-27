@@ -1,6 +1,4 @@
 # pylint: disable=protected-access
-
-'''Manual test for deterministic rollout with baseline agents'''
 import random
 import unittest
 import numpy as np
