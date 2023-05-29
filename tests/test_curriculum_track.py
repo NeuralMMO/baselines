@@ -3,6 +3,10 @@
 '''Manual test for running a training epoch with curriculum'''
 import wandb
 
+from nmmo.core.config import Config
+
+from curriculum.heuristic_task_gen import HeuristicTaskGenerator
+
 # to be provided by Joseph
 #from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
 def train_on_tasks():
@@ -13,12 +17,6 @@ def evaluate_on_tasks():
 
 def load_model(pretrained_model_path):
   pass
-
-# Daniel's heuristic task generator
-#from curriculum.heuristic_task_gen.py_import HeuristicTaskGenerator
-class HeuristicTaskGenerator:
-  def generate_tasks(self, num_tasks):
-    pass
 
 # Nishaanth's OpenELM task generator
 #from curriculum.openelm_task_gen.py_import OpenELMTaskGenerator
@@ -41,8 +39,8 @@ class SyllabusTaskSampler:
     pass
 
 
-def test_curriculum_learning(use_elm=True):
-  generator = HeuristicTaskGenerator()
+def test_curriculum_learning(config: Config, use_elm=True):
+  generator = HeuristicTaskGenerator(config)
   train_tasks = generator.generate_tasks(num_tasks=25_000)
   eval_tasks = generator.generate_tasks(num_tasks=1_000)
 
