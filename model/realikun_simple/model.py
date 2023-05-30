@@ -75,8 +75,8 @@ class ModelArchitecture:
   # Model
   SELF_EMBED = 512
   SELF_AS_ALLY_EMBED = 256
-  LSTM_HIDDEN = 512
-  ATTENTION_HIDDEN = 256
+  LSTM_HIDDEN = 256
+  ATTENTION_HIDDEN = 128
 
 
 class TileEncoder(nn.Module):
