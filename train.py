@@ -200,7 +200,7 @@ if __name__ == "__main__":
     return BaselineAgent(binding, model_weights=model_weights)
 
   def make_env():
-    if args.model_type in ["realikun", "realikun-lstm"]:
+    if args.model_type in ["realikun", "realikun-simplified"]:
       env = NMMOTeamEnv(
         config, team_helper, rewards_config, moves_only=args.moves_only)
     elif args.model_type == "basic":

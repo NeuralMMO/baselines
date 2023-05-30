@@ -9,7 +9,7 @@ from lib.agent.agent import Agent
 from lib.agent.util import load_matching_state_dict
 from model.basic.basic_policy import BasicPolicy
 from model.realikun.policy import RealikunPolicy
-from model.realikun.policy_lstm import RealikunPolicyLSTM
+from model.realikun_simple.policy import RealikunSimplifiedPolicy
 
 
 class BaselineAgent(Agent):
@@ -102,8 +102,8 @@ class BaselineAgent(Agent):
   def policy_class(model_type: str):
     if model_type == "realikun":
       return RealikunPolicy.create_policy()
-    if model_type == "realikun-lstm":
-      return RealikunPolicyLSTM.create_policy()
+    if model_type == "realikun-simplified":
+      return RealikunSimplifiedPolicy.create_policy()
     elif model_type == "basic":
       return BasicPolicy.create_policy()
     else:
