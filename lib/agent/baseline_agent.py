@@ -7,7 +7,8 @@ import torch
 
 from lib.agent.agent import Agent
 from lib.agent.util import load_matching_state_dict
-from model.basic.basic_policy import BasicPolicy
+from model.basic.policy import BasicPolicy
+from model.basic_teams.policy import BasicTeamsPolicy
 from model.realikun.policy import RealikunPolicy
 from model.realikun_simple.policy import RealikunSimplifiedPolicy
 
@@ -106,5 +107,7 @@ class BaselineAgent(Agent):
       return RealikunSimplifiedPolicy.create_policy()
     elif model_type == "basic":
       return BasicPolicy.create_policy()
+    elif model_type == "basic-teams":
+      return BasicTeamsPolicy.create_policy()
     else:
       raise ValueError(f"Unsupported model type: {model_type}")

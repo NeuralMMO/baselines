@@ -18,6 +18,7 @@ from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from env.nmmo_team_env import NMMOTeamEnv
+from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
 
 import logging
@@ -205,6 +206,10 @@ if __name__ == "__main__":
         config, team_helper, rewards_config, moves_only=args.moves_only)
     elif args.model_type == "basic":
       env = NMMOEnv(config, rewards_config)
+    elif args.model_type == "basic-teams":
+      env = TeamEnv(
+        NMMOEnv(config, rewards_config),
+        team_helper=team_helper, include_dummy_obs=True)
     else:
       raise ValueError(f"Unknown model type: {args.model_type}")
 

@@ -95,7 +95,6 @@ class NMMOTeamEnv(TeamEnv):
             if isinstance(value, (int, float)):
               stats[key]["sum"] += float(value)
               stats[key]["count"] += 1
-
       team_info["stats"] = stats
 
     return obs, rewards, dones, infos
