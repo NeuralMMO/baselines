@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
   # Historic self play is not yet working, so we require
   # all the players to be learners
-  assert args.num_teams == args.num_learners
+  # assert args.num_teams == args.num_learners
 
   # Set up the teams
   team_helper = TeamHelper({
@@ -207,26 +207,31 @@ if __name__ == "__main__":
     elif args.model_type == "basic":
       env = NMMOEnv(config, rewards_config)
     elif args.model_type == "basic-teams":
-      env = TeamEnv(
-        NMMOEnv(config, rewards_config),
-        team_helper=team_helper, include_dummy_obs=True)
+      env = NMMOEnv(config, rewards_config)
     else:
       raise ValueError(f"Unknown model type: {args.model_type}")
 
-    return OpponentPoolEnv(
-      env,
-      range(args.num_learners, team_helper.num_teams),
-      opponent_pool,
-      make_agent
-    )
+    return env
+
+    # return OpponentPoolEnv(
+    #   env,
+    #   range(args.num_learners, team_helper.num_teams),
+    #   opponent_pool,
+    #   make_agent
+    # )
 
   # Create a pufferlib binding, and use it to initialize the
   # opponent pool and create the learner agent
+  puffer_teams = None
+  if args.model_type == "basic-teams":
+    puffer_teams = team_helper.teams
+
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
+    teams=puffer_teams
   )
   opponent_pool.binding = binding
 
@@ -262,62 +267,83 @@ if __name__ == "__main__":
   checkpoins = os.listdir(experiment_dir)
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
-
-  def epoch_end_callback(state):
-    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 1:
-        save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
-        temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
-        state["model_type"] = args.model_type
-        logging.info(f'Saving checkpoint to {save_path}')
-        torch.save(state, temp_path)
-        os.rename(temp_path, save_path)
-        logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
-        opponent_pool.add_policy(save_path)
+    #xcxc
 
   logging.info("Starting training...")
-  try:
-    cleanrl_ppo_lstm.train(
-      binding,
+  trainer = cleanrl_ppo_lstm.CleanPuffeRL(
+    binding,
+    learner_policy,
+
+    run_name = args.experiment_name,
+
+    cuda=torch.cuda.is_available(),
+    total_timesteps=args.train_num_steps,
+    track=(args.wandb_project is not None),
+
+    num_envs=args.num_envs,
+    num_cores=args.num_cores or args.num_envs,
+    num_buffers=args.num_buffers,
+
+    num_agents=args.num_learners,
+    num_steps=args.num_steps,
+
+    wandb_project_name=args.wandb_project,
+    wandb_entity=args.wandb_entity,
+
+
+    # PPO
+    learning_rate=args.ppo_learning_rate,
+    # clip_coef=0.2, # ratio_clip
+    # dual_clip_c=3.,
+    # ent_coef=0.001 # entropy_loss_weight,
+    # grad_clip=1.0,
+    # bptt_trunc_len=16,
+  )
+
+  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
+  if args.use_serial_vecenv:
+    vec_env_cls = pufferlib.vectorization.serial.VecEnv
+
+  buffers, next_obs, next_done, next_lstm_state = trainer.make_vecenv(vec_backend=vec_env_cls)
+  obs, actions, logprobs, rewards, dones, values = trainer.allocate_storage()
+
+  data = obs, actions, logprobs, rewards, dones, values, next_obs, next_done, next_lstm_state
+
+  num_updates = 10000
+  for update in range(trainer.update+1, num_updates + 1):
+    initial_lstm_state, data = trainer.evaluate(learner_policy, buffers, *data)
+    trainer.train(
       learner_policy,
-      run_name = args.experiment_name,
-
-      cuda=torch.cuda.is_available(),
-      total_timesteps=args.train_num_steps,
-      track=(args.wandb_project is not None),
-
-      num_envs=args.num_envs,
-      num_cores=args.num_cores or args.num_envs,
-      num_buffers=args.num_buffers,
-      use_serial_vecenv=args.use_serial_vecenv,
-
+      buffers,
+      initial_lstm_state,
+      *data,
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
-
-      num_agents=args.num_learners,
-      num_steps=args.num_steps,
       bptt_horizon=args.bptt_horizon,
-
-      wandb_project_name=args.wandb_project,
-      wandb_entity=args.wandb_entity,
-
-      epoch_end_callback=epoch_end_callback,
-      resume_from_path=resume_from_path,
-
-      # PPO
-      learning_rate=args.ppo_learning_rate,
-      # clip_coef=0.2, # ratio_clip
-      # dual_clip_c=3.,
-      # ent_coef=0.001 # entropy_loss_weight,
-      # grad_clip=1.0,
-      # bptt_trunc_len=16,
     )
+    if experiment_dir is not None and update % args.checkpoint_interval == 1:
+      save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
+      temp_path = os.path.join(experiment_dir, f'.{update:06d}.pt.tmp')
+      state = {
+        "agent_state_dict": learner_policy.state_dict(),
+        "mean_reward": trainer.mean_reward,
+        "update": update,
+        "model_type": args.model_type
+      }
+      logging.info(f'Saving checkpoint to {save_path}')
+      torch.save(state, temp_path)
+      os.rename(temp_path, save_path)
+      logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
+      opponent_pool.add_policy(save_path)
 
-  except RuntimeError as e:
-    if "CUDA out of memory" in str(e):
-        logging.info("Exitting due to CUDA out of memory")
-        sys.exit(101)
-    else:
-      raise e
+  # try:
+  #   trainer.train()
+  # except RuntimeError as e:
+  #   if "CUDA out of memory" in str(e):
+  #       logging.info("Exitting due to CUDA out of memory")
+  #       sys.exit(101)
+  #   else:
+  #     raise e
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2
