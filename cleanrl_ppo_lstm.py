@@ -26,7 +26,7 @@ import pufferlib.vectorization.serial
 class CleanPuffeRL:
     def __init__(
         self,
-        binding, 
+        binding,
         agent,
         config={},
         exp_name=os.path.basename(__file__),
@@ -69,7 +69,7 @@ class CleanPuffeRL:
         self.agent_step = 0
         self.start_epoch = 0
         self.update = 0
- 
+
         # Seed everything
         random.seed(seed)
         np.random.seed(seed)
@@ -300,7 +300,7 @@ class CleanPuffeRL:
                     next_done[buf],
                 ).reshape(1, -1)
 
-                advantages = torch.zeros_like(rewards).to(device)
+                advantages = torch.zeros_like(rewards).to(self.device)
                 lastgaelam = 0
                 for t in reversed(range(self.num_steps)):
                     if t == self.num_steps - 1:
@@ -315,9 +315,9 @@ class CleanPuffeRL:
 
         #### This is the update logic
         # flatten the batch
-        b_obs = obs.reshape((num_minibatches, bptt_horizon, -1) + envs.single_observation_space.shape)
+        b_obs = obs.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_observation_space.shape)
         b_logprobs = logprobs.reshape(num_minibatches, bptt_horizon, -1)
-        b_actions = actions.reshape((num_minibatches, bptt_horizon, -1) + envs.single_action_space.shape)
+        b_actions = actions.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_action_space.shape)
         b_dones = dones.reshape(num_minibatches, bptt_horizon, -1)
         b_advantages = advantages.reshape(num_minibatches, bptt_horizon, -1)
         b_returns = returns.reshape(num_minibatches, -1)
@@ -418,7 +418,7 @@ EntityId = EntityState.State.attr_name_to_col["id"]
 class Agent(pufferlib.models.Policy):
     def __init__(self, binding, input_size=128, hidden_size=256):
         '''Simple custom PyTorch policy subclassing the pufferlib BasePolicy
-        
+
         This requires only that you structure your network as an observation encoder,
         an action decoder, and a critic function. If you use our LSTM support, it will
         be added between the encoder and the decoder.
@@ -451,7 +451,7 @@ class Agent(pufferlib.models.Policy):
         tile = env_outputs['Tile']
         agents, tiles, features = tile.shape
         tile = tile.transpose(1, 2).view(agents, features, 15, 15)
-        
+
         tile = self.tile_conv_1(tile)
         tile = F.relu(tile)
         tile = self.tile_conv_2(tile)

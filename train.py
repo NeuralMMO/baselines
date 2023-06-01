@@ -284,7 +284,7 @@ if __name__ == "__main__":
     num_cores=args.num_cores or args.num_envs,
     num_buffers=args.num_buffers,
 
-    num_agents=args.num_learners,
+    num_agents=args.num_teams,
     num_steps=args.num_steps,
 
     wandb_project_name=args.wandb_project,
@@ -326,14 +326,13 @@ if __name__ == "__main__":
       temp_path = os.path.join(experiment_dir, f'.{update:06d}.pt.tmp')
       state = {
         "agent_state_dict": learner_policy.state_dict(),
-        "mean_reward": trainer.mean_reward,
         "update": update,
         "model_type": args.model_type
       }
       logging.info(f'Saving checkpoint to {save_path}')
       torch.save(state, temp_path)
       os.rename(temp_path, save_path)
-      logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
+      logging.info(f"Adding {save_path} to policy pool.")
       opponent_pool.add_policy(save_path)
 
   # try:

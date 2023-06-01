@@ -56,7 +56,7 @@ class BasicTeamsPolicy(pufferlib.models.Policy):
 
   def encode_observations(self, env_outputs):
       # TODO: Change 0 for teams when teams are added
-      env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+      env_outputs = self.binding.unpack_batched_obs(env_outputs)
       num_bodies = len(env_outputs)
       tile = torch.stack([env_outputs[i]["Tile"] for i in range(num_bodies)], dim=1)
       num_teams, _, num_tiles, num_features = tile.shape
