@@ -10,6 +10,7 @@ import pufferlib.registry.nmmo
 import torch
 from env.nmmo_config import NmmoConfig
 from env.nmmo_env import NMMOEnv, RewardsConfig
+from env.postprocessor import Postprocessor
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
 from lib.agent.baseline_agent import BaselineAgent
@@ -20,6 +21,8 @@ import cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
+
+import nmmo
 
 import logging
 
@@ -207,7 +210,8 @@ if __name__ == "__main__":
     elif args.model_type == "basic":
       env = NMMOEnv(config, rewards_config)
     elif args.model_type == "basic-teams":
-      env = NMMOEnv(config, rewards_config)
+      #env = NMMOEnv(config, rewards_config)
+      env = nmmo.Env()
     else:
       raise ValueError(f"Unknown model type: {args.model_type}")
 
@@ -231,7 +235,9 @@ if __name__ == "__main__":
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
-    teams=puffer_teams
+    teams=puffer_teams,
+    postprocessor_cls=Postprocessor,
+    postprocessor_args=[rewards_config]
   )
   opponent_pool.binding = binding
 
