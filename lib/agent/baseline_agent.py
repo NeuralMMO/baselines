@@ -106,7 +106,9 @@ class BaselineAgent(Agent):
     if model_type == "realikun-simplified":
       return RealikunSimplifiedPolicy.create_policy()
     elif model_type == "basic":
-      return BasicPolicy.create_policy()
+      return BasicPolicy.create_policy(num_lstm_layers=0)
+    elif model_type == "basic-lstm":
+      return BasicPolicy.create_policy(num_lstm_layers=1)
     elif model_type == "basic-teams":
       return BasicTeamsPolicy.create_policy()
     else:

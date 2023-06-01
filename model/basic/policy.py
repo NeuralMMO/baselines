@@ -97,8 +97,8 @@ class BasicPolicy(pufferlib.models.Policy):
 
 
   @staticmethod
-  def create_policy():
+  def create_policy(num_lstm_layers=1):
     return pufferlib.frameworks.cleanrl.make_policy(
       BasicPolicy,
       recurrent_args=[128, 256],
-      recurrent_kwargs={'num_layers': 1})
+      recurrent_kwargs={'num_layers': num_lstm_layers})
