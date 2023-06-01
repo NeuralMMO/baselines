@@ -207,11 +207,8 @@ if __name__ == "__main__":
     if args.model_type in ["realikun", "realikun-simplified"]:
       env = NMMOTeamEnv(
         config, team_helper, rewards_config, moves_only=args.moves_only)
-    elif args.model_type == "basic":
-      env = NMMOEnv(config, rewards_config)
-    elif args.model_type == "basic-teams":
-      #env = NMMOEnv(config, rewards_config)
-      env = nmmo.Env()
+    elif args.model_type in ["basic", "basic-teams"]:
+      env = nmmo.Env(config)
     else:
       raise ValueError(f"Unknown model type: {args.model_type}")
 

@@ -84,7 +84,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       infos[agent_id]["cod/starved"] = agent.food.val == 0
       infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
       infos[agent_id]["cod/attacked"] = agent.damage.val > 0
-      infos[agent_id]["lifespan"] = self.realm.tick
+      infos[agent_id]["lifespan"] = self.env.realm.tick
 
       infos[agent_id].update(get_player_history(self.env.realm, agent_id, agent))
 
