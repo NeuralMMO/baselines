@@ -512,18 +512,6 @@ if __name__ == '__main__':
         trainer.evaluate(agent, data)
         trainer.train(agent, data)
 
-    # @Daveey: can use your callback code to save policies directly here
-    '''
-    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 1:
-        save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
-        temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
-        logging.info(f'Saving checkpoint to {save_path}')
-        torch.save(state, temp_path)
-        os.rename(temp_path, save_path)
-        logging.info(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
-        opponent_pool.add_policy(save_path)
-    '''
-
     trainer.close()
 
     # TODO: Figure out why this does not exit cleanly

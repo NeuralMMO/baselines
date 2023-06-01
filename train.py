@@ -310,8 +310,6 @@ if __name__ == "__main__":
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
     trainer.resume_model(resume_from_path)
 
-
-
   trainer_state = trainer.allocate_storage()
 
   num_updates = 10000
@@ -338,14 +336,7 @@ if __name__ == "__main__":
       logging.info(f"Adding {save_path} to policy pool.")
       opponent_pool.add_policy(save_path)
 
-  # try:
-  #   trainer.train()
-  # except RuntimeError as e:
-  #   if "CUDA out of memory" in str(e):
-  #       logging.info("Exitting due to CUDA out of memory")
-  #       sys.exit(101)
-  #   else:
-  #     raise e
+  trainer.close()
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2
