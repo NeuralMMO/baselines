@@ -266,11 +266,6 @@ if __name__ == "__main__":
 
   os.makedirs(experiment_dir, exist_ok=True)
   logging.info(f"Experiment directory {experiment_dir}")
-  resume_from_path = None
-  checkpoins = os.listdir(experiment_dir)
-  if len(checkpoins) > 0:
-    resume_from_path = os.path.join(experiment_dir, max(checkpoins))
-    #xcxc
 
   logging.info("Starting training...")
   trainer = cleanrl_ppo_lstm.CleanPuffeRL(
@@ -302,6 +297,13 @@ if __name__ == "__main__":
     # grad_clip=1.0,
     # bptt_trunc_len=16,
   )
+
+  resume_from_path = None
+  checkpoins = os.listdir(experiment_dir)
+  if len(checkpoins) > 0:
+    resume_from_path = os.path.join(experiment_dir, max(checkpoins))
+    trainer.resume_model(resume_from_path)
+
 
   vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
   if args.use_serial_vecenv:
