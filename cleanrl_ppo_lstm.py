@@ -8,6 +8,7 @@ import psutil
 import random
 import time
 from datetime import timedelta
+from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -34,6 +35,7 @@ class CleanPuffeRL:
         torch_deterministic=True,
         cuda=True,
         track=False,
+        vec_backend=pufferlib.vectorization.multiprocessing.VecEnv,
         wandb_project_name='cleanRL',
         wandb_entity=None,
         wandb_run_id=None,
@@ -61,6 +63,7 @@ class CleanPuffeRL:
         self.num_cores = num_cores
         self.num_steps = num_steps
         self.envs_per_worker = envs_per_worker
+        self.seed = seed
 
         self.batch_size = int(num_envs * num_agents * num_buffers * num_steps)
         self.num_updates = total_timesteps // self.batch_size
@@ -79,6 +82,16 @@ class CleanPuffeRL:
         # Setup agent
         self.device = torch.device("cuda" if torch.cuda.is_available() and cuda else "cpu")
         self.agent = agent.to(self.device)
+
+        # Create environments
+        self.buffers = [
+            vec_backend(
+                self.binding,
+                num_workers=self.num_cores,
+                envs_per_worker=self.envs_per_worker,
+            )
+            for _ in range(self.num_buffers)
+        ]
 
         # Setup optimizer
         self.learning_rate = learning_rate
@@ -123,29 +136,9 @@ class CleanPuffeRL:
         self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     def allocate_storage(self):
-        common_shape = (self.num_steps, self.num_buffers, self.num_envs * self.num_agents)
-        obs = torch.zeros(common_shape + self.binding.single_observation_space.shape).to(self.device)
-        actions = torch.zeros(common_shape + self.binding.single_action_space.shape, dtype=int).to(self.device)
-        logprobs = torch.zeros(common_shape).to(self.device)
-        rewards = torch.zeros(common_shape).to(self.device)
-        dones = torch.zeros(common_shape).to(self.device)
-        values = torch.zeros(common_shape).to(self.device)
-        return obs, actions, logprobs, rewards, dones, values
-
-    def make_vecenv(self, vec_backend=pufferlib.vectorization.multiprocessing.VecEnv):
-        buffers = [
-            vec_backend(
-                self.binding,
-                num_workers=self.num_cores,
-                envs_per_worker=self.envs_per_worker,
-            )
-            for _ in range(self.num_buffers)
-        ]
-
         next_obs, next_done, next_lstm_state = [], [], []
-        for i, envs in enumerate(buffers):
-            # TODO: Check seeding
-            envs.async_reset()
+        for i, envs in enumerate(self.buffers):
+            envs.async_reset(self.seed + i*self.num_envs)
             o, _, _, _ = envs.recv()
             next_obs.append(torch.Tensor(o).to(self.device))
             next_done.append(torch.zeros((self.num_envs * self.num_agents,)).to(self.device))
@@ -156,16 +149,22 @@ class CleanPuffeRL:
                 torch.zeros(shape).to(self.device)
             ))
 
-        return buffers, next_obs, next_done, next_lstm_state
+        common_shape = (self.num_steps, self.num_buffers, self.num_envs * self.num_agents)
+        return SimpleNamespace(
+            next_obs=next_obs, next_done=next_done, next_lstm_state=next_lstm_state,
+            obs=torch.zeros(common_shape + self.binding.single_observation_space.shape).to(self.device),
+            actions=torch.zeros(common_shape + self.binding.single_action_space.shape, dtype=int).to(self.device),
+            logprobs=torch.zeros(common_shape).to(self.device),
+            rewards=torch.zeros(common_shape).to(self.device),
+            dones=torch.zeros(common_shape).to(self.device),
+            values=torch.zeros(common_shape).to(self.device),
+        )
 
     @pufferlib.utils.profile
-    def evaluate(self, agent, buffers,
-            obs, actions, logprobs, rewards, dones, values,
-            next_obs, next_done, next_lstm_state):
-
-        initial_lstm_state = [
-            torch.cat([e[0].clone() for e in next_lstm_state], dim=1),
-            torch.cat([e[1].clone() for e in next_lstm_state], dim=1)
+    def evaluate(self, agent, data):
+        data.initial_lstm_state = [
+            torch.cat([e[0].clone() for e in data.next_lstm_state], dim=1),
+            torch.cat([e[1].clone() for e in data.next_lstm_state], dim=1)
         ]
 
         epoch_lengths = []
@@ -174,27 +173,27 @@ class CleanPuffeRL:
         inference_time = 0
 
         for step in range(0, self.num_steps + 1):
-            for buf, envs in enumerate(buffers):
+            for buf, envs in enumerate(self.buffers):
                 self.global_step += self.num_envs * self.num_agents
 
                 # TRY NOT TO MODIFY: Receive from game and log data
                 if step == 0:
-                    obs[step, buf] = next_obs[buf]
-                    dones[step, buf] = next_done[buf]
+                    data.obs[step, buf] = data.next_obs[buf]
+                    data.dones[step, buf] = data.next_done[buf]
                 else:
                     start = time.time()
                     o, r, d, i = envs.recv()
                     env_step_time += time.time() - start
 
-                    next_obs[buf] = torch.Tensor(o).to(self.device)
-                    next_done[buf] = torch.Tensor(d).to(self.device)
+                    data.next_obs[buf] = torch.Tensor(o).to(self.device)
+                    data.next_done[buf] = torch.Tensor(d).to(self.device)
 
                     if step != self.num_steps:
-                        obs[step, buf] = next_obs[buf]
-                        dones[step, buf] = next_done[buf]
+                        data.obs[step, buf] = data.next_obs[buf]
+                        data.dones[step, buf] = data.next_done[buf]
 
 
-                    rewards[step - 1, buf] = torch.tensor(r).float().to(self.device).view(-1)
+                    data.rewards[step - 1, buf] = torch.tensor(r).float().to(self.device).view(-1)
 
                     for item in i:
                         if "episode" in item.keys():
@@ -217,12 +216,12 @@ class CleanPuffeRL:
                 # ALGO LOGIC: action logic
                 with torch.no_grad():
                     start = time.time()
-                    action, logprob, _, value, next_lstm_state[buf] = agent.get_action_and_value(next_obs[buf], next_lstm_state[buf], next_done[buf])
+                    action, logprob, _, value, data.next_lstm_state[buf] = agent.get_action_and_value(data.next_obs[buf], data.next_lstm_state[buf], data.next_done[buf])
                     inference_time += time.time() - start
-                    values[step, buf] = value.flatten()
+                    data.values[step, buf] = value.flatten()
 
-                actions[step, buf] = action
-                logprobs[step, buf] = logprob
+                data.actions[step, buf] = action
+                data.logprobs[step, buf] = logprob
 
                 # TRY NOT TO MODIFY: execute the game
                 start = time.time()
@@ -238,7 +237,7 @@ class CleanPuffeRL:
         self.writer.add_scalar("performance/inference_time", inference_time, self.global_step)
         self.writer.add_scalar("performance/inference_sps", inference_sps, self.global_step)
 
-        mean_reward = float(torch.mean(rewards))
+        mean_reward = float(torch.mean(data.rewards))
         self.writer.add_scalar("charts/reward", mean_reward, self.global_step)
 
         for profile in envs.profile():
@@ -262,12 +261,11 @@ class CleanPuffeRL:
             f'\tSteps Per Second: Env={env_sps}, Inference={inference_sps}'
         )
 
-        return initial_lstm_state, (obs, actions, logprobs, rewards, dones, values, next_obs, next_done,next_lstm_state)
+        return data
 
     @pufferlib.utils.profile
     def train(
-            self, agent, buffers, initial_lstm_state,
-            obs, actions, logprobs, rewards, dones, values, next_obs, next_done, next_lstm_state,
+            self, agent, data,
             anneal_lr=True,
             gamma=0.99,
             gae_lambda=0.95,
@@ -282,7 +280,6 @@ class CleanPuffeRL:
             max_grad_norm=0.5,
             target_kl=None,
         ):
-
         assert self.num_steps % bptt_horizon == 0, "num_steps must be divisible by bptt_horizon"
 
         # Annealing the rate if instructed to do so.
@@ -295,39 +292,39 @@ class CleanPuffeRL:
         with torch.no_grad():
             for buf in range(self.num_buffers):
                 next_value = agent.get_value(
-                    next_obs[buf],
-                    next_lstm_state[buf],
-                    next_done[buf],
+                    data.next_obs[buf],
+                    data.next_lstm_state[buf],
+                    data.next_done[buf],
                 ).reshape(1, -1)
 
-                advantages = torch.zeros_like(rewards).to(self.device)
+                advantages = torch.zeros_like(data.rewards).to(self.device)
                 lastgaelam = 0
                 for t in reversed(range(self.num_steps)):
                     if t == self.num_steps - 1:
-                        nextnonterminal = 1.0 - next_done[buf]
+                        nextnonterminal = 1.0 - data.next_done[buf]
                         nextvalues = next_value
                     else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = rewards[t] + gamma * nextvalues * nextnonterminal - values[t]
+                        nextnonterminal = 1.0 - data.dones[t + 1]
+                        nextvalues = data.values[t + 1]
+                    delta = data.rewards[t] + gamma * nextvalues * nextnonterminal - data.values[t]
                     advantages[t] = lastgaelam = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
-                returns = advantages + values
+                returns = advantages + data.values
 
         #### This is the update logic
         # flatten the batch
-        b_obs = obs.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_observation_space.shape)
-        b_logprobs = logprobs.reshape(num_minibatches, bptt_horizon, -1)
-        b_actions = actions.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_action_space.shape)
-        b_dones = dones.reshape(num_minibatches, bptt_horizon, -1)
+        b_obs = data.obs.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_observation_space.shape)
+        b_logprobs = data.logprobs.reshape(num_minibatches, bptt_horizon, -1)
+        b_actions = data.actions.reshape((num_minibatches, bptt_horizon, -1) + self.binding.single_action_space.shape)
+        b_dones = data.dones.reshape(num_minibatches, bptt_horizon, -1)
+        b_values = data.values.reshape(num_minibatches, -1)
         b_advantages = advantages.reshape(num_minibatches, bptt_horizon, -1)
         b_returns = returns.reshape(num_minibatches, -1)
-        b_values = values.reshape(num_minibatches, -1)
 
         # Optimizing the policy and value network
         train_time = time.time()
         clipfracs = []
         for epoch in range(update_epochs):
-            initial_initial_lstm_state = initial_lstm_state
+            initial_initial_lstm_state = data.initial_lstm_state
             for minibatch in range(num_minibatches):
                 initial_lstm_state = initial_initial_lstm_state
                 _, newlogprob, entropy, newvalue, initial_lstm_state = agent.get_action_and_value(
@@ -505,18 +502,15 @@ if __name__ == '__main__':
             recurrent_kwargs={'num_layers': 1}
         )(binding).to(device)
 
-    trainer = CleanPuffeRL(binding, agent, track=True, num_agents=128, num_envs=1, num_steps=128, num_cores=1)
+    trainer = CleanPuffeRL(binding, agent, track=False, num_agents=128, num_envs=1, num_steps=128, num_cores=1)
     #trainer.load_model(path)
 
-    buffers, next_obs, next_done, next_lstm_state = trainer.make_vecenv()
-    obs, actions, logprobs, rewards, dones, values = trainer.allocate_storage()
-
-    data = obs, actions, logprobs, rewards, dones, values, next_obs, next_done, next_lstm_state
+    data = trainer.allocate_storage()
 
     num_updates = 10000
     for update in range(trainer.update+1, num_updates + 1):
-        initial_lstm_state, data = trainer.evaluate(agent, buffers, *data)
-        trainer.train(agent, buffers, initial_lstm_state, *data)
+        trainer.evaluate(agent, data)
+        trainer.train(agent, data)
 
     # @Daveey: can use your callback code to save policies directly here
     '''
