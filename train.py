@@ -267,6 +267,11 @@ if __name__ == "__main__":
   os.makedirs(experiment_dir, exist_ok=True)
   logging.info(f"Experiment directory {experiment_dir}")
 
+  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
+  if args.use_serial_vecenv:
+    vec_env_cls = pufferlib.vectorization.serial.VecEnv
+
+
   logging.info("Starting training...")
   trainer = cleanrl_ppo_lstm.CleanPuffeRL(
     binding,
@@ -275,6 +280,7 @@ if __name__ == "__main__":
     run_name = args.experiment_name,
 
     cuda=torch.cuda.is_available(),
+    vec_backend=vec_env_cls,
     total_timesteps=args.train_num_steps,
     track=(args.wandb_project is not None),
 
@@ -305,23 +311,15 @@ if __name__ == "__main__":
     trainer.resume_model(resume_from_path)
 
 
-  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
-  if args.use_serial_vecenv:
-    vec_env_cls = pufferlib.vectorization.serial.VecEnv
 
-  buffers, next_obs, next_done, next_lstm_state = trainer.make_vecenv(vec_backend=vec_env_cls)
-  obs, actions, logprobs, rewards, dones, values = trainer.allocate_storage()
-
-  data = obs, actions, logprobs, rewards, dones, values, next_obs, next_done, next_lstm_state
+  trainer_state = trainer.allocate_storage()
 
   num_updates = 10000
   for update in range(trainer.update+1, num_updates + 1):
-    initial_lstm_state, data = trainer.evaluate(learner_policy, buffers, *data)
+    trainer.evaluate(learner_policy, trainer_state)
     trainer.train(
       learner_policy,
-      buffers,
-      initial_lstm_state,
-      *data,
+      trainer_state,
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
