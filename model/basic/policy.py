@@ -21,7 +21,7 @@ class BasicPolicy(pufferlib.models.Policy):
       an action decoder, and a critic function. If you use our LSTM support, it will
       be added between the encoder and the decoder.
       '''
-      super().__init__(binding, input_size, hidden_size)
+      super().__init__(binding)
       self.raw_single_observation_space = binding.raw_single_observation_space
 
       # A dumb example encoder that applies a linear layer to agent self features
@@ -29,11 +29,11 @@ class BasicPolicy(pufferlib.models.Policy):
 
       self.tile_conv_1 = torch.nn.Conv2d(3, 32, 3)
       self.tile_conv_2 = torch.nn.Conv2d(32, 8, 3)
-      self.tile_fc = torch.nn.Linear(8*11*11, input_size)
+      self.tile_fc = torch.nn.Linear(8*11*11, hidden_size)
 
-      self.entity_fc = torch.nn.Linear(23, input_size)
+      self.entity_fc = torch.nn.Linear(23, hidden_size)
 
-      self.proj_fc = torch.nn.Linear(256, input_size)
+      self.proj_fc = torch.nn.Linear(2*hidden_size, hidden_size)
 
       self.decoders = torch.nn.ModuleList([torch.nn.Linear(hidden_size, n)
               for n in binding.single_action_space.nvec])

@@ -82,6 +82,7 @@ class CleanPuffeRL:
         # Setup agent
         self.device = torch.device("cuda" if torch.cuda.is_available() and cuda else "cpu")
         self.agent = agent.to(self.device)
+        self.agent.is_recurrent = hasattr(self.agent, "lstm")
 
         # Create environments
         self.buffers = [
@@ -143,11 +144,14 @@ class CleanPuffeRL:
             next_obs.append(torch.Tensor(o).to(self.device))
             next_done.append(torch.zeros((self.num_envs * self.num_agents,)).to(self.device))
 
-            shape = (self.agent.lstm.num_layers, self.num_envs * self.num_agents, self.agent.lstm.hidden_size)
-            next_lstm_state.append((
-                torch.zeros(shape).to(self.device),
-                torch.zeros(shape).to(self.device)
-            ))
+            if self.agent.is_recurrent:
+                shape = (self.agent.lstm.num_layers, self.num_envs * self.num_agents, self.agent.lstm.hidden_size)
+                next_lstm_state.append((
+                    torch.zeros(shape).to(self.device),
+                    torch.zeros(shape).to(self.device)
+                ))
+            else:
+                next_lstm_state.append(None)
 
         common_shape = (self.num_steps, self.num_buffers, self.num_envs * self.num_agents)
         return SimpleNamespace(
@@ -162,10 +166,12 @@ class CleanPuffeRL:
 
     @pufferlib.utils.profile
     def evaluate(self, agent, data):
-        data.initial_lstm_state = [
-            torch.cat([e[0].clone() for e in data.next_lstm_state], dim=1),
-            torch.cat([e[1].clone() for e in data.next_lstm_state], dim=1)
-        ]
+        data.initial_lstm_state = None
+        if self.agent.is_recurrent:
+            data.initial_lstm_state = [
+                torch.cat([e[0].clone() for e in data.next_lstm_state], dim=1),
+                torch.cat([e[1].clone() for e in data.next_lstm_state], dim=1)
+            ]
 
         epoch_lengths = []
         epoch_returns = []
@@ -216,7 +222,10 @@ class CleanPuffeRL:
                 # ALGO LOGIC: action logic
                 with torch.no_grad():
                     start = time.time()
-                    action, logprob, _, value, data.next_lstm_state[buf] = agent.get_action_and_value(data.next_obs[buf], data.next_lstm_state[buf], data.next_done[buf])
+                    if self.agent.is_recurrent:
+                        action, logprob, _, value, data.next_lstm_state[buf] = agent.get_action_and_value(data.next_obs[buf], data.next_lstm_state[buf], data.next_done[buf])
+                    else:
+                        action, logprob, _, value = agent.get_action_and_value(data.next_obs[buf])
                     inference_time += time.time() - start
                     data.values[step, buf] = value.flatten()
 
@@ -326,10 +335,15 @@ class CleanPuffeRL:
         for epoch in range(update_epochs):
             initial_initial_lstm_state = data.initial_lstm_state
             for minibatch in range(num_minibatches):
-                initial_lstm_state = initial_initial_lstm_state
-                _, newlogprob, entropy, newvalue, initial_lstm_state = agent.get_action_and_value(
-                    b_obs[minibatch], initial_lstm_state, b_dones[minibatch], b_actions[minibatch])
-                initial_lstm_state = (initial_lstm_state[0].detach(), initial_lstm_state[1].detach())
+                if self.agent.is_recurrent:
+                    initial_lstm_state = initial_initial_lstm_state
+                    _, newlogprob, entropy, newvalue, initial_lstm_state = agent.get_action_and_value(
+                        b_obs[minibatch], initial_lstm_state, b_dones[minibatch], b_actions[minibatch])
+                    initial_lstm_state = (initial_lstm_state[0].detach(), initial_lstm_state[1].detach())
+                else:
+                    _, newlogprob, entropy, newvalue = agent.get_action_and_value(
+                        b_obs[minibatch].reshape(-1, *self.binding.single_observation_space.shape), action=b_actions[minibatch])
+
                 logratio = newlogprob - b_logprobs[minibatch].reshape(-1)
                 ratio = logratio.exp()
 
