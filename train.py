@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import sys
+from numpy import save
 
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
@@ -324,15 +325,8 @@ if __name__ == "__main__":
     )
     if experiment_dir is not None and update % args.checkpoint_interval == 1:
       save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
-      temp_path = os.path.join(experiment_dir, f'.{update:06d}.pt.tmp')
-      state = {
-        "agent_state_dict": learner_policy.state_dict(),
-        "update": update,
-        "model_type": args.model_type
-      }
-      logging.info(f'Saving checkpoint to {save_path}')
-      torch.save(state, temp_path)
-      os.rename(temp_path, save_path)
+      trainer.save_model(save_path,
+                         model_type=args.model_type)
       logging.info(f"Adding {save_path} to policy pool.")
       opponent_pool.add_policy(save_path)
 

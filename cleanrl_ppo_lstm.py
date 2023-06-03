@@ -134,8 +134,22 @@ class CleanPuffeRL:
         self.update = resume_state['update']
 
         print(f'Resuming from {path} with wandb_run_id={self.wandb_run_id}')
-        if 'optimizer_state_dict' in resume_state:
-            self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
+        self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
+
+    def save_model(self, save_path, **kwargs):
+      temp_path = os.path.join(f'{save_path}.tmp')
+      state = {
+        "agent_state_dict": agent.state_dict(),
+        "optimizer_state_dict": trainer.optimizer.state_dict(),
+        "wandb_run_id": self.wandb_run_id,
+        "global_step": self.global_step,
+        "agent_step": self.agent_step,
+        "update": self.update,
+        **kwargs
+      }
+      print(f'Saving checkpoint to {save_path}')
+      torch.save(state, temp_path)
+      os.rename(temp_path, save_path)
 
     def allocate_storage(self):
         next_obs, next_done, next_lstm_state = [], [], []
