@@ -139,7 +139,7 @@ class CleanPuffeRL:
     def save_model(self, save_path, **kwargs):
       temp_path = os.path.join(f'{save_path}.tmp')
       state = {
-        "agent_state_dict": agent.state_dict(),
+        "agent_state_dict": self.agent.state_dict(),
         "optimizer_state_dict": trainer.optimizer.state_dict(),
         "wandb_run_id": self.wandb_run_id,
         "global_step": self.global_step,
