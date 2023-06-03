@@ -134,7 +134,8 @@ class CleanPuffeRL:
         self.update = resume_state['update']
 
         print(f'Resuming from {path} with wandb_run_id={self.wandb_run_id}')
-        self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
+        if 'optimizer_state_dict' in resume_state:
+            self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
 
     def allocate_storage(self):
         next_obs, next_done, next_lstm_state = [], [], []
