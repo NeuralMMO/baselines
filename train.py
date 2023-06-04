@@ -283,7 +283,6 @@ if __name__ == "__main__":
     cuda=torch.cuda.is_available(),
     vec_backend=vec_env_cls,
     total_timesteps=args.train_num_steps,
-    track=(args.wandb_project is not None),
 
     num_envs=args.num_envs,
     num_cores=args.num_cores or args.num_envs,
@@ -308,7 +307,8 @@ if __name__ == "__main__":
     trainer.resume_model(resume_from_path)
 
   trainer_state = trainer.allocate_storage()
-  trainer.init_wandb(args.wandb_project, args.wandb_entity)
+  if args.wandb_project is not None and args.wandb_entity is not None:
+    trainer.init_wandb(args.wandb_project, args.wandb_entity)
 
   num_updates = 10000
   for update in range(trainer.update+1, num_updates + 1):
