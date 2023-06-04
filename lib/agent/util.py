@@ -1,4 +1,3 @@
-import numpy as np
 
 # Loads a state dict into a model, skipping parameters that don't match in shape.
 def load_matching_state_dict(model, state_dict):

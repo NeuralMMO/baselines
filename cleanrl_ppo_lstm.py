@@ -22,7 +22,7 @@ import pufferlib.utils
 import pufferlib.frameworks.cleanrl
 import pufferlib.vectorization.multiprocessing
 import pufferlib.vectorization.serial
-
+import lib.agent.util
 
 class CleanPuffeRL:
     def __init__(
@@ -130,7 +130,7 @@ class CleanPuffeRL:
         self.global_step = resume_state.get('global_step', 0)
         self.agent_step = resume_state.get('agent_step', 0)
         self.update = resume_state['update']
-        self.agent.load_state_dict(resume_state['agent_state_dict'])
+        lib.agent.util.load_matching_state_dict(self.agent, resume_state['agent_state_dict'])
 
         print(f'Resuming from {path} with wandb_run_id={self.wandb_run_id}')
         self.optimizer.load_state_dict(resume_state['optimizer_state_dict'])
