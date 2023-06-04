@@ -97,6 +97,8 @@ class CleanPuffeRL:
 
         # Setup logging
         self.run_name = run_name or f"{binding.env_name}__{seed}__{int(time.time())}"
+
+        self.wandb_run_id = None
         self.wandb_initialized = False
 
     def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None):
