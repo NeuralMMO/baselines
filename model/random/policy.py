@@ -11,18 +11,18 @@ import torch
 class RandomPolicy(pufferlib.models.Policy):
   def __init__(self, binding):
     super().__init__(binding)
-    self.tile_conv_1 = torch.nn.Conv2d(3, 32, 3)
+    self.decoders = torch.nn.ModuleList([torch.nn.Linear(1, n)
+            for n in binding.single_action_space.nvec])
 
   def encode_observations(self, env_outputs):
     return torch.randn((env_outputs.shape[0], 1)), None
 
   def decode_actions(self, hidden, lookup, concat=True):
-    actions = [
-      torch.randint(low=0, high=n,
-      size=(hidden.shape[0],)) for n in self.binding.single_action_space.nvec]
+    actions = [dec(hidden) for dec in self.decoders]
     if concat:
-        return torch.cat(actions, dim=-1)
+      return torch.cat(actions, dim=-1)
     return actions
+
 
   def critic(self, hidden):
     return torch.zeros((hidden.shape[0], 1))

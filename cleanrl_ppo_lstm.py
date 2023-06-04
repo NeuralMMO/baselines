@@ -100,6 +100,17 @@ class CleanPuffeRL:
 
         self.wandb_run_id = None
         self.wandb_initialized = False
+        self.writer = None
+
+    def init_writer(self):
+        if self.writer is not None:
+            return
+
+        self.writer = SummaryWriter(f"runs/{self.run_name}")
+        self.writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in self.config.items()])),
+        )
 
     def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None):
         if self.wandb_initialized:
@@ -182,6 +193,7 @@ class CleanPuffeRL:
 
     @pufferlib.utils.profile
     def evaluate(self, agent, data):
+        self.init_writer()
         data.initial_lstm_state = None
         if self.agent.is_recurrent:
             data.initial_lstm_state = [
@@ -306,6 +318,7 @@ class CleanPuffeRL:
             target_kl=None,
         ):
         assert self.num_steps % bptt_horizon == 0, "num_steps must be divisible by bptt_horizon"
+        self.init_writer()
 
         # Annealing the rate if instructed to do so.
         if anneal_lr:
