@@ -13,9 +13,10 @@ class RandomPolicy(pufferlib.models.Policy):
     super().__init__(binding)
     self.decoders = torch.nn.ModuleList([torch.nn.Linear(1, n)
             for n in binding.single_action_space.nvec])
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
   def encode_observations(self, env_outputs):
-    return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
+    return torch.randn((env_outputs.shape[0], 1)).to(self.device), None
 
   def decode_actions(self, hidden, lookup, concat=True):
     actions = [dec(hidden) for dec in self.decoders]

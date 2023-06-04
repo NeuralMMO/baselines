@@ -231,8 +231,8 @@ class CleanPuffeRL:
 
                     for item in i:
                         if "episode" in item.keys():
-                            er = sum(item["episode"]["r"]) / self.num_agents / self.num_agents
-                            el = sum(item["episode"]["l"]) / self.num_agents / self.num_agents
+                            er = sum(item["episode"]["r"])
+                            el = sum(item["episode"]["l"])
                             epoch_returns.append(er)
                             epoch_lengths.append(el)
                             self.writer.add_scalar("charts/episodic_return", er, self.global_step)
