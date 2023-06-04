@@ -307,7 +307,7 @@ if __name__ == "__main__":
     trainer.resume_model(resume_from_path)
 
   trainer_state = trainer.allocate_storage()
-  if args.wandb_project is not None and args.wandb_entity is not None:
+  if args.wandb_project is not None:
     trainer.init_wandb(args.wandb_project, args.wandb_entity)
 
   num_updates = 10000

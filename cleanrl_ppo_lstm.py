@@ -107,7 +107,7 @@ class CleanPuffeRL:
         self.wandb_run_id = wandb_run_id or wandb.util.generate_id()
 
         wandb.init(
-            id=wandb_run_id,
+            id=self.wandb_run_id,
             project=wandb_project_name,
             entity=wandb_entity,
             config=self.config,
