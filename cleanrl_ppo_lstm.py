@@ -99,12 +99,6 @@ class CleanPuffeRL:
         self.run_name = run_name or f"{binding.env_name}__{seed}__{int(time.time())}"
         self.wandb_initialized = False
 
-        self.writer = SummaryWriter(f"runs/{run_name}")
-        self.writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.items()])),
-        )
-
     def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None):
         if self.wandb_initialized:
             return
@@ -124,6 +118,11 @@ class CleanPuffeRL:
             resume="allow",
         )
         self.wandb_initialized = True
+        self.writer = SummaryWriter(f"runs/{self.run_name}")
+        self.writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in self.config.items()])),
+        )
 
     def resume_model(self, path):
         resume_state = torch.load(path)
@@ -217,8 +216,8 @@ class CleanPuffeRL:
 
                     for item in i:
                         if "episode" in item.keys():
-                            er = sum(item["episode"]["r"])
-                            el = sum(item["episode"]["l"])
+                            er = sum(item["episode"]["r"]) / self.num_agents / self.num_agents
+                            el = sum(item["episode"]["l"]) / self.num_agents / self.num_agents
                             epoch_returns.append(er)
                             epoch_lengths.append(el)
                             self.writer.add_scalar("charts/episodic_return", er, self.global_step)
