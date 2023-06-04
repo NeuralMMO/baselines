@@ -104,7 +104,7 @@ class CleanPuffeRL:
             return
 
         import wandb
-        self.wandb_run_id = wandb_run_id or wandb.util.generate_id()
+        self.wandb_run_id = self.wandb_run_id or wandb_run_id or wandb.util.generate_id()
 
         wandb.init(
             id=self.wandb_run_id,
