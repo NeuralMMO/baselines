@@ -2,7 +2,7 @@
 # Adapted from https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_atari_envpoolpy
 
 from collections import defaultdict
-from pdb import set_trace as T
+from pdb import run, set_trace as T
 import os
 import psutil
 import random
@@ -34,11 +34,7 @@ class CleanPuffeRL:
         seed=1,
         torch_deterministic=True,
         cuda=True,
-        track=False,
         vec_backend=pufferlib.vectorization.multiprocessing.VecEnv,
-        wandb_project_name='cleanRL',
-        wandb_entity=None,
-        wandb_run_id=None,
         total_timesteps=10000000,
         learning_rate=2.5e-4,
         num_buffers=1,
@@ -57,6 +53,7 @@ class CleanPuffeRL:
         envs_per_worker = int(envs_per_worker)
 
         self.binding = binding
+        self.config = config
         self.num_buffers = num_buffers
         self.num_envs = num_envs
         self.num_agents = num_agents
@@ -99,32 +96,34 @@ class CleanPuffeRL:
         self.optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
 
         # Setup logging
-        if run_name is None:
-            run_name = f"{binding.env_name}__{seed}__{int(time.time())}"
-
-        self.track = track
-        if track:
-            self.wandb_run_id = None
-            import wandb
-            wandb_run_id = wandb_run_id or wandb.util.generate_id()
-
-            wandb.init(
-                project=wandb_project_name,
-                entity=wandb_entity,
-                config=config,
-                sync_tensorboard=True,
-                name=run_name,
-                id=wandb_run_id,
-                monitor_gym=True,
-                save_code=True,
-                resume="allow",
-            )
+        self.run_name = run_name or f"{binding.env_name}__{seed}__{int(time.time())}"
+        self.wandb_initialized = False
 
         self.writer = SummaryWriter(f"runs/{run_name}")
         self.writer.add_text(
             "hyperparameters",
             "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in config.items()])),
         )
+
+    def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None):
+        if self.wandb_initialized:
+            return
+
+        import wandb
+        wandb_run_id = wandb_run_id or wandb.util.generate_id()
+
+        wandb.init(
+            id=wandb_run_id,
+            project=wandb_project_name,
+            entity=wandb_entity,
+            config=self.config,
+            sync_tensorboard=True,
+            name=self.run_name,
+            monitor_gym=True,
+            save_code=True,
+            resume="allow",
+        )
+        self.wandb_initialized = True
 
     def resume_model(self, path):
         resume_state = torch.load(path)
@@ -218,8 +217,8 @@ class CleanPuffeRL:
 
                     for item in i:
                         if "episode" in item.keys():
-                            er = sum(item["episode"]["r"]) / len(item["episode"]["r"])
-                            el = sum(item["episode"]["l"]) / len(item["episode"]["l"])
+                            er = sum(item["episode"]["r"])
+                            el = sum(item["episode"]["l"])
                             epoch_returns.append(er)
                             epoch_lengths.append(el)
                             self.writer.add_scalar("charts/episodic_return", er, self.global_step)
@@ -433,7 +432,7 @@ class CleanPuffeRL:
     def close(self):
         self.writer.close()
 
-        if self.track:
+        if self.wandb_initialized:
             import wandb
             wandb.finish()
 
@@ -531,7 +530,7 @@ if __name__ == '__main__':
             recurrent_kwargs={'num_layers': 1}
         )(binding).to(device)
 
-    trainer = CleanPuffeRL(binding, agent, track=False, num_agents=128, num_envs=1, num_steps=128, num_cores=1)
+    trainer = CleanPuffeRL(binding, agent, num_agents=128, num_envs=1, num_steps=128, num_cores=1)
     #trainer.load_model(path)
 
     data = trainer.allocate_storage()

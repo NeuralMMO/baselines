@@ -292,10 +292,6 @@ if __name__ == "__main__":
     num_agents=args.num_teams,
     num_steps=args.num_steps,
 
-    wandb_project_name=args.wandb_project,
-    wandb_entity=args.wandb_entity,
-
-
     # PPO
     learning_rate=args.ppo_learning_rate,
     # clip_coef=0.2, # ratio_clip
@@ -312,6 +308,7 @@ if __name__ == "__main__":
     trainer.resume_model(resume_from_path)
 
   trainer_state = trainer.allocate_storage()
+  trainer.init_wandb(args.wandb_project, args.wandb_entity)
 
   num_updates = 10000
   for update in range(trainer.update+1, num_updates + 1):
