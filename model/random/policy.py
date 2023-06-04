@@ -15,7 +15,7 @@ class RandomPolicy(pufferlib.models.Policy):
             for n in binding.single_action_space.nvec])
 
   def encode_observations(self, env_outputs):
-    return torch.randn((env_outputs.shape[0], 1)), None
+    return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
 
   def decode_actions(self, hidden, lookup, concat=True):
     actions = [dec(hidden) for dec in self.decoders]
