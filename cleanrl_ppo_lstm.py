@@ -237,16 +237,18 @@ class CleanPuffeRL:
                             self.writer.add_scalar("charts/episodic_return", er, self.global_step)
                             self.writer.add_scalar("charts/episodic_length", el, self.global_step)
 
+                        episode_stats = defaultdict(float)
+                        num_stats = 0
                         for agent_info in item.values():
-                            episode_stats = defaultdict(float)
                             if "episode_stats" in agent_info.keys():
                                 for name, stat in agent_info["episode_stats"].items():
                                     self.writer.add_histogram(f"charts/episode_stats/{name}", stat, self.global_step)
                                     episode_stats[name] += stat
-                            if len(episode_stats) > 0:
-                                for name, stat in episode_stats.items():
-                                    self.writer.add_scalar(f"charts/episode_stats/{name}", stat / len(episode_stats), self.global_step)
-                                    print("Episode stats:", name, stat / len(episode_stats))
+                                    num_stats += 1
+                        if num_stats > 0:
+                            for name, stat in episode_stats.items():
+                                self.writer.add_scalar(f"charts/episode_stats/{name}", stat / num_stats, self.global_step)
+                                print("Episode stats:", name, stat / num_stats)
 
                 if step == self.num_steps:
                     continue
