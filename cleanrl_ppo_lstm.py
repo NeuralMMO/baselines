@@ -228,6 +228,8 @@ class CleanPuffeRL:
 
                     data.rewards[step - 1, buf] = torch.tensor(r).float().to(self.device).view(-1)
 
+                    episode_stats = defaultdict(float)
+                    num_stats = 0
                     for item in i:
                         if "episode" in item.keys():
                             er = sum(item["episode"]["r"])
@@ -237,18 +239,18 @@ class CleanPuffeRL:
                             self.writer.add_scalar("charts/episodic_return", er, self.global_step)
                             self.writer.add_scalar("charts/episodic_length", el, self.global_step)
 
-                        episode_stats = defaultdict(float)
-                        num_stats = 0
+
                         for agent_info in item.values():
                             if "episode_stats" in agent_info.keys():
                                 num_stats += 1
                                 for name, stat in agent_info["episode_stats"].items():
                                     self.writer.add_histogram(f"charts/episode_stats/{name}/hist", stat, self.global_step)
                                     episode_stats[name] += stat
-                        if num_stats > 0:
-                            for name, stat in episode_stats.items():
-                                self.writer.add_scalar(f"charts/episode_stats/{name}", stat / num_stats, self.global_step)
-                                print("Episode stats:", name, stat / num_stats)
+
+                    if num_stats > 0:
+                        for name, stat in episode_stats.items():
+                            self.writer.add_scalar(f"charts/episode_stats/{name}", stat / num_stats, self.global_step)
+                            print("Episode stats:", name, stat / num_stats)
 
                 if step == self.num_steps:
                     continue
