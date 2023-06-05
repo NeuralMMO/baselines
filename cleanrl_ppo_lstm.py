@@ -226,7 +226,6 @@ class CleanPuffeRL:
                         data.obs[step, buf] = data.next_obs[buf]
                         data.dones[step, buf] = data.next_done[buf]
 
-
                     data.rewards[step - 1, buf] = torch.tensor(r).float().to(self.device).view(-1)
 
                     for item in i:
@@ -239,10 +238,9 @@ class CleanPuffeRL:
                             self.writer.add_scalar("charts/episodic_length", el, self.global_step)
 
                         for agent_info in item.values():
-                            if "stats" in agent_info.keys():
-                                for name, stat in agent_info["stats"].items():
-                                    self.writer.add_scalar("charts/info/{}/sum".format(name), stat["sum"], self.global_step)
-                                    self.writer.add_scalar("charts/info/{}/count".format(name), stat["count"], self.global_step)
+                            if "episode_stats" in agent_info.keys():
+                                for name, stat in agent_info["episode_stats"].items():
+                                    self.writer.add_histogram(f"charts/episode_stats/{name}", stat, self.global_step)
 
                 if step == self.num_steps:
                     continue

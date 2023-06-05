@@ -68,7 +68,7 @@ class NMMOEnv(nmmo.Env):
     for agent_id in dones.keys():
       assert dones[agent_id], f'Agent {agent_id} is not done'
       # TODO: sometimes dead agents haven't been culled yet
-      agent = self.realm.players.dead.get(
+      agent = self.realm.players.dead_this_tick.get(
         agent_id, self.realm.players.get(agent_id))
       assert agent is not None, f'Agent {agent_id} not found'
 
