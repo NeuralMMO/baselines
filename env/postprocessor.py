@@ -43,7 +43,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     if not self._rewards_config.environment:
       rewards = { id: 0 for id in agents }
 
-    team_reward = 0
+    team_reward = sum(rewards.values())
     team_info = {"stats": defaultdict(float)}
 
     for agent_id in agents:
