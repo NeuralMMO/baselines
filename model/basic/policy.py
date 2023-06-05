@@ -14,7 +14,7 @@ EntityId = EntityState.State.attr_name_to_col["id"]
 
 
 class BasicPolicy(pufferlib.models.Policy):
-  def __init__(self, binding, input_size=128, hidden_size=256):
+  def __init__(self, binding):
       '''Simple custom PyTorch policy subclassing the pufferlib BasePolicy
 
       This requires only that you structure your network as an observation encoder,
@@ -22,6 +22,10 @@ class BasicPolicy(pufferlib.models.Policy):
       be added between the encoder and the decoder.
       '''
       super().__init__(binding)
+      # :/
+      input_size = BasicPolicy.INPUT_SIZE
+      hidden_size = BasicPolicy.HIDDEN_SIZE
+
       self.raw_single_observation_space = binding.raw_single_observation_space
 
       # A dumb example encoder that applies a linear layer to agent self features
@@ -29,11 +33,11 @@ class BasicPolicy(pufferlib.models.Policy):
 
       self.tile_conv_1 = torch.nn.Conv2d(3, 32, 3)
       self.tile_conv_2 = torch.nn.Conv2d(32, 8, 3)
-      self.tile_fc = torch.nn.Linear(8*11*11, hidden_size)
+      self.tile_fc = torch.nn.Linear(8*11*11, input_size)
 
-      self.entity_fc = torch.nn.Linear(23, hidden_size)
+      self.entity_fc = torch.nn.Linear(23, input_size)
 
-      self.proj_fc = torch.nn.Linear(2*hidden_size, hidden_size)
+      self.proj_fc = torch.nn.Linear(2*input_size, input_size)
 
       self.decoders = torch.nn.ModuleList([torch.nn.Linear(hidden_size, n)
               for n in binding.single_action_space.nvec])
@@ -98,7 +102,14 @@ class BasicPolicy(pufferlib.models.Policy):
 
   @staticmethod
   def create_policy(num_lstm_layers=1):
-    return pufferlib.frameworks.cleanrl.make_policy(
-      BasicPolicy,
-      recurrent_args=[128, 256],
-      recurrent_kwargs={'num_layers': num_lstm_layers})
+    BasicPolicy.INPUT_SIZE = 128
+    if num_lstm_layers == 0:
+        BasicPolicy.HIDDEN_SIZE = 128
+        policy = pufferlib.frameworks.cleanrl.make_policy(
+        BasicPolicy, recurrent_kwargs={'num_layers': 0})
+    else:
+        BasicPolicy.HIDDEN_SIZE = 256
+        policy = pufferlib.frameworks.cleanrl.make_policy(
+        BasicPolicy, recurrent_args=[BasicPolicy.INPUT_SIZE, BasicPolicy.HIDDEN_SIZE],
+        recurrent_kwargs={'num_layers': num_lstm_layers})
+    return policy
