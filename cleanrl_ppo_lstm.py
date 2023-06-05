@@ -242,7 +242,7 @@ class CleanPuffeRL:
                         for agent_info in item.values():
                             if "episode_stats" in agent_info.keys():
                                 for name, stat in agent_info["episode_stats"].items():
-                                    self.writer.add_histogram(f"charts/episode_stats/{name}", stat, self.global_step)
+                                    self.writer.add_histogram(f"charts/episode_stats/{name}/hist", stat, self.global_step)
                                     episode_stats[name] += stat
                                     num_stats += 1
                         if num_stats > 0:
