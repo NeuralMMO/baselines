@@ -241,10 +241,10 @@ class CleanPuffeRL:
                         num_stats = 0
                         for agent_info in item.values():
                             if "episode_stats" in agent_info.keys():
+                                num_stats += 1
                                 for name, stat in agent_info["episode_stats"].items():
                                     self.writer.add_histogram(f"charts/episode_stats/{name}/hist", stat, self.global_step)
                                     episode_stats[name] += stat
-                                    num_stats += 1
                         if num_stats > 0:
                             for name, stat in episode_stats.items():
                                 self.writer.add_scalar(f"charts/episode_stats/{name}", stat / num_stats, self.global_step)
