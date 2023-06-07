@@ -86,14 +86,14 @@ class BasicPolicy(pufferlib.models.Policy):
     row_indices = torch.where(mask.any(dim=1), mask.argmax(dim=1), torch.zeros_like(mask.sum(dim=1)))
     entity = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
 
-    # de = entity[0]
-    # did = de[EntityId]
-    # dr = de[EntityState.State.attr_name_to_col["row"]]
-    # dc = de[EntityState.State.attr_name_to_col["col"]]
-    # dh = de[EntityState.State.attr_name_to_col["health"]]
-    # df = de[EntityState.State.attr_name_to_col["food"]]
-    # dw = de[EntityState.State.attr_name_to_col["water"]]
-    # print(f"Entity: id={did}, r={dr}, c={dc}, h={dh}, f={df}, w={dw}")
+    de = entity[0]
+    did = de[EntityId]
+    dr = de[EntityState.State.attr_name_to_col["row"]]
+    dc = de[EntityState.State.attr_name_to_col["col"]]
+    ct = env_outputs['Tile'][0].view(15,15,-1)[7,7]
+    if did != 0:
+      assert ct[0] == dr and ct[1] == dc
+      assert did == 1
 
     entity = self.entity_fc(entity)
     entity = F.relu(entity)
