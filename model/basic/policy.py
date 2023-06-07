@@ -62,36 +62,44 @@ class BasicPolicy(pufferlib.models.Policy):
       return self.value_head(hidden)
 
   def encode_observations(self, env_outputs):
-      # TODO: Change 0 for teams when teams are added
-      env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+    # TODO: Change 0 for teams when teams are added
+    env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
 
-      tile = env_outputs['Tile']
-      agents, tiles, features = tile.shape
-      tile = tile.transpose(1, 2).view(agents, features, 15, 15)
+    tile = env_outputs['Tile']
+    agents, tiles, features = tile.shape
+    tile = tile.transpose(1, 2).view(agents, features, 15, 15)
 
-      tile = self.tile_conv_1(tile)
-      tile = F.relu(tile)
-      tile = self.tile_conv_2(tile)
-      tile = F.relu(tile)
-      tile = tile.contiguous().view(agents, -1)
-      tile = self.tile_fc(tile)
-      tile = F.relu(tile)
+    tile = self.tile_conv_1(tile)
+    tile = F.relu(tile)
+    tile = self.tile_conv_2(tile)
+    tile = F.relu(tile)
+    tile = tile.contiguous().view(agents, -1)
+    tile = self.tile_fc(tile)
+    tile = F.relu(tile)
 
-      # Pull out rows corresponding to the agent
-      agentEmb = env_outputs["Entity"]
-      my_id = env_outputs["AgentId"][:,0]
-      entity_ids = agentEmb[:,:,EntityId]
-      mask = (entity_ids == my_id.unsqueeze(1)) & (entity_ids != 0)
-      mask = mask.int()
-      row_indices = torch.where(mask.any(dim=1), mask.argmax(dim=1), torch.zeros_like(mask.sum(dim=1)))
-      entity = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
+    # Pull out rows corresponding to the agent
+    agentEmb = env_outputs["Entity"]
+    my_id = env_outputs["AgentId"][:,0]
+    entity_ids = agentEmb[:,:,EntityId]
+    mask = (entity_ids == my_id.unsqueeze(1)) & (entity_ids != 0)
+    mask = mask.int()
+    row_indices = torch.where(mask.any(dim=1), mask.argmax(dim=1), torch.zeros_like(mask.sum(dim=1)))
+    entity = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
 
-      #entity = env_outputs['Entity'][:, 0, :]
-      entity = self.entity_fc(entity)
-      entity = F.relu(entity)
+    # de = entity[0]
+    # did = de[EntityId]
+    # dr = de[EntityState.State.attr_name_to_col["row"]]
+    # dc = de[EntityState.State.attr_name_to_col["col"]]
+    # dh = de[EntityState.State.attr_name_to_col["health"]]
+    # df = de[EntityState.State.attr_name_to_col["food"]]
+    # dw = de[EntityState.State.attr_name_to_col["water"]]
+    # print(f"Entity: id={did}, r={dr}, c={dc}, h={dh}, f={df}, w={dw}")
 
-      obs = torch.cat([tile, entity], dim=-1)
-      return self.proj_fc(obs), None
+    entity = self.entity_fc(entity)
+    entity = F.relu(entity)
+
+    obs = torch.cat([tile, entity], dim=-1)
+    return self.proj_fc(obs), None
 
   def decode_actions(self, hidden, lookup, concat=True):
       actions = [dec(hidden) for dec in self.decoders]

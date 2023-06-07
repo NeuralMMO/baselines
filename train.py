@@ -17,6 +17,7 @@ from lib.policy_pool.json_policy_pool import JsonPolicyPool
 from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
+from nmmo.render.replay_helper import DummyReplayHelper
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
 from env.nmmo_team_env import NMMOTeamEnv
@@ -26,6 +27,8 @@ from lib.team.team_helper import TeamHelper
 import nmmo
 
 import logging
+
+from lib.team.team_replay_helper import TeamReplayHelper
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)

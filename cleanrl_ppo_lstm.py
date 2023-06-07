@@ -192,7 +192,9 @@ class CleanPuffeRL:
         )
 
     @pufferlib.utils.profile
-    def evaluate(self, agent, data):
+    def evaluate(self, agent, data, max_episodes=None):
+        num_episodes = 0
+
         self.init_writer()
         data.initial_lstm_state = None
         if self.agent.is_recurrent:
@@ -207,6 +209,9 @@ class CleanPuffeRL:
         inference_time = 0
 
         for step in range(0, self.num_steps + 1):
+            if max_episodes and num_episodes >= max_episodes:
+                break
+
             for buf, envs in enumerate(self.buffers):
                 self.global_step += self.num_envs * self.num_agents
 
@@ -248,11 +253,15 @@ class CleanPuffeRL:
                                     episode_stats[name] += stat
 
                     if num_stats > 0:
+                        print("End of episode:", step)
                         for name, stat in episode_stats.items():
                             self.writer.add_scalar(f"charts/episode_stats/{name}", stat / num_stats, self.global_step)
                             print("Episode stats:", name, stat / num_stats)
+                        num_episodes += 1
 
                 if step == self.num_steps:
+                    continue
+                if max_episodes and num_episodes >= max_episodes:
                     continue
 
                 # ALGO LOGIC: action logic
@@ -272,7 +281,6 @@ class CleanPuffeRL:
                 start = time.time()
                 envs.send(action.cpu().numpy(), None)
                 env_step_time += time.time() - start
-
         epoch_step = self.num_envs * self.num_agents * self.num_buffers * self.num_steps
         env_sps = int(epoch_step / env_step_time)
         inference_sps = int(epoch_step / inference_time)

@@ -5,6 +5,7 @@ import logging
 import os
 import time
 from venv import logger
+import nmmo
 
 import pandas as pd
 
@@ -12,11 +13,31 @@ from env.nmmo_config import NmmoConfig
 from nmmo.render.replay_helper import DummyReplayHelper
 
 from env.nmmo_env import RewardsConfig
+import lib
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.rollout import Rollout
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
+
+import pufferlib.emulation
+import pufferlib.frameworks.cleanrl
+import pufferlib.registry.nmmo
+import torch
+from env.nmmo_config import NmmoConfig
+from env.nmmo_env import NMMOEnv, RewardsConfig
+from env.postprocessor import Postprocessor
+from lib.policy_pool.json_policy_pool import JsonPolicyPool
+
+from lib.agent.baseline_agent import BaselineAgent
+from lib.policy_pool.policy_pool import PolicyPool
+from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
+from nmmo.render.replay_helper import DummyReplayHelper
+
+import cleanrl_ppo_lstm as cleanrl_ppo_lstm
+from env.nmmo_team_env import NMMOTeamEnv
+from lib.team.team_env import TeamEnv
+from lib.team.team_helper import TeamHelper
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -81,8 +102,8 @@ if __name__ == "__main__":
     maps_path=args.maps_path
   )
 
-  config.MAP_PREVIEW_DOWNSCALE = 8
-  config.MAP_CENTER = 64
+  # config.MAP_PREVIEW_DOWNSCALE = 8
+  # config.MAP_CENTER = 64
 
   team_helper = TeamHelper({
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
@@ -113,35 +134,75 @@ if __name__ == "__main__":
     policy_pool._load()
     time.sleep(60)
 
+  puffer_teams = None
+  if args.team_size != 1:
+    puffer_teams = team_helper.teams
+
+  def make_env():
+    env = nmmo.Env(config)
+    env.realm.record_replay(replay_helper)
+    return env
+
+  binding = pufferlib.emulation.Binding(
+    env_creator=make_env,
+    env_name="Neural MMO",
+    suppress_env_prints=False,
+    emulate_const_horizon=args.max_episode_length,
+    teams=puffer_teams,
+    postprocessor_cls=Postprocessor,
+    postprocessor_args=[rewards_config]
+  )
+
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   for ri in range(args.num_rounds):
     models = list(set(
        policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
 
-    rollout = Rollout(
-      config, team_helper, rewards_config,
-      models,
-      replay_helper
+    assert len(models) == 1
+    model_data = torch.load(models[0], map_location=device)
+    agent = BaselineAgent.policy_class(
+      model_data.get("model_type", "realikun"))(binding)
+    lib.agent.util.load_matching_state_dict(
+      agent,
+      model_data["agent_state_dict"])
+
+    evaluator = cleanrl_ppo_lstm.CleanPuffeRL(
+      binding,
+      agent,
+
+      cuda=torch.cuda.is_available(),
+      vec_backend=pufferlib.vectorization.serial.VecEnv,
+      total_timesteps=10000000,
+
+      num_envs=1,
+      num_cores=1,
+      num_buffers=1,
+      num_steps=args.max_episode_length,
+
+      num_agents=args.num_teams,
     )
+    eval_state = evaluator.allocate_storage()
 
     logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
-    agent_rewards, model_rewards = rollout.run_episode(args.seed+ri)
+    evaluator.evaluate(agent, eval_state, max_episodes=1)
+    # agent_rewards, model_rewards = rollout.run_episode(args.seed+ri)
 
     if args.replay_save_dir is not None:
       replay_helper.save(
         os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
 
-    old_ranks = policy_pool._skill_rating.stats
-    policy_pool.update_rewards(model_rewards)
-    new_ranks = policy_pool._skill_rating.stats
+    # old_ranks = policy_pool._skill_rating.stats
+    # policy_pool.update_rewards(model_rewards)
+    # new_ranks = policy_pool._skill_rating.stats
 
-    table = pd.DataFrame(models, columns=["Model"])
-    table["Reward"] = [model_rewards[model] for model in table["Model"]]
-    table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
-    table["New Rank"] = [new_ranks.get(model, 1000) for model in table["Model"]]
-    table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
+    # table = pd.DataFrame(models, columns=["Model"])
+    # table["Reward"] = [model_rewards[model] for model in table["Model"]]
+    # table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
+    # table["New Rank"] = [new_ranks.get(model, 1000) for model in table["Model"]]
+    # table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
 
-    table = table.sort_values(by='Reward')
-    logger.info("\n" + table.to_string(index=False))
+    # table = table.sort_values(by='Reward')
+    # logger.info("\n" + table.to_string(index=False))
 
 
 
