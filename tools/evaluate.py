@@ -191,6 +191,8 @@ if __name__ == "__main__":
       replay_helper.save(
         os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
 
+    logger.info(f"Model rewards: {sum(eval_state.rewards)}")
+
     # old_ranks = policy_pool._skill_rating.stats
     # policy_pool.update_rewards(model_rewards)
     # new_ranks = policy_pool._skill_rating.stats
