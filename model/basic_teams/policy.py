@@ -10,6 +10,8 @@ import torch
 import torch.nn.functional as F
 from nmmo.entity.entity import EntityState
 
+from model.basic.policy import BasicPolicy
+
 EntityId = EntityState.State.attr_name_to_col["id"]
 
 
@@ -103,3 +105,17 @@ class BasicTeamsPolicy(pufferlib.models.Policy):
       BasicTeamsPolicy,
       recurrent_args=[128, 256],
       recurrent_kwargs={'num_layers': 1})
+
+  @staticmethod
+  def create_policy(num_lstm_layers=1):
+    BasicPolicy.INPUT_SIZE = 128
+    if num_lstm_layers == 0:
+        BasicPolicy.HIDDEN_SIZE = 128
+        policy = pufferlib.frameworks.cleanrl.make_policy(
+        BasicPolicy, recurrent_kwargs={'num_layers': 0})
+    else:
+        BasicPolicy.HIDDEN_SIZE = 256
+        policy = pufferlib.frameworks.cleanrl.make_policy(
+        BasicPolicy, recurrent_args=[BasicPolicy.INPUT_SIZE, BasicPolicy.HIDDEN_SIZE],
+        recurrent_kwargs={'num_layers': num_lstm_layers})
+    return policy

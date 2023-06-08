@@ -113,6 +113,8 @@ class BaselineAgent(Agent):
     elif model_type == "basic-lstm":
       return BasicPolicy.create_policy(num_lstm_layers=1)
     elif model_type == "basic-teams":
-      return BasicTeamsPolicy.create_policy()
+      return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
+    elif model_type == "basic-teams-lstm":
+      return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
     else:
       raise ValueError(f"Unsupported model type: {model_type}")
