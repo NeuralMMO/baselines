@@ -163,9 +163,14 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
+  # Set up the teams
+  team_helper = TeamHelper({
+    i: [i*args.team_size+j+1 for j in range(args.team_size)]
+    for i in range(args.num_teams)}
+  )
+
   config = NmmoConfig(
-    num_teams=args.num_teams,
-    team_size=args.team_size,
+    team_helper,
     num_npcs=args.num_npcs,
     num_maps=args.num_maps,
     maps_path=args.maps_path,
@@ -177,11 +182,7 @@ if __name__ == "__main__":
   # all the players to be learners
   # assert args.num_teams == args.num_learners
 
-  # Set up the teams
-  team_helper = TeamHelper({
-    i: [i*args.team_size+j+1 for j in range(args.team_size)]
-    for i in range(args.num_teams)}
-  )
+
 
   # Create a pool of opponents
   if args.opponent_pool is None:

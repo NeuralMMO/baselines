@@ -92,9 +92,13 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
+  team_helper = TeamHelper({
+    i: [i*args.team_size+j+1 for j in range(args.team_size)]
+    for i in range(args.num_teams)}
+  )
+
   config = NmmoConfig(
-    num_teams=args.num_teams,
-    team_size=args.team_size,
+    team_helper,
     num_npcs=args.num_npcs,
     max_episode_length=args.max_episode_length,
     death_fog_tick=args.death_fog_tick,
@@ -102,19 +106,10 @@ if __name__ == "__main__":
     maps_path=args.maps_path
   )
 
-  # config.MAP_PREVIEW_DOWNSCALE = 8
-  # config.MAP_CENTER = 64
-
-  team_helper = TeamHelper({
-    i: [i*args.team_size+j+1 for j in range(args.team_size)]
-    for i in range(args.num_teams)}
-  )
-
   replay_helper = DummyReplayHelper()
   if args.replay_save_dir is not None:
     os.makedirs(args.replay_save_dir, exist_ok=True)
     replay_helper = TeamReplayHelper(team_helper)
-
 
   rewards_config = RewardsConfig(
     environment=True
@@ -180,12 +175,12 @@ if __name__ == "__main__":
       num_steps=args.max_episode_length,
 
       num_agents=args.num_teams,
+      seed=args.seed+ri,
     )
     eval_state = evaluator.allocate_storage()
 
     logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
     evaluator.evaluate(agent, eval_state, max_episodes=1)
-    # agent_rewards, model_rewards = rollout.run_episode(args.seed+ri)
 
     if args.replay_save_dir is not None:
       replay_helper.save(
