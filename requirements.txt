@@ -6,3 +6,7 @@ stable_baselines3
 tensorboard
 wandb
 torchtyping
+
+# for OpenElm
+accelerate
+openelm
