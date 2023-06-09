@@ -57,7 +57,7 @@ def load_agent_model(model_path):
 # Nishaanth's OpenELM task generator
 #from curriculum.openelm_task_gen.py_import OpenELMTaskGenerator
 class OpenELMTaskGenerator:
-  def permute_tasks(): # please suggest better name
+  def evolve_tasks(): # please suggest better name
     pass
 
 epochs_per_elm_update = 10
