@@ -16,6 +16,10 @@ import curriculum.manual_curriculum as eval_curriculum
 # task_spec_with_embedding: (reward_to, eval_fn, kwargs, task_embedding)
 
 # assuming something like this
+# CHECK ME: currently assuming each agent has only one task assigned during training,
+#   so that we don't have to add multiple task embeddings to feed into one agent
+# TODO: when given multiple tasks, can agents prioritize and/or multi-task?
+#   It seems to be a research questions.
 class TaskEmbeddingGenerator:
   def __init__(self, model, contexts):
     # hopefully, the model is stored locally and also used by OpenELM
