@@ -16,7 +16,7 @@ import curriculum.manual_curriculum as eval_curriculum
 # task_spec_with_embedding: (reward_to, eval_fn, kwargs, task_embedding)
 
 # assuming something like this
-# CHECK ME: currently assuming each agent has only one task assigned during training,
+# CHECK ME: currently assuming each agent has ONLY ONE task assigned during training,
 #   so that we don't have to add multiple task embeddings to feed into one agent
 # TODO: when given multiple tasks, can agents prioritize and/or multi-task?
 #   It seems to be a research questions.
@@ -35,20 +35,20 @@ class TaskEmbeddingGenerator:
     pass
 
   def get_task_embedding(self, task_spec):
-    task_embedding = []
+    task_spec_with_embedding = []
     for reward_to, eval_fn, kwargs in task_spec:
       prompt = self._construct_prompt(reward_to, eval_fn, kwargs)
       embedding = self.model.get_hidden_layer(prompt) # something like this? 
-      task_embedding.append(embedding)
-    return task_embedding
+      task_spec_with_embedding.append((reward_to, eval_fn, kwargs, embedding))
+    return task_spec_with_embedding
 
 
 # to be provided by Joseph
 #from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
-def train_on_tasks(agent_mode, task_spec_with_embedding):
+def train_on_tasks(agent_model, task_spec_with_embedding):
   pass
 
-def evaluate_on_tasks(agent_mode, task_spec_with_embedding):
+def evaluate_on_tasks(agent_model, task_spec_with_embedding):
   pass
 
 def load_agent_model(model_path):
