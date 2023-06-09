@@ -11,7 +11,7 @@ import curriculum.submission_curriculum as participant_curriculum
 import curriculum.manual_curriculum as eval_curriculum
 
 
-# Task spec, which is a list tuple and pickable, is passed around
+# Task spec, which is a list tuple and pickle-able, is passed around
 # task_spec: (reward_to, eval_fn, kwargs)
 # task_spec_with_embedding: (reward_to, eval_fn, kwargs, task_embedding)
 
