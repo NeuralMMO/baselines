@@ -8,5 +8,6 @@ wandb
 torchtyping
 
 # for OpenElm
+transformers
 accelerate
 openelm
