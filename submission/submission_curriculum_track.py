@@ -10,7 +10,11 @@ from curriculum.train_helper import TaskEmbeddingGenerator
 from curriculum.train_helper import SimpleTaskGenerator, OpenELMTaskGenerator
 from curriculum.train_helper import SyllabusTaskSampler
 
+# simulation participant's custom functions
 from submission import custom_curriculum as cc
+
+# if you want more task specs, use
+from curriculum import manual_curriculum as mc # and use mc.task_spec
 
 # Task spec, which is a list tuple and pickle-able, is passed around
 # task_spec: (reward_to, eval_fn, kwargs)
