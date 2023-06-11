@@ -66,7 +66,7 @@ for reward_to in ['agent', 'team']:
     task_spec.append((reward_to, TickGE, {'num_tick': num_tick}))
 
 # protect the leader: get reward for each tick the leader is alive
-task_spec.append(('team', StayAlive, {'target': 'my_team_leader', 'task_cls': OngoingTask}))
+task_spec.append(('team', StayAlive, {'target': 'my_team_leader'}, {'task_cls': OngoingTask}))
 
 # want the other team or team leader to die
 for target in ['left_team', 'left_team_leader', 'right_team', 'right_team_leader']:

@@ -75,12 +75,21 @@ class TaskEmbeddingGenerator:
   def get_task_embedding(self, task_spec):
     #assert self.prompt_template is not None, 'prompt_template must be set'
     task_spec_with_embedding = []
-    for reward_to, eval_fn, kwargs in task_spec:
+    for single_spec in task_spec:
+      if len(single_spec) == 3:
+        reward_to, eval_fn, eval_kwargs = single_spec
+        task_kwargs = {}
+      elif len(single_spec) == 4:
+        reward_to, eval_fn, eval_kwargs, task_kwargs = single_spec
+        assert isinstance(task_kwargs, dict), 'task_kwargs must be a dict'
+      else:
+        raise ValueError('len(single_spec) must be either 3 or 4')    
+
       # TODO: make the below lines run
       #prompt = self._construct_prompt(reward_to, eval_fn, kwargs)
       #embedding = self.model.get_hidden_layer(prompt) # something like this? 
-      embedding = np.array([1, 2, 3, 4]) # dummy
-      task_spec_with_embedding.append((reward_to, eval_fn, kwargs, embedding))
+      task_kwargs['embedding'] = np.array([1,2,3,4]) # dummy
+      task_spec_with_embedding.append((reward_to, eval_fn, eval_kwargs, task_kwargs))
     return task_spec_with_embedding
 
 
