@@ -67,6 +67,10 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="only allow moves (default: False)")
   parser.add_argument(
+    "--env.reset_on_death", dest="reset_on_death",
+    action="store_true", default=False,
+    help="reset on death (default: False)")
+  parser.add_argument(
     "--env.num_maps", dest="num_maps", type=int, default=128,
     help="number of maps to use for training (default: 1)")
   parser.add_argument(
@@ -177,6 +181,7 @@ if __name__ == "__main__":
     max_episode_length=args.max_episode_length,
     death_fog_tick=args.death_fog_tick
   )
+  config.RESET_ON_DEATH = args.reset_on_death
 
   # Historic self play is not yet working, so we require
   # all the players to be learners
