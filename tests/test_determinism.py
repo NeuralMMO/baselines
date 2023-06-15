@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pufferlib.emulation import Binding
 
 from env.nmmo_env import RewardsConfig
-from env.nmmo_config import NmmoConfig
+from env.nmmo_config import NmmoMoveConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
@@ -23,7 +23,7 @@ def init_team_env(model_weights):
   num_teams = ModelArchitecture.NUM_TEAMS
   team_size = ModelArchitecture.NUM_PLAYERS_PER_TEAM
 
-  config = NmmoConfig(num_teams=num_teams, team_size=team_size)
+  config = NmmoMoveConfig(num_teams=num_teams, team_size=team_size)
   reward_config = RewardsConfig()
 
   team_helper = TeamHelper({

@@ -9,7 +9,7 @@ import nmmo
 
 import pandas as pd
 
-from env.nmmo_config import NmmoConfig
+from env.nmmo_config import NmmoMoveConfig
 from nmmo.render.replay_helper import DummyReplayHelper
 
 from env.nmmo_env import RewardsConfig
@@ -24,7 +24,7 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from env.nmmo_config import NmmoConfig
+from env.nmmo_config import NmmoMoveConfig
 from env.nmmo_env import NMMOEnv, RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  config = NmmoConfig(
+  config = NmmoMoveConfig(
     team_helper,
     num_npcs=args.num_npcs,
     max_episode_length=args.max_episode_length,

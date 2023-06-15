@@ -9,7 +9,7 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from env.nmmo_config import NmmoConfig
+from env.nmmo_config import NmmoMoveConfig, nmmo_config
 from env.nmmo_env import NMMOEnv, RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
     help="number of ticks before death fog starts (default: None)")
   parser.add_argument(
-    "--env.moves_only", dest="moves_only",
+    "--env.combat_enabled", dest="combat_enabled",
     action="store_true", default=False,
     help="only allow moves (default: False)")
   parser.add_argument(
@@ -173,13 +173,16 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  config = NmmoConfig(
+  config = nmmo_config(
     team_helper,
-    num_npcs=args.num_npcs,
-    num_maps=args.num_maps,
-    maps_path=args.maps_path,
-    max_episode_length=args.max_episode_length,
-    death_fog_tick=args.death_fog_tick
+    dict(
+      # num_npcs=args.num_npcs,
+      num_maps=args.num_maps,
+      maps_path=args.maps_path,
+      max_episode_length=args.max_episode_length,
+      death_fog_tick=args.death_fog_tick,
+      combat_enabled=args.combat_enabled,
+    )
   )
   config.RESET_ON_DEATH = args.reset_on_death
 
@@ -299,6 +302,9 @@ if __name__ == "__main__":
 
     num_agents=args.num_teams,
     num_steps=args.num_steps,
+
+    # wandb loggin
+    config=vars(args),
 
     # PPO
     learning_rate=args.ppo_learning_rate,
