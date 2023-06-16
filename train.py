@@ -20,6 +20,7 @@ from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 from nmmo.render.replay_helper import DummyReplayHelper
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
+import clean_pufferl as clean_pufferl
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
@@ -139,6 +140,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--train.opponent_pool", dest="opponent_pool", type=str, default=None,
     help="json file containing the opponent pool (default: None)")
+  parser.add_argument(
+    "--train.puffer_rl", dest="puffer_rl", action="store_true",
+    help="use puffer rl (default: False)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -285,8 +289,18 @@ if __name__ == "__main__":
     vec_env_cls = pufferlib.vectorization.serial.VecEnv
 
 
+  if args.puffer_rl:
+    trainer_cls = clean_pufferl.CleanPuffeRL
+    trainer_args = dict()
+  else:
+    trainer_cls = cleanrl_ppo_lstm.CleanPuffeRL
+    trainer_args = dict(
+      num_agents=args.num_teams,
+      num_steps=args.num_steps
+    )
+
   logging.info("Starting training...")
-  trainer = cleanrl_ppo_lstm.CleanPuffeRL(
+  trainer = trainer_cls(
     binding,
     learner_policy,
 
@@ -300,12 +314,6 @@ if __name__ == "__main__":
     num_cores=args.num_cores or args.num_envs,
     num_buffers=args.num_buffers,
 
-    num_agents=args.num_teams,
-    num_steps=args.num_steps,
-
-    # wandb loggin
-    config=vars(args),
-
     # PPO
     learning_rate=args.ppo_learning_rate,
     # clip_coef=0.2, # ratio_clip
@@ -313,6 +321,7 @@ if __name__ == "__main__":
     # ent_coef=0.001 # entropy_loss_weight,
     # grad_clip=1.0,
     # bptt_trunc_len=16,
+    **trainer_args
   )
 
   resume_from_path = None
@@ -323,7 +332,7 @@ if __name__ == "__main__":
 
   trainer_state = trainer.allocate_storage()
   if args.wandb_project is not None:
-    trainer.init_wandb(args.wandb_project, args.wandb_entity)
+    trainer.init_wandb(args.wandb_project, args.wandb_entity, vars(args))
 
   num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
@@ -331,7 +340,7 @@ if __name__ == "__main__":
     trainer.train(
       learner_policy,
       trainer_state,
-      num_minibatches=args.ppo_num_minibatches,
+      # num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
     )
