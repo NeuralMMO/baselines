@@ -325,7 +325,7 @@ if __name__ == "__main__":
   if args.wandb_project is not None:
     trainer.init_wandb(args.wandb_project, args.wandb_entity)
 
-  num_updates = 10000
+  num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
     trainer.evaluate(learner_policy, trainer_state)
     trainer.train(
