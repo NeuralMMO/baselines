@@ -53,7 +53,6 @@ class CleanPuffeRL:
         envs_per_worker = int(envs_per_worker)
 
         self.binding = binding
-        self.config = config
         self.num_buffers = num_buffers
         self.num_envs = num_envs
         self.num_agents = num_agents
@@ -102,28 +101,31 @@ class CleanPuffeRL:
         self.wandb_initialized = False
         self.writer = None
 
-    def init_writer(self):
+    def init_writer(self, extra_data=None):
         if self.writer is not None:
             return
 
         self.writer = SummaryWriter(f"runs/{self.run_name}")
         self.writer.add_text(
             "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in self.config.items()])),
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in extra_data.items()])),
         )
 
-    def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None):
+    def init_wandb(self, wandb_project_name, wandb_entity, wandb_run_id = None,
+                   extra_data = None):
+
         if self.wandb_initialized:
             return
 
         import wandb
         self.wandb_run_id = self.wandb_run_id or wandb_run_id or wandb.util.generate_id()
+        extra_data = extra_data or {}
 
         wandb.init(
             id=self.wandb_run_id,
             project=wandb_project_name,
             entity=wandb_entity,
-            config=self.config,
+            config=extra_data,
             sync_tensorboard=True,
             name=self.run_name,
             monitor_gym=True,
@@ -131,11 +133,7 @@ class CleanPuffeRL:
             resume="allow",
         )
         self.wandb_initialized = True
-        self.writer = SummaryWriter(f"runs/{self.run_name}")
-        self.writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in self.config.items()])),
-        )
+        self.init_writer(extra_data)
 
     def resume_model(self, path):
         resume_state = torch.load(path)
@@ -195,7 +193,7 @@ class CleanPuffeRL:
     def evaluate(self, agent, data, max_episodes=None):
         num_episodes = 0
 
-        self.init_writer()
+        self.init_writer({})
         data.initial_lstm_state = None
         if self.agent.is_recurrent:
             data.initial_lstm_state = [
@@ -334,7 +332,7 @@ class CleanPuffeRL:
             target_kl=None,
         ):
         assert self.num_steps % bptt_horizon == 0, "num_steps must be divisible by bptt_horizon"
-        self.init_writer()
+        self.init_writer({})
 
         # Annealing the rate if instructed to do so.
         if anneal_lr:
