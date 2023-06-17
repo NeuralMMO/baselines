@@ -332,7 +332,7 @@ if __name__ == "__main__":
 
   trainer_state = trainer.allocate_storage()
   if args.wandb_project is not None:
-    trainer.init_wandb(args.wandb_project, args.wandb_entity, vars(args))
+    trainer.init_wandb(args.wandb_project, args.wandb_entity, extra_data=vars(args))
 
   num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
