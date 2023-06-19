@@ -23,6 +23,8 @@ ulimit -c unlimited && \
 ulimit -s unlimited && \
 ulimit -a
 
+wandb login --host=https://stability.wandb.io
+
 # Extract experiment_name from the arguments
 experiment_name=""
 args=()
