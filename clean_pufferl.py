@@ -465,6 +465,8 @@ class CleanPuffeRL:
         if self.wandb_initialized:
             import wandb
             wandb.log({
+                "performance/train_sps": train_sps,
+                "performance/train_time": train_time,
                 "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
                 "losses/value_loss": v_loss.item(),
                 "losses/policy_loss": pg_loss.item(),
