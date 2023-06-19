@@ -2,6 +2,9 @@ from typing import Optional, Union
 from dataclasses import dataclass, field
 
 import re
+import math
+import Counter
+
 import wandb
 import random
 import argparse
@@ -13,22 +16,130 @@ from openelm.configs import ELMConfig, PromptModelConfig, EnvConfig, MAPElitesCo
 from openelm.environments import BaseEnvironment, Genotype, ENVS_DICT
 from openelm.mutation_model import DiffModel
 
+import nmmo
+from train_helper import SimpleTaskGenerator
+from nmmo.task.group import Group
+from nmmo.systems.item import ItemState
+from nmmo.entity.entity import Entity, EntityState
+from nmmo.task.task_api import OngoingTask, make_team_tasks
+from nmmo.task.predicate.core import Predicate, AND, OR
+from nmmo.datastore.numpy_datastore import NumpyDatastore
+from nmmo.task.predicate_api import make_predicate, Predicate
+
 from transformers import AutoTokenizer
 
 from sample_tasks import uniq_predicates, tasks, import_str
 
-tokenizer = AutoTokenizer.from_pretrained("Salesforce/codegen-2B-mono")
+"""
+Script to use the OpenELM package to generate/evolve tasks for 2023 NeurIPS competition.
+The default config/args in this script can be used to generate the competition baseline tasks
+"""
+
+# # Mock Classes to test the generated tasks
+
+# # optional code to improve task quality
+# class MockRealm:
+#   def __init__(self):
+#     self.config = nmmo.config.Default()
+#     self.config.PLAYERS = range(100)
+#     self.datastore = NumpyDatastore()
+#     self.items={}
+#     self.datastore.register_object_type("Entity", EntityState.State.num_attributes)
+#     self.datastore.register_object_type("Item", ItemState.State.num_attributes)
+
+# some sample phenotypes:
+
+def entropy(task):
+    """A sample metric for the behaviour space, computing entropy to count repeated strings"""
+    words = re.split(r'[ _\(\):]+', task)
+    words = [word for word in words if word]
+    word_freq = Counter(words)
+    # Calculate the probability of each word
+    total_words = len(words)
+    word_prob = [count / total_words for count in word_freq.values()]
+    # Calculate the Shannon entropy
+    entropy = -sum(prob * math.log2(prob) for prob in word_prob)
+
+    # rescale to behaviour space
+    return min(math.ceil(entropy),10)
+
+def calculate_length(task):
+    """Scaling metrics between two values. It is very important for the selected phenotypes 
+    to be able to have values and easily move across the defined behaviour space. in this case 0-10 """
+    # scale # of characters in task (100-9000) to behaviour space 0-10
+    min_val = 100
+    max_val = 9000
+    new_min = 0
+    new_max = 10
+
+    # Scale the value
+    scaled_value = ((len(task) - min_val) / (max_val - min_val)) * (new_max - new_min) + new_min
+
+    return math.ceil(scaled_value)
+
+def extract_kwargs(function_definition):
+    pattern = r'def\s+\w+\((.*?)\)'
+    parameter_pattern = r'(\w+)\s*:\s*([^\s,]+)'
+
+    match = re.search(pattern, function_definition)
+    if match:
+        parameters_string = match.group(1)
+        parameters = re.findall(parameter_pattern, parameters_string)
+        parameter_dict = {name: data_type for name, data_type in parameters}
+        return parameter_dict
+    else:
+        return {}
+    
+def check_task_spec(spec_list):
+    teams = {0:[1,2,3], 1:[4,5], 2:[6,7], 3:[8,9], 4:[10,11]}
+    config = nmmo.config.Default()
+    env = nmmo.Env(config)
+    for idx, single_spec in enumerate(spec_list):
+      # pylint: disable=cell-var-from-loop
+      test_task = make_team_tasks(teams, [single_spec])
+      try:
+        env.reset(make_task_fn=lambda: test_task)
+        for _ in range(3):
+          env.step({})
+      except:
+        print('invalid task spec:', single_spec)
+        return False
+
+      if idx > 0 and idx % 50 == 0:
+        print(idx, 'task specs checked.')
+
+def str_to_task_spec(task_list):
+    task_specs = []
+    for task in task_list:
+        func = {}
+        exec(task, globals(), func)
+        # get kwargs
+        kwargs = extract_kwargs(task)
+        task_specs.append(("agent", task, kwargs))
+    return task_specs
+
+def task_spec_to_str(task_specs):
+    # convert task spec to str code
+    str_tasks = []
+    for task_spec in task_specs:
+        predicate = make_predicate(task_spec[1])
+        inst_predicate = predicate(Group(0))
+        str_tasks.append(inst_predicate.get_source_code())
+    return "\n".join(str_tasks)
 
 @dataclass
 class NMMOConfig(EnvConfig):
     """Config for the NMMO environment."""
     env_name:str = "NMMO"
+    # Important for specifying the diversity of a task. Well defined the behaviour space, better quality/diversity from OpenELM
     behavior_space: list[list[float]] = field(
         default_factory=lambda: [
-            # Unique_predicates, length of the task, difficulty
-            [0, 20],
-            [0, 20],
-            [0, 20],
+            # Baseline config considers the number of unique predicates, 
+            # length of the task/normalized
+            # number of lines in the task / normalized
+            [0, 10],
+            [0, 10],
+            [0, 10],
         ]
     )
     init_prompt: str = ""
@@ -38,16 +149,6 @@ class NMMOConfig(EnvConfig):
     crossover: bool = False
     batch_size: int = 1
     mutate: bool = False
-
-# optional code to improve task quality
-# class MockRealm:
-#   def __init__(self):
-#     self.config = nmmo.config.Default()
-#     self.config.PLAYERS = range(100)
-#     self.datastore = NumpyDatastore()
-#     self.items={}
-#     self.datastore.register_object_type("Entity", EntityState.State.num_attributes)
-#     self.datastore.register_object_type("Item", ItemState.State.num_attributes)
 
 Phenotype = Optional[np.ndarray]
 class NMMOTask(Genotype):
@@ -59,6 +160,7 @@ class NMMOTask(Genotype):
         # extract def task_ from the program_str
         split = program_str.split("\n")
         task = []
+        # Consider only the last task generated
         for lines in split[::-1]:
             if lines.startswith("def task_"):
                 task.append(lines)
@@ -76,27 +178,37 @@ class NMMOTask(Genotype):
             # need to ignore comments
             self.morphology = {}
             self.morphology["predicates"] = self._count_predicates(program_str) 
-            self.morphology["length"] = len(program_str)/100
-            self.morphology["lines"] = program_str.count(r"\n")
+            self.morphology["length"] = calculate_length(program_str)
+            self.morphology["lines"] = program_str.count("\n")
         else:
             self.valid = False
 
     def evaluate(self) -> float:
         # how to evaluate the fitness of a task? (time taken for the baseline RL algo to solve?)
-        # for now, just the length of the task
+        # for now, just the length of the task. The longer the task, the better the fitness (a very bad fitness function). 
+
+        # Very important metric, could include like penalizing for hallucinated predicates. 
+        # low values if the task is either to easy or too hard
         self._fitness = len(self.program_str)/10
 
         return self._fitness
     
     def check_valid(self, program_str: str):
-        # additional checks if tasks are correct
         # if program_str has more than 2048 tokens the tasks is not valid
+
+        # Important function to quickly check if the generated task is valid. 
         
-        tokens = len(tokenizer(program_str)["input_ids"])
+        tokens = len(program_str)/5
         if tokens >= 2048:
             return False
         
-        return True
+        # convert to task spec
+        
+        task_spec = str_to_task_spec([program_str])[0]
+        if check_task_spec(task_spec):
+            return True
+        else:
+            return False
 
     def __str__(self) -> str:
         return self.program_str
@@ -127,7 +239,7 @@ class NMMOTask(Genotype):
         return self._fitness
 
 
-class NMMO(BaseEnvironment[NMMOTask]):
+class NMMOEnvironment(BaseEnvironment[NMMOTask]):
     """The NMMO environment."""
 
     def __init__(
@@ -160,7 +272,7 @@ class NMMO(BaseEnvironment[NMMOTask]):
         else:
             prompt_str += "\n"+self.init_prompt
             
-        # instruction postpended to the prompt
+        # instruction added to the prompt
         inst = "\n# use the predicates listed in the imports and complete the task using diverse predicates than before\ndef task_"
         import_s += inst
         prompt_str += inst
@@ -183,30 +295,6 @@ class NMMO(BaseEnvironment[NMMOTask]):
                 task_list.append(task)
 
         return task_list
-        # code to check the validity of the task, commented out to speed up the process
-        # for task in generated_tasks:
-        #     with open("generated_progam.py","a") as f:
-        #         f.write(task)
-        # realm = MockRealm()
-        # entity_id = 123
-        # population_id = 11
-        # entity = Entity(realm, (10,20), entity_id, "name", "color", population_id)
-
-
-        # results = pool_exec_processes(
-        #     generated_tasks,
-        #     timeout=5.0,
-        #     args={"entity":entity},
-        #     debug=False
-        # )
-        # result_list: list = []
-        # for i, result in enumerate(results):
-        #     try:
-        #         if isinstance(result, AND) or isinstance(result, OR) or isinstance(result, Predicate): 
-        #             print(generated_tasks[i])
-        #             result_list.append(generated_tasks[i])
-        #     except Exception as e:
-        #         print(type(e))
 
     # Executed First
     def random(self) -> list[NMMOTask]:
@@ -226,28 +314,47 @@ class NMMO(BaseEnvironment[NMMOTask]):
         else:
             return -np.inf
 
+
+class OpenELMCurriculumGenerator():
+    """Container class to include all the configs and generate tasks"""
+
+    def __init__(self, temperature, model, batch_size, task_specs):
+
+        super().__init__(task_specs)
+        
+        assert model in ["2", "6"], "model should be either 2B or 6B"
+        assert 0.9<=temperature<=1.4, "temperature should be between 0.9 and 1.4"
+        
+        self.config = ELMConfig()
+        self.config.batch_size = batch_size
+        
+        self.config.env = NMMOConfig()
+        self.config.env.impr = import_str["short_import"]
+        self.config.env.init_prompt = task_spec_to_str(task_specs)
+        self.config.env.mutate = True
+        self.config.env.batch_size = batch_size
+
+        self.config.qd = MAPElitesConfig()
+
+        self.config.model = PromptModelConfig()
+        self.config.model.temp = temperature
+        self.config.model.batch_size = batch_size
+        self.config.model.model_path = f"Salesforce/codegen-{model}-mono"
+
+        ENVS_DICT["NMMO"] = NMMOEnvironment
+
+    def evolve_tasks(self, steps, task_spec):
+        """Evolve the given task specs for the given number of steps and return the evolved task specs"""
+        self.config.env.init_prompt = task_spec_to_str(task_spec)
+        elm = ELM(self.config)
+        elm.run(init_steps = 2, total_steps = steps)
+        # flatten genomes to a list of tasks
+        return str_to_task_spec(list(elm.qd_algorithm.genomes.array.flatten()))
+        
+
+
+
 def main(temperature, imports, n_tasks, model, mutate, batch_size):
-
-    impr = import_str[imports]
-    prompt_tasks = "\n" + "\n".join(random.sample(tasks, n_tasks))
-
-    config = ELMConfig()
-    config.env = NMMOConfig()
-    config.env.impr = impr
-    config.env.init_prompt = prompt_tasks
-    config.env.mutate = mutate
-    config.env.batch_size = batch_size
-    config.qd = MAPElitesConfig()
-    # config.qd.map_grid_size = (20)
-    config.model = PromptModelConfig()
-    config.model.temp = temperature
-    config.model.batch_size = batch_size
-    config.batch_size = batch_size
-    config.model.model_path = f"Salesforce/codegen-{model}B-mono"
-
-    ENVS_DICT["NMMO"] = NMMO
-
-    elm = ELM(config)
 
     return elm.run(init_steps = 2, total_steps = 100)
 
@@ -279,3 +386,10 @@ if __name__ == "__main__":
         f.write(f"qd: {qd}\n")
     print(f"Niches filled: {niches}")
     print(f"QD: {qd}")
+
+
+    # TODO:
+
+    # [] - Generate only Valid tasks
+    # [] - Measure fitness with respect to predicates only
+
