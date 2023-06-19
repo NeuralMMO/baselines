@@ -17,7 +17,7 @@
 #SBATCH --requeue
 #SBATCH --export=PYTHONUNBUFFERED=1
 
-source /fsx/home-daveey/miniconda3/etc/profile.d/conda.sh && \
+source /fsx/home-daveey/miniconda/etc/profile.d/conda.sh && \
 conda activate nmmo && \
 ulimit -c unlimited && \
 ulimit -s unlimited && \
