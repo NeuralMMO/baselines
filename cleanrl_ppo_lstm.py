@@ -29,8 +29,6 @@ class CleanPuffeRL:
         self,
         binding,
         agent,
-        config={},
-        exp_name=os.path.basename(__file__),
         seed=1,
         torch_deterministic=True,
         cuda=True,
