@@ -1,4 +1,5 @@
 import argparse
+from ctypes import util
 import logging
 import os
 import re
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     help="number of buffers to use for training (default: 4)")
   parser.add_argument(
     "--rollout.num_steps", dest="num_steps", type=int, default=128,
-    help="number of steps to rollout (default: 16)")
+    help="number of steps to rollout (default: 128)")
 
   parser.add_argument(
     "--train.num_steps",
@@ -140,9 +141,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--train.opponent_pool", dest="opponent_pool", type=str, default=None,
     help="json file containing the opponent pool (default: None)")
-  parser.add_argument(
-    "--train.puffer_rl", dest="puffer_rl", action="store_true",
-    help="use puffer rl (default: False)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -157,9 +155,9 @@ if __name__ == "__main__":
      "use this to reduce GPU memory (default: 16)")
 
   parser.add_argument(
-    "--ppo.num_minibatches",
-    dest="ppo_num_minibatches", type=int, default=16,
-    help="number of minibatches to use for training")
+    "--ppo.training_batch_size",
+    dest="ppo_training_batch_size", type=int, default=32,
+    help="number of rows in a training batch (default: 32)")
   parser.add_argument(
     "--ppo.update_epochs",
     dest="ppo_update_epochs", type=int, default=4,
@@ -190,12 +188,6 @@ if __name__ == "__main__":
   )
   config.RESET_ON_DEATH = args.reset_on_death
 
-  # Historic self play is not yet working, so we require
-  # all the players to be learners
-  # assert args.num_teams == args.num_learners
-
-
-
   # Create a pool of opponents
   if args.opponent_pool is None:
     opponent_pool = PolicyPool()
@@ -213,43 +205,18 @@ if __name__ == "__main__":
     environment=args.rewards_environment
   )
 
-  # Create an environment factory that uses the opponent pool
-  # for some of the agents, while letting the rest be learners
-  def make_agent(model_weights):
-    if binding is None:
-      return None
-    return BaselineAgent(binding, model_weights=model_weights)
-
   def make_env():
-    if args.model_type in ["realikun", "realikun-simplified"]:
-      env = NMMOTeamEnv(
-        config, team_helper, rewards_config, moves_only=args.moves_only)
-    elif args.model_type in ["random", "basic", "basic-lstm", "basic-teams", "basic-teams-lstm"]:
-      env = nmmo.Env(config)
-    else:
-      raise ValueError(f"Unknown model type: {args.model_type}")
-
-    return env
-
-    # return OpponentPoolEnv(
-    #   env,
-    #   range(args.num_learners, team_helper.num_teams),
-    #   opponent_pool,
-    #   make_agent
-    # )
-
-  # Create a pufferlib binding, and use it to initialize the
-  # opponent pool and create the learner agent
-  puffer_teams = None
-  if args.model_type == "basic-teams":
-    puffer_teams = team_helper.teams
+    return nmmo.Env(config)
+    # if args.model_type in ["realikun", "realikun-simplified"]:
+    #   env = NMMOTeamEnv(
+    #     config, team_helper, rewards_config, moves_only=args.moves_only)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
-    teams=puffer_teams,
+    teams=team_helper.teams,
     postprocessor_cls=Postprocessor,
     postprocessor_args=[rewards_config]
   )
@@ -262,7 +229,7 @@ if __name__ == "__main__":
     model = torch.load(args.model_init_from_path)
     learner_policy = BaselineAgent.policy_class(
       model.get("model_type", "realikun"))(binding)
-    cleanrl_ppo_lstm.load_matching_state_dict(
+    util.load_matching_state_dict(
       learner_policy,
       model["agent_state_dict"]
     )
@@ -288,19 +255,8 @@ if __name__ == "__main__":
   if args.use_serial_vecenv:
     vec_env_cls = pufferlib.vectorization.serial.VecEnv
 
-
-  if args.puffer_rl:
-    trainer_cls = clean_pufferl.CleanPuffeRL
-    trainer_args = dict()
-  else:
-    trainer_cls = cleanrl_ppo_lstm.CleanPuffeRL
-    trainer_args = dict(
-      num_agents=args.num_teams,
-      num_steps=args.num_steps
-    )
-
   logging.info("Starting training...")
-  trainer = trainer_cls(
+  trainer = clean_pufferl.CleanPuffeRL(
     binding,
     learner_policy,
 
@@ -321,7 +277,6 @@ if __name__ == "__main__":
     # ent_coef=0.001 # entropy_loss_weight,
     # grad_clip=1.0,
     # bptt_trunc_len=16,
-    **trainer_args
   )
 
   resume_from_path = None
@@ -343,6 +298,7 @@ if __name__ == "__main__":
       # num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
+      batch_rows=args.ppo_training_batch_size
     )
     if experiment_dir is not None and update % args.checkpoint_interval == 1:
       save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
