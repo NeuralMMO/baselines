@@ -1,35 +1,23 @@
 import argparse
-from ctypes import util
 import logging
 import os
 import re
-import sys
-from numpy import save
+from ctypes import util
 
+import nmmo
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from env.nmmo_config import NmmoMoveConfig, nmmo_config
-from env.nmmo_env import NMMOEnv, RewardsConfig
-from env.postprocessor import Postprocessor
-from lib.policy_pool.json_policy_pool import JsonPolicyPool
-
-from lib.agent.baseline_agent import BaselineAgent
-from lib.policy_pool.policy_pool import PolicyPool
-from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
-from nmmo.render.replay_helper import DummyReplayHelper
 
 import clean_pufferl
-from env.nmmo_team_env import NMMOTeamEnv
-from lib.team.team_env import TeamEnv
+from env.nmmo_config import nmmo_config
+from env.nmmo_env import RewardsConfig
+from env.postprocessor import Postprocessor
+from lib.agent.baseline_agent import BaselineAgent
+from lib.policy_pool.json_policy_pool import JsonPolicyPool
+from lib.policy_pool.policy_pool import PolicyPool
 from lib.team.team_helper import TeamHelper
-
-import nmmo
-
-import logging
-
-from lib.team.team_replay_helper import TeamReplayHelper
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
