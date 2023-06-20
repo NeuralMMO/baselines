@@ -20,8 +20,7 @@ from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 from nmmo.render.replay_helper import DummyReplayHelper
 
-import cleanrl_ppo_lstm as cleanrl_ppo_lstm
-import clean_pufferl as clean_pufferl
+import clean_pufferl
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
