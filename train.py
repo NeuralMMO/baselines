@@ -203,7 +203,7 @@ if __name__ == "__main__":
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
-    teams=team_helper.teams,
+    # teams=team_helper.teams,
     postprocessor_cls=Postprocessor,
     postprocessor_args=[rewards_config]
   )
@@ -282,7 +282,6 @@ if __name__ == "__main__":
     trainer.train(
       learner_policy,
       trainer_state,
-      # num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
       batch_rows=args.ppo_training_batch_size

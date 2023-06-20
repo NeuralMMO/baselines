@@ -5,7 +5,6 @@ python -u -m train \
 --rollout.num_buffers=2  \
 --rollout.num_steps=128 \
 --ppo.bptt_horizon=8 \
---ppo.num_minibatches=16 \
 --wandb.entity=daveey \
 --wandb.project=nmmo \
 --train.opponent_pool=/fsx/home-daveey/experiments/pool.json \
