@@ -35,6 +35,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     super().__init__(env, teams, team_id)
 
   def reset(self, team_obs):
+    super().reset(team_obs)
     self._achievements = {
       id: {} for id in self.env.possible_agents
     }
