@@ -1,8 +1,4 @@
-uniq_predicates = ["TickGE","StayAlive","AllDead","EatFood","DrinkWater","CanSeeTile","CanSeeAgent","OccupyTile","DistanceTraveled",
-                   "AllMembersWithinRange","ScoreHit","ScoreKill","AttainSkill","InventorySpaceGE","OwnItem","EquipItem","FullyArmed",
-                   "ConsumeItem","GiveItem","DestroyItem","HarvestItem","HoardGold","GiveGold","ListItem","EarnGold","BuyItem",
-                   "SpendGold","MakeProfit"]
-
+# pylint: disable=all
 import_str = {"short_import": """from predicates import TickGE,StayAlive,AllDead,EatFood,DrinkWater,CanSeeTile,CanSeeAgent,OccupyTile
 from predicates import DistanceTraveled,AllMembersWithinRange,ScoreHit,ScoreKill,AttainSkill,InventorySpaceGE,OwnItem
 from predicates import EquipItem,FullyArmed,ConsumeItem,GiveItem,DestroyItem,HarvestItem,HoardGold,GiveGold,ListItem,EarnGold,BuyItem,SpendGold,MakeProfit
