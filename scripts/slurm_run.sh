@@ -10,7 +10,7 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --cpus-per-gpu=12
-#SBATCH --mem=40G
+#SBATCH --mem=60G
 #SBATCH --chdir=/fsx/home-daveey/nmmo-baselines/
 #SBATCH --output=sbatch/%j.log
 #SBATCH --error=sbatch/%j.log
