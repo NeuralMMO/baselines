@@ -102,8 +102,8 @@ if __name__ == "__main__":
     "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
     help="number of buffers to use for training (default: 4)")
   parser.add_argument(
-    "--rollout.num_steps", dest="num_steps", type=int, default=128,
-    help="number of steps to rollout (default: 128)")
+    "--rollout.batch_size", dest="rollout_batch_size", type=int, default=2**14,
+    help="number of steps to rollout (default: 2**14)")
 
   parser.add_argument(
     "--train.num_steps",
@@ -256,6 +256,8 @@ if __name__ == "__main__":
     num_envs=args.num_envs,
     num_cores=args.num_cores or args.num_envs,
     num_buffers=args.num_buffers,
+
+    batch_size=args.rollout_batch_size,
 
     # PPO
     learning_rate=args.ppo_learning_rate,

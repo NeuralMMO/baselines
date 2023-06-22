@@ -3,7 +3,6 @@
 python -u -m train \
 --rollout.num_envs=8 \
 --rollout.num_buffers=2  \
---rollout.num_steps=128 \
 --ppo.bptt_horizon=8 \
 --wandb.entity=daveey \
 --wandb.project=nmmo \
