@@ -91,6 +91,7 @@ class BasicPolicy(pufferlib.models.Policy):
     dr = de[EntityState.State.attr_name_to_col["row"]]
     dc = de[EntityState.State.attr_name_to_col["col"]]
     ct = env_outputs['Tile'][0].view(15,15,-1)[7,7]
+    print(entity[:,EntityId:EntityState.State.attr_name_to_col["col"]+1])
     # if did != 0:
     #   assert ct[0] == dr and ct[1] == dc
     #   assert did == 1
