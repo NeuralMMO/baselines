@@ -1,19 +1,23 @@
 import re
+import sys
 import math
+import time
+import inspect
+import multiprocessing as mp
 from collections import Counter
 
-import nmmo
-from nmmo.task.group import Group
-from nmmo.task.task_api import make_team_tasks
-from nmmo.task.predicate_api import make_predicate
+import numpy as np
 
-# TODO: automatically get all pre-built functions from nmmo.task.base_predicates
-UNIQUE_PREDICATES = [
-  "TickGE","StayAlive","AllDead","EatFood","DrinkWater","CanSeeTile","CanSeeAgent",
-  "OccupyTile","DistanceTraveled","AllMembersWithinRange","ScoreHit","ScoreKill",
-  "AttainSkill","InventorySpaceGE","OwnItem","EquipItem","FullyArmed","ConsumeItem",
-  "GiveItem","DestroyItem","HarvestItem","HoardGold","GiveGold","ListItem","EarnGold",
-  "BuyItem","SpendGold","MakeProfit"]
+import nmmo
+from nmmo.lib.material import Harvestable
+from nmmo.task import constraint as c
+from nmmo.task.task_api import make_team_tasks
+
+# required to run check_task_spec
+# pylint: disable=wildcard-import,unused-import,unused-wildcard-import
+from nmmo.task.group import Group
+from nmmo.task.game_state import GameState
+from nmmo.task.base_predicates import *
 
 
 ######################################################################
@@ -50,57 +54,142 @@ def calculate_length(task):
 ######################################################################
 # nmmo task-related helper functions
 
-def extract_kwargs(function_definition):
-  pattern = r'def\s+\w+\((.*?)\)'
-  parameter_pattern = r'(\w+)\s*:\s*([^\s,]+)'
+def is_camel_case(input_string):
+  if input_string == input_string.lower(): # all lower case
+    return False
+  # Check if the string matches the camel case pattern
+  pattern = r"^(?:[A-Z]{2}|[A-Z][a-z0-9]+|[a-z][a-z0-9]*)+$"
+  return re.match(pattern, input_string) is not None
 
-  match = re.search(pattern, function_definition)
-  if match:
-    parameters_string = match.group(1)
-    parameters = re.findall(parameter_pattern, parameters_string)
-    parameter_dict = dict(parameters) #{name: data_type for name, data_type in parameters}
-    return parameter_dict
+PREBUILT_TASK_FN = [fn for fn in dir(nmmo.task.base_predicates) if is_camel_case(fn)]
 
-  return {}
+# extract training task function from the ELM result
+def extract_task_fn(result_str, fn_name):
+  split = result_str.split("\n")
+  fn_str = []
+  for line in split[::-1]:
+    if line.startswith(f"def {fn_name}("):
+      fn_str.append(line)
+      break
+    fn_str.append(line)
+  return "\n".join(fn_str[::-1])
 
-def check_task_spec(spec_list):
+def sample_parameter(key, type_hint):
+  # pylint: disable=invalid-name,unnecessary-lambda
+  # try to return helpful values
+  TARGET = ['left_team', 'right_team',
+            'left_team_leader', 'right_team_leader', 'my_team_leader']
+  EVENT_NAME = c.event_names
+  SKILLS = c.combat_skills + c.harvest_skills
+  COMBAT_STYLE = c.combat_skills
+  ALL_ITEM = c.armour + c.weapons + c.tools + c.ammunition + c.consumables
+  sample_dict = {
+    'event': lambda: np.random.choice(EVENT_NAME),
+    'N': lambda: round(1+np.random.gamma(1,3)),
+    'tile_type': lambda: np.random.choice(list(Harvestable)),
+    'num_tick': lambda: round(np.random.gamma(10,20)),
+    'target': lambda: np.random.choice(TARGET),
+    'row': lambda: round(80+np.random.randn()*15),
+    'col': lambda: round(80+np.random.randn()*15),
+    'dist': lambda: round(np.random.rand()*10),
+    'num_agent': lambda: 1,
+    'level': lambda: min(round(1+np.random.gamma(1,3)),10),
+    'skill': lambda: np.random.choice(SKILLS),
+    'combat_style': lambda: np.random.choice(COMBAT_STYLE),
+    'agent_type': lambda: np.random.choice(['npc','player']),
+    'amount': lambda: round(1+np.random.gamma(3,3)),
+    'space': lambda: round(2+np.random.rand()*6),
+    'item': lambda: np.random.choice(ALL_ITEM),
+    'quantity': lambda: round(1+np.random.gamma(1,1)),
+  }
+  if key in sample_dict:
+    return sample_dict[key]()
+
+  # TODO: prompting would be helpful below
+  hint_dict = {
+    'int': lambda: round(1+np.random.gamma(1,3)),
+    'float': lambda: np.random.rand(),
+  }
+  if type_hint in hint_dict:
+    return hint_dict[type_hint]()
+
+  return 1
+
+TIME_OUT = 15 # sec
+def is_task_spec_valid(spec_list):
   # pylint: disable=bad-builtin,bare-except,inconsistent-return-statements
   teams = {0:[1,2,3], 1:[4,5], 2:[6,7], 3:[8,9], 4:[10,11]}
   config = nmmo.config.Default()
   env = nmmo.Env(config)
-  for idx, single_spec in enumerate(spec_list):
+  num_success = 0
+  for single_spec in spec_list:
     # pylint: disable=cell-var-from-loop
     test_task = make_team_tasks(teams, [single_spec])
-    try:
-      env.reset(make_task_fn=lambda: test_task)
+    env.reset(make_task_fn=lambda: test_task)
+    def run_env():
       for _ in range(3):
         env.step({})
-    except:
-      print('invalid task spec:', single_spec)
-      return False
+      sys.exit(0) # success
 
-    if idx > 0 and idx % 50 == 0:
-      print(idx, 'task specs checked.')
+    # sometimes the task fn has a long loop, so we need to time out
+    proc = mp.Process(target=run_env)
+    proc.start()
+    start_time = time.time()
+    while proc.is_alive():
+      elapsed_time = time.time() - start_time
+      if elapsed_time > TIME_OUT:
+        print("NMMO task timed out")
+        proc.terminate()
+        break
+      time.sleep(0.1)
 
-def str_to_task_spec(task_list):
-  # pylint: disable=exec-used
-  task_specs = []
-  for task in task_list:
-    func = {}
-    try:
-      exec(task, globals(), func)
-      # get kwargs
-      kwargs = extract_kwargs(task)
-      task_specs.append(("agent", task, kwargs))
-    except: # pylint: disable=bare-except
-      pass
-  return task_specs
+    if proc.exitcode == 0:
+      num_success += 1
+
+  return num_success > 0 # at least 1 spec runs
+
+def generate_task_spec(result_str, fn_name, num_sample=3):
+  # pylint: disable=bare-except,exec-used,bad-builtin
+  task_spec = []
+  task_fn_str = extract_task_fn(result_str, fn_name)
+  import_str = "from nmmo.task.game_state import GameState\n" +\
+                "from nmmo.task.group import Group\n" +\
+                "from nmmo.task.base_predicates import *\n\n"
+
+  locals_dict = {}
+  try:
+    # NOTE: this is a security vulenerability
+    # TODO: make this secure
+    exec(import_str + task_fn_str, globals(), locals_dict)
+  except:
+    # return empty task spec for invalid function
+    print('Invalid python function generated ...')
+    return task_spec
+  task_fn = locals_dict[fn_name]
+  fn_params = inspect.signature(task_fn).parameters
+
+  included_kwargs = set()
+  for _ in range(num_sample):
+    eval_kwargs = {}
+    for key, param in fn_params.items():
+      if key in ['gs', 'subject']:
+        continue
+      type_hint = param.annotation.__name__
+      eval_kwargs[key] = sample_parameter(key, type_hint)
+    args_vals = tuple(eval_kwargs.values())
+    if args_vals not in included_kwargs:
+      task_spec.append(('agent', task_fn, eval_kwargs))
+      included_kwargs.add(args_vals)
+
+  return task_spec
 
 def task_spec_to_str(task_specs):
-  # convert task spec to str code
-  str_tasks = []
+  # extract task_fn source code from task_spec
+  extracted_fn_list = set()
+  task_fn_src = []
   for task_spec in task_specs:
-    predicate = make_predicate(task_spec[1])
-    inst_predicate = predicate(Group(0))
-    str_tasks.append(inst_predicate.get_source_code())
-  return "\n".join(str_tasks)
+    fn_name = task_spec[1].__name__
+    if fn_name not in extracted_fn_list:
+      task_fn_src.append(inspect.getsource(task_spec[1]))
+      extracted_fn_list.add(fn_name)
+  return "\n".join(task_fn_src)
