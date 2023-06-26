@@ -65,6 +65,10 @@ while true; do
   elif [ $exit_status -eq 101 ]; then
     echo "Job failed due to torch.cuda.OutOfMemoryError."
     break
+  elif [ $exit_status -eq 143 ]; then
+    echo "Job failed due to OOM. Killing child processes..."
+    pkill -P $$
+    break
   else
     echo "Job failed with exit status $exit_status. Retrying..."
   fi
