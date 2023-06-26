@@ -18,12 +18,11 @@ class RandomPolicy(pufferlib.models.Policy):
     return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
 
   def decode_actions(self, hidden, lookup, concat=True):
-    with torch.no_grad():
-      actions = [dec(hidden) for dec in self.decoders]
-      if concat:
-        return torch.cat(actions, dim=-1)
-      return actions
-
+    torch.nn.init.xavier_uniform_(hidden)
+    actions = [dec(hidden) for dec in self.decoders]
+    if concat:
+      return torch.cat(actions, dim=-1)
+    return actions
 
   def critic(self, hidden):
     return torch.zeros((hidden.shape[0], 1)).to(hidden.device)

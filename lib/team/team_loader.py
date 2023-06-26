@@ -12,6 +12,7 @@ class TeamLoader(spawn.SequentialLoader):
 
     self.candidate_spawn_pos = \
       spawn.get_team_spawn_positions(config, team_helper.num_teams)
+    # print("TeamLoader: candidate_spawn_pos", self.candidate_spawn_pos)
 
   def get_spawn_position(self, agent_id):
     team_id, _ = self.team_helper.team_and_position_for_agent[agent_id]
