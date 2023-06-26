@@ -15,7 +15,7 @@
 #SBATCH --output=sbatch/%j.log
 #SBATCH --error=sbatch/%j.log
 #SBATCH --requeue
-#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_DIR=/fsx/home-daveey/tmp/wandb
+#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_DIR=/fsx/home-daveey/tmp/wandb,WANDB_CONFIG_DIR=/fsx/home-daveey/tmp/wandb
 
 source /fsx/home-daveey/miniconda/etc/profile.d/conda.sh && \
 conda activate nmmo && \
