@@ -18,10 +18,11 @@ class RandomPolicy(pufferlib.models.Policy):
     return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
 
   def decode_actions(self, hidden, lookup, concat=True):
-    actions = [dec(hidden) for dec in self.decoders]
-    if concat:
-      return torch.cat(actions, dim=-1)
-    return actions
+    with torch.no_grad():
+      actions = [dec(hidden) for dec in self.decoders]
+      if concat:
+        return torch.cat(actions, dim=-1)
+      return actions
 
 
   def critic(self, hidden):
