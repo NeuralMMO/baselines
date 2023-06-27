@@ -7,3 +7,4 @@ tensorboard
 wandb
 torchtyping
 pandas
+traitlets
