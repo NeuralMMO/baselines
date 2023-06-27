@@ -8,7 +8,8 @@ from openelm.configs import EnvConfig
 from openelm.environments import BaseEnvironment, Genotype
 from openelm.mutation_model import DiffModel
 
-from .elm_helper import calculate_length, check_task_spec, str_to_task_spec, UNIQUE_PREDICATES
+from .elm_helper import calculate_length, PREBUILT_TASK_FN
+from .elm_helper import generate_task_spec, extract_task_fn, is_task_spec_valid
 
 
 @dataclass
@@ -37,39 +38,28 @@ class NMMOConfig(EnvConfig):
   batch_size: int = 1
   mutate: bool = False
 
+  # how many sets of kwargs parameters (task_spec) to sample for a valid eval fn
+  num_sample_spec = 5
+  # the default name to generate
+  gen_fn_name = "training_task"
+
 
 Phenotype = Optional[np.ndarray]
-class NMMOTask(Genotype):
+class NMMOTaskFn(Genotype):
   """A task in the NMMO environment."""
-  def __init__(self, program_str: str, impr: str = None):
+  def __init__(self, program_str: str, fn_name: str):
     self._fitness = -np.inf
-    # remove the prompt from the program_str
-    program_str = program_str.replace(impr, "")
-    # extract def task_ from the program_str
-    split = program_str.split("\n")
-    task = []
-    # Consider only the last task generated
-    for lines in split[::-1]:
-      if lines.startswith("def task_"):
-        task.append(lines)
-        break
-      task.append(lines)
+    self._fn_name = fn_name
+    self.program_str = extract_task_fn(program_str, self._fn_name)
+    self.valid = self.is_valid_nmmo_fn(self.program_str)
+    self.morphology = {}
 
-    program_str = "\n".join(task[::-1])
-    # print("Program_str at init")
-    # print(program_str)
-
-    # to check if the task is valid
-    if self.check_valid(program_str):
-      self.valid = True
-      self.program_str: str = re.sub(r" +#.*\n", "", program_str)
-      # need to ignore comments
-      self.morphology = {}
-      self.morphology["predicates"] = self._count_predicates(program_str)
-      self.morphology["length"] = calculate_length(program_str)
-      self.morphology["lines"] = program_str.count("\n")
-    else:
-      self.valid = False
+    if self.valid:
+      code_only = re.sub(r" +#.*\n", "", self.program_str) # remove comments
+      # TODO: add more metrics here
+      self.morphology["predicates"] = self._count_predicates(code_only)
+      self.morphology["length"] = calculate_length(code_only)
+      self.morphology["lines"] = code_only.count("\n")
 
   def evaluate(self) -> float:
     # how to evaluate the fitness of a task? (time taken for the baseline RL algo to solve?)
@@ -81,30 +71,34 @@ class NMMOTask(Genotype):
     self._fitness = len(self.program_str)/10
     return self._fitness
 
-  def check_valid(self, program_str: str):
+  def is_valid_nmmo_fn(self, eval_fn_str: str):
     # if program_str has more than 2048 tokens the tasks is not valid
-
     # Important function to quickly check if the generated task is valid.
-    tokens = len(program_str)/5
+    tokens = len(eval_fn_str)/5
     if tokens >= 2048:
       return False
 
-    # CHECK ME: convert to task spec, is the task spec correct?
-    try: 
-      task_spec = str_to_task_spec([program_str])[0]
-      if check_task_spec(task_spec):
-        return True
-    except: # pylint: disable=bare-except
-      pass
+    # generate_task_spec returns task_spec if the function is valid python
+    task_spec = generate_task_spec(eval_fn_str, self._fn_name)
 
-    return False
+    # is_task_spec_valid tests if these task_spec runs in the nmmo
+    return is_task_spec_valid(task_spec)
+
+  def generate_task_spec(self, num_sample=None):
+    if not self.valid:
+      return []
+    task_spec = []
+    for single_spec in generate_task_spec(self.program_str, self._fn_name, num_sample):
+      if is_task_spec_valid([single_spec]):
+        task_spec.append(single_spec)
+    return task_spec
 
   def __str__(self) -> str:
     return self.program_str
 
   def _count_predicates(self, task_str):
     predicates = set()
-    for i in UNIQUE_PREDICATES:
+    for i in PREBUILT_TASK_FN:
       if i in task_str:
         predicates.add(i)
     return len(predicates)
@@ -128,7 +122,8 @@ class NMMOTask(Genotype):
     return self._fitness
 
 
-class NMMOEnvironment(BaseEnvironment[NMMOTask]):
+# TODO: make the prompts, etc easy to edit
+class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
   """The NMMO environment."""
   def __init__(self,
                config: NMMOConfig,
@@ -141,6 +136,8 @@ class NMMOEnvironment(BaseEnvironment[NMMOTask]):
     self.genotype_ndim = self.genotype_space.shape[1]
     self.impr = config.impr
     self.init_prompt = config.init_prompt
+    self.gen_fn_name = config.gen_fn_name
+    self.num_sample_spec = config.num_sample_spec
 
   def construct_prompt(self,
                        code_batch: Optional[Union[list[str], str]] = None
@@ -157,40 +154,54 @@ class NMMOEnvironment(BaseEnvironment[NMMOTask]):
     else:
       prompt_str += "\n"+self.init_prompt
 
+    # this inst seems critical in determining what function the elm writes
+    # TODO: use heuristics or LLM to generate a diverse goal statement here
+    task_idea = "explore the map, eat food, and drink water"
+
     # instruction added to the prompt
     inst = "\n# use the predicates listed in the imports and " +\
-           "complete the task using diverse predicates than before\ndef task_"
+           "complete the task using diverse predicates than before\n\n" +\
+           "# normalized float progress to a value between 0 and 1\n" +\
+           "def norm(progress):\n" + \
+           "  return max(min(progress, 1.0), 0.0)\n\n" + \
+           "# training_task evaluates progress towards " + task_idea + "\n" +\
+           "# and must return a float between 0-1 using norm()\n" +\
+           "# the lines of code should be less than 30\n" +\
+           f"def {self.gen_fn_name}(gs: GameState, subject: Group, "
     import_s += inst
     prompt_str += inst
     return {"prompt": prompt_str, "template": import_s}
 
-  # NMMOTask should only contain the task, after the prompt
-  def generate_programs(self, code_batch: list[dict[str, str]]) -> list[NMMOTask]:
+  # returns a string that contains the generated eval fn
+  def _generate_task_fn(self, code_batch: list[dict[str, str]]) -> str:
     local_scope_exec: bool = False
-    generated_tasks = self.mutation_model.generate_programs(
+    return self.mutation_model.generate_programs(
       code_batch, local_scope_exec
     )
-    # check if each task is valid then append to the list
+
+  def generate_programs(self, code_batch: list[dict[str, str]]) -> list[NMMOTaskFn]:
+    eval_fn_batch = self._generate_task_fn(code_batch)
     task_list = []
-    for t in generated_tasks:
-      task = NMMOTask(t, self.impr)
-      if task.valid:
-        task_list.append(task)
+    for gen_str in eval_fn_batch:
+      gene = NMMOTaskFn(gen_str, self.gen_fn_name)
+      if gene.valid:
+        task_list.append(gene)
     return task_list
 
   # Executed First
-  def random(self) -> list[NMMOTask]:
+  def random(self) -> list[NMMOTaskFn]:
+    # NOTE: where the 2 comes from?
     program_list = [self.construct_prompt() for _ in range(2)]
     new_tasks = self.generate_programs(program_list)
     return new_tasks
 
-  def mutate(self, x: list[NMMOTask]) -> list[NMMOTask]:
+  def mutate(self, x: list[NMMOTaskFn]) -> list[NMMOTaskFn]:
     task_list = [sr.program_str for sr in x]
     program_list = list(map(self.construct_prompt, task_list))
     new_tasks = self.generate_programs(program_list)
     return new_tasks
 
-  def fitness(self, x: NMMOTask) -> float:
+  def fitness(self, x: NMMOTaskFn) -> float:
     if x.valid:
       return x.evaluate()
     return -np.inf

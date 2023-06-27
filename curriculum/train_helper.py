@@ -5,8 +5,6 @@ import ast
 from tqdm import tqdm
 import json
 
-from elm_curriculum_gen import OpenELMCurriculumGenerator
-
 from transformers import AutoModelForCausalLM, AutoTokenizer, CodeGenModel
 
 import nmmo.task
@@ -137,54 +135,6 @@ class SimpleTaskGenerator:
     # CHECK ME: do we need to provide a random task generator?
     #   providing a manually curated task could do
     return random.choices(self.task_spec, k=num_tasks)
-
-# Nishaanth's OpenELM task generator, assuming something like this
-class OpenELMTaskGenerator(SimpleTaskGenerator):
-  def __init__(self, task_spec, checkpoint):
-    # OpenELM task generator uses the task_spec to produce new things
-    #   and does NOT have to keep track
-    super().__init__(task_spec)
-    # OpenELM default is "Salesforce/codegen-2B-mono"
-    # self.model = AutoModelForCausalLM.from_pretrained(checkpoint)
-    # self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    self.elm_curriculum_generator = OpenELMCurriculumGenerator(
-      temperature=1.1,
-      model="2B",
-      batch_size=4,
-      task_specs=task_spec
-    )
-
-  def _add_eval_fn(self, fn_code):
-    self.eval_fn_code += '\n'+fn_code
-
-  def _evolve_eval_fn(self) -> str:
-    # return new eval fn code
-    return ''
-
-  @property
-  def active_fn_code(self) -> str:
-    # TODO: return only the actively used eval fn code
-    return self.eval_fn_code
-
-  def evolve_tasks(self, num_tasks, task_spec, weights=None):
-    # if weights is not None:
-    #   assert len(task_spec) == len(weights), 'cannot use weights'
-    # TODO: actually generate valid functions and task by evolution
-    #   perhaps, the weights could be helpful?
-
-    # generate the new eval functions and add these to the inventory
-    # TODO: consider separating the "active" vs. "reserve" eval fns
-    #   -- "active" are the ones used in task_spec, so going into LLM
-    #   -- "reserve" are the ones NOT currently used, but can be used in future
-    # self.eval_fn_code += self._evolve_eval_fn()
-
-    evolved_task_spec = self.elm_curriculum_generator.evolve_tasks(steps=100, task_spec=task_spec)
-    return evolved_task_spec
-
-def get_called_functions(source_code):
-    tree = ast.parse(source_code)
-    funcs = [node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call)]
-    return funcs
 
 # how to load functions from str and get the src of fn subset
 """
