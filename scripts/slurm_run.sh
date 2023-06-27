@@ -69,17 +69,29 @@ while true; do
     echo "Job failed due to torch.cuda.OutOfMemoryError."
   elif [ $exit_status -eq 137 ]; then
     echo "Job failed due to OOM. Killing child processes..."
-    pids=$(pgrep -P $$)  # This fetches all child processes of the current process
-    if [ "$pids" != "" ]; then
-      echo "The following processes will be killed:"
-      for pid in $pids; do
-        echo "PID $pid: $(ps -p $pid -o cmd=)"
+
+    # Killing child processes
+    child_pids=$(pgrep -P $$)  # This fetches all child processes of the current process
+    if [ "$child_pids" != "" ]; then
+      echo "The following child processes will be killed:"
+      for pid in $child_pids; do
+        echo "Child PID $pid: $(ps -p $pid -o cmd=)"
       done
-      pkill -P $$ python  # This kills the child processes
+      kill $child_pids  # This kills the child processes
+    fi
+
+    # Killing processes that have the experiment name in their command line
+    experiment_pids=$(pgrep -f "$experiment_name")
+    if [ "$experiment_pids" != "" ]; then
+      echo "The following processes with '$experiment_name' will be killed:"
+      for pid in $experiment_pids; do
+        echo "Experiment PID $pid: $(ps -p $pid -o cmd=)"
+      done
+      kill $experiment_pids  # This kills the processes
     fi
   elif [ $exit_status -eq 143 ]; then
     echo "Killing Zombie processes..."
-    pids=$(pgrep -P $$ python)
+    pids=$(pgrep -P $$)
     for pid in $pids; do
       if [ $(ps -o stat= -p $pid) == "Z" ]; then
         kill -9 $pid
