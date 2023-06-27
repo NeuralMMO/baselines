@@ -82,19 +82,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         elif agent.water.val == 0:
           team_info["stats"]["cod/dehydrated"] += 1
 
-        team_info["stats"].update(get_player_history(self.env.realm, agent_id, agent))
+        # team_info["stats"].update(get_player_history(self.env.realm, agent_id, agent))
 
-    if "episode_stats" in infos:
-      sums = defaultdict(float)
-      counts = defaultdict(float)
-      for key, value in infos["episode_stats"].items():
-        sums[key] += value
-        counts[key] += 1
-      for key, value in sums.items():
-        team_info["episode_stats"] = {
-          key: value / counts[key]
-          for key, value in sums.items()
-        }
     return team_reward, team_info
 
 def _symlog(value):

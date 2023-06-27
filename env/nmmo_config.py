@@ -31,7 +31,7 @@ class NmmoMoveConfig(
     self.PLAYER_DEATH_FOG = death_fog_tick
     if maps_path is not None:
       self.PATH_MAPS = maps_path
-    self.PLAYER_LOADER = lambda config: TeamLoader(config, team_helper)
+    self.PLAYER_LOADER = lambda config, np_rand: TeamLoader(config, team_helper, np_rand)
 
 class NmmoCombatConfig(NmmoMoveConfig, nmmo.config.Combat):
   def __init__(self, *args, **kwargs):

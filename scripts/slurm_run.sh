@@ -67,7 +67,10 @@ while true; do
     break
   elif [ $exit_status -eq 137 ]; then
     echo "Job failed due to OOM. Killing child processes..."
-    pkill -P $$
+    pids=$(pgrep -P $$)  # This fetches all child processes of the current process
+    if [ "$pids" != "" ]; then
+      kill $pids  # This kills the child processes
+    fi
     break
   else
     echo "Job failed with exit status $exit_status. Retrying..."
