@@ -53,6 +53,9 @@ if [ ! -z "$experiment_name" ]; then
   ln -s "$logfile" "$symlink"
 fi
 
+max_retries=5
+retry_count=0
+
 while true; do
   stdbuf -oL -eL "${args[@]}"
 
@@ -73,11 +76,26 @@ while true; do
       for pid in $pids; do
         echo "PID $pid: $(ps -p $pid -o cmd=)"
       done
-      kill $pids  # This kills the child processes
+      pkill -P $$ python  # This kills the child processes
     fi
     break
+  elif [ $exit_status -eq 143 ]; then
+    echo "Killing Zombie processes..."
+    pids=$(pgrep -P $$ python)
+    for pid in $pids; do
+      if [ $(ps -o stat= -p $pid) == "Z" ]; then
+        kill -9 $pid
+        echo "Killed zombie process $pid"
+      fi
+    done
   else
-    echo "Job failed with exit status $exit_status. Retrying..."
+    retry_count=$((retry_count + 1))
+    if [ $retry_count -gt $max_retries ]; then
+      echo "Job failed with exit status $exit_status. Maximum retries exceeded. Exiting..."
+      break
+    fi
+    echo "Job failed with exit status $exit_status. Retrying in 10 seconds..."
+    sleep 10
   fi
 done
 
