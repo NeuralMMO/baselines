@@ -69,9 +69,9 @@ while true; do
     echo "Job failed due to torch.cuda.OutOfMemoryError."
   elif [ $exit_status -eq 137 ]; then
     echo "Job failed due to OOM. Killing child processes..."
-    pids=$(pgrep -P $$ python)  # This fetches all child processes of the current process
+    pids=$(pgrep -P $$)  # This fetches all child processes of the current process
     if [ "$pids" != "" ]; then
-      echo "The following Python processes will be killed:"
+      echo "The following processes will be killed:"
       for pid in $pids; do
         echo "PID $pid: $(ps -p $pid -o cmd=)"
       done
