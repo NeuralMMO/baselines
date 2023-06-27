@@ -81,7 +81,7 @@ while true; do
     fi
 
     # Killing processes that have the experiment name in their command line
-    experiment_pids=$(pgrep -f "$experiment_name")
+    experiment_pids=$(pgrep -f "$experiment_name" | grep python)
     if [ "$experiment_pids" != "" ]; then
       echo "The following processes with '$experiment_name' will be killed:"
       for pid in $experiment_pids; do
