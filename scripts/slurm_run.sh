@@ -78,7 +78,6 @@ while true; do
       done
       pkill -P $$ python  # This kills the child processes
     fi
-    break
   elif [ $exit_status -eq 143 ]; then
     echo "Killing Zombie processes..."
     pids=$(pgrep -P $$ python)
