@@ -67,7 +67,6 @@ while true; do
     break
   elif [ $exit_status -eq 101 ]; then
     echo "Job failed due to torch.cuda.OutOfMemoryError."
-    break
   elif [ $exit_status -eq 137 ]; then
     echo "Job failed due to OOM. Killing child processes..."
     pids=$(pgrep -P $$ python)  # This fetches all child processes of the current process
@@ -87,15 +86,14 @@ while true; do
         echo "Killed zombie process $pid"
       fi
     done
-  else
-    retry_count=$((retry_count + 1))
-    if [ $retry_count -gt $max_retries ]; then
-      echo "Job failed with exit status $exit_status. Maximum retries exceeded. Exiting..."
-      break
-    fi
-    echo "Job failed with exit status $exit_status. Retrying in 10 seconds..."
-    sleep 10
   fi
+  retry_count=$((retry_count + 1))
+  if [ $retry_count -gt $max_retries ]; then
+    echo "Job failed with exit status $exit_status. Maximum retries exceeded. Exiting..."
+    break
+  fi
+  echo "Job failed with exit status $exit_status. Retrying in 10 seconds..."
+  sleep 10
 done
 
 echo "Slurm Job completed."
