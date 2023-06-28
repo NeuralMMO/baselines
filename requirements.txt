@@ -7,7 +7,7 @@ tensorboard
 wandb
 torchtyping
 
-# for OpenElm
+# for TaskEncoder and OpenELMTaskGenerator
 transformers
 accelerate
 openelm

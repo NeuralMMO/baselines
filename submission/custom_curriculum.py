@@ -1,7 +1,4 @@
-import inspect
-import random
-
-import nmmo.task
+# pylint: disable=wildcard-import,invalid-name,unused-wildcard-import,unused-argument
 
 # allow custom functions to use pre-built eval functions without prefix
 from nmmo.task.base_predicates import *
@@ -9,6 +6,7 @@ from nmmo.task.base_predicates import norm as norm_progress
 
 ##############################################################################
 # define custom evaluation functions
+# pylint: disable=redefined-outer-name
 
 def PracticeFormation(gs, subject, dist, num_tick):
   return norm_progress(AllMembersWithinRange(gs, subject, dist) * TickGE(gs, subject, num_tick))

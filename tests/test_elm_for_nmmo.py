@@ -24,8 +24,9 @@ class TestElmForNmmo(unittest.TestCase):
     train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
     eval_task_spec = task_generator.generate_tasks(NUM_TEST_TASKS)
 
-    # this may take a while, so test the individual functions below
-    #new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS)
+    # to actually run elm, remove debug=True
+    new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS,
+                                                debug=True)
 
   def test_gnereate_task_spec(self):
     # see also elm_helper.sample_parameter
