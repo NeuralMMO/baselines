@@ -7,11 +7,11 @@ from tqdm import tqdm
 from pufferlib.emulation import Binding
 
 from env.nmmo_env import RewardsConfig
-from env.nmmo_config import NmmoConfig
+from env.nmmo_config import NmmoMoveConfig
 from env.nmmo_team_env import NMMOTeamEnv
 from lib.team.team_helper import TeamHelper
 from model.realikun.model import ModelArchitecture
-from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.baseline_agent import BaselineAgent
 
 HORIZON = 30
 RANDOM_SEED = random.randint(0, 100000)
@@ -21,7 +21,7 @@ def init_team_env(model_weights):
   num_teams = ModelArchitecture.NUM_TEAMS
   team_size = ModelArchitecture.NUM_PLAYERS_PER_TEAM
 
-  config = NmmoConfig(num_teams=num_teams, team_size=team_size)
+  config = NmmoMoveConfig(num_teams=num_teams, team_size=team_size)
   reward_config = RewardsConfig()
 
   team_helper = TeamHelper({
@@ -39,7 +39,7 @@ def init_team_env(model_weights):
 
   agent_list = []
   for _ in range(num_teams):
-    agent_list.append(BaselineAgent(model_weights, binding))
+    agent_list.append(BaselineAgent(binding, weights_path=model_weights))
 
   return team_env, agent_list
 

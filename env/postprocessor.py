@@ -1,8 +1,11 @@
 
+from collections import defaultdict
 from os import environ
+import os
 from re import T
 import resource
 from typing import Dict, List
+from xxlimited import foo
 from attr import dataclass
 
 import nmmo
@@ -10,6 +13,11 @@ from pettingzoo.utils.env import AgentID
 import numpy as np
 
 from nmmo.lib.log import EventCode
+
+import pufferlib
+import pufferlib.emulation
+from traitlets import default
+
 
 @dataclass
 class RewardsConfig:
@@ -20,69 +28,73 @@ class RewardsConfig:
   achievements: bool = False
   environment: bool = False
 
-class NMMOEnv(nmmo.Env):
-  def __init__(
-      self, config,
-      rewards_config: RewardsConfig
-    ):
-    super().__init__(config)
+class Postprocessor(pufferlib.emulation.Postprocessor):
+  def __init__(self, env, teams, team_id, rewards_config):
     self._rewards_config = rewards_config
     self._achievements = {}
+    super().__init__(env, teams, team_id)
 
-  def reset(self, map_id=None, seed=None, options=None):
+  def reset(self, team_obs):
     self._achievements = {
-      id: {} for id in self.possible_agents
+      id: {} for id in self.env.possible_agents
     }
-    return super().reset(map_id, seed, options)
 
-  def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
-    rewards, infos = super()._compute_rewards(agents, dones)
+  def rewards(self, rewards, dones, infos, step):
+    agents = list(set(rewards.keys()).union(set(dones.keys())))
     if not self._rewards_config.environment:
       rewards = { id: 0 for id in agents }
 
-    for agent_id in agents:
-      if agent_id not in infos:
-        infos[agent_id] = {}
+    team_reward = sum(rewards.values())
+    team_info = {"stats": defaultdict(float)}
 
-      agent = self.realm.players.get(agent_id)
-      assert agent is not None, f'Agent {agent_id} not found'
+    for agent_id in agents:
+      agent = self.env.realm.players.dead_this_tick.get(
+        agent_id, self.env.realm.players.get(agent_id))
+
+      if agent is None:
+        continue
 
       if self._rewards_config.hunger:
-        if agent.food.val / self.config.RESOURCE_BASE < 0.4:
-          rewards[agent_id] -= 0.1
+        if agent.food.val / self.env.config.RESOURCE_BASE < 0.4:
+          team_reward -= 0.1
 
       if self._rewards_config.thirst:
-        if agent.water.val / self.config.RESOURCE_BASE < 0.4:
-          rewards[agent_id] -= 0.1
+        if agent.water.val / self.env.config.RESOURCE_BASE < 0.4:
+          team_reward -= 0.1
 
       if self._rewards_config.health:
-        if agent.health.val / self.config.PLAYER_BASE_HEALTH > 0.4:
-          rewards[agent_id] -= 0.1
+        if agent.health.val / self.env.config.PLAYER_BASE_HEALTH > 0.4:
+          team_reward -= 0.1
 
       if self._rewards_config.achievements:
-        rewards[agent_id] += 10*score_unique_events(self.realm, agent_id)
+        team_reward += 10*score_unique_events(self.env.realm, agent_id)
 
+      # This is probably bad
       if self._rewards_config.symlog_rewards:
-        rewards[agent_id] = _symlog(rewards[agent_id])
+        team_reward = _symlog(rewards[agent_id])
 
-    for agent_id in dones.keys():
-      assert dones[agent_id], f'Agent {agent_id} is not done'
-      # TODO: sometimes dead agents haven't been culled yet
-      agent = self.realm.players.dead_this_tick.get(
-        agent_id, self.realm.players.get(agent_id))
-      assert agent is not None, f'Agent {agent_id} not found'
+      if agent_id in dones:
+        if agent.damage.val > 0:
+          team_info["stats"]["cod/attacked"] += 1
+        elif agent.food.val == 0:
+          team_info["stats"]["cod/starved"] += 1
+        elif agent.water.val == 0:
+          team_info["stats"]["cod/dehydrated"] += 1
 
-      if agent_id not in infos:
-        infos[agent_id] = {}
+        team_info["stats"].update(get_player_history(self.env.realm, agent_id, agent))
 
-      infos[agent_id]["cod/starved"] = agent.food.val == 0
-      infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
-      infos[agent_id]["cod/attacked"] = agent.damage.val > 0
-      infos[agent_id]["lifespan"] = self.realm.tick
-
-      infos[agent_id].update(get_player_history(self.realm, agent_id, agent))
-
-    return rewards, infos
+    if "episode_stats" in infos:
+      sums = defaultdict(float)
+      counts = defaultdict(float)
+      for key, value in infos["episode_stats"].items():
+        sums[key] += value
+        counts[key] += 1
+      for key, value in sums.items():
+        team_info["episode_stats"] = {
+          key: value / counts[key]
+          for key, value in sums.items()
+        }
+    return team_reward, team_info
 
 def _symlog(value):
     """Applies symmetrical logarithmic transformation to a float value."""

@@ -36,7 +36,7 @@ class OpponentPoolEnv(AgentEnv):
     self._agents = {}
 
     # Select new policies for each opponent, use a NoopAgent if no policy is available
-    new_policy_ids = self._policy_pool.select_policies(len(self._opponent_ids))
+    new_policy_ids = self._policy_pool.select_best_policies(len(self._opponent_ids))
     if new_policy_ids is None:
        self._agents = {agent_id: NoopAgent() for agent_id in self._opponent_ids}
     else:

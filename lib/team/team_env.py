@@ -1,16 +1,25 @@
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, OrderedDict
 
 import gym
+import numpy as np
 from pettingzoo.utils.env import AgentID, ParallelEnv
 
 from lib.team.team_helper import TeamHelper
 
+
 class TeamEnv(ParallelEnv):
   # pylint: disable=arguments-renamed
-  def __init__(self, env: ParallelEnv, team_helper: TeamHelper):
+  def __init__(self, env: ParallelEnv, team_helper: TeamHelper,
+               include_dummy_obs: bool = False):
     self._env = env
     self._team_helper = team_helper
+
+    self._include_dummy_obs = include_dummy_obs
+    if include_dummy_obs:
+      self._dummy_obs = {}
+      for team_id in team_helper.teams:
+        self._dummy_obs[team_id] = self._env.observation_space(team_id).sample()
 
     self.possible_agents = list(range(team_helper.num_teams))
     self._num_alive = None
@@ -28,11 +37,11 @@ class TeamEnv(ParallelEnv):
     })
 
   def _group_by_team(self, data: Dict[int, Any]) -> Dict[int, Dict[int, Any]]:
-    grouped_data = defaultdict(dict)
+    grouped_data = defaultdict(OrderedDict)
     for agent_id, value in data.items():
       team_id, pos = self._team_helper.team_and_position_for_agent[agent_id]
       grouped_data[team_id][pos] = value
-    return dict(grouped_data)
+    return OrderedDict(grouped_data)
 
   def _team_actions_to_agent_actions(self,
                                      team_actions: Dict[int, Dict[int, Any]]) -> Dict[int, Any]:
@@ -54,6 +63,14 @@ class TeamEnv(ParallelEnv):
     agent_actions = self._team_actions_to_agent_actions(actions)
     gym_obs, rewards, dones, infos = self._env.step(agent_actions)
     merged_obs = self._group_by_team(gym_obs)
+
+    if self._include_dummy_obs:
+      for team_id in self._team_helper.teams:
+        for pos in range(self._team_helper.team_size[team_id]):
+          if pos not in merged_obs[team_id]:
+            merged_obs[team_id][pos] = self._dummy_obs[team_id]
+            print("filling dummy obs for team", team_id, "pos", pos)
+
     merged_rewards = {
       tid: sum(vals.values()) / self._team_helper.team_size[tid]
       for tid, vals in self._group_by_team(rewards).items()
@@ -62,7 +79,7 @@ class TeamEnv(ParallelEnv):
 
     merged_dones = {}
     for team_id, team_dones in self._group_by_team(dones).items():
-      self._num_alive[team_id] -= sum(v for _, v in team_dones.items())
+      self._num_alive[team_id] -= sum(team_dones.values())
       merged_dones[team_id] = self._num_alive[team_id] == 0
 
     return merged_obs, merged_rewards, merged_dones, merged_infos

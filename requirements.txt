@@ -6,6 +6,7 @@ stable_baselines3
 tensorboard
 wandb
 torchtyping
+pandas
 
 # for TaskEncoder and OpenELMTaskGenerator
 transformers

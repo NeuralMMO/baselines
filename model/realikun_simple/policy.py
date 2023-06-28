@@ -1,13 +1,19 @@
+from re import M
 import torch
 import pufferlib
 import pufferlib.models
 import pufferlib.frameworks.cleanrl
 
-from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
+from model.realikun_simple.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
 from env.nmmo_team_env import NMMOTeamEnv
 
-class RealikunPolicy(pufferlib.models.Policy):
-  def __init__(self, binding, input_size=2048, hidden_size=4096):
+class RealikunSimplifiedPolicy(pufferlib.models.Policy):
+  def __init__(
+      self,
+      binding,
+      input_size=ModelArchitecture.LSTM_HIDDEN // 2,
+      hidden_size=ModelArchitecture.LSTM_HIDDEN):
+
     super().__init__(binding, input_size, hidden_size)
 
     # CHECK: Do these belong here?
@@ -37,19 +43,25 @@ class RealikunPolicy(pufferlib.models.Policy):
       ModelArchitecture.ENTITY_NUM_FEATURES,
       ModelArchitecture.ATTENTION_HIDDEN)
 
-    self.interact_net = InteractionBlock(ModelArchitecture.ATTENTION_HIDDEN)
+    # self.interact_net = InteractionBlock(ModelArchitecture.ATTENTION_HIDDEN) xcxc
+    self.interact_net = torch.nn.Linear(
+      ModelArchitecture.SELF_EMBED,
+      ModelArchitecture.ATTENTION_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM)
 
-    self.value_head = torch.nn.Linear(ModelArchitecture.LSTM_HIDDEN, 1)
+    self.value_head = torch.nn.Linear(
+      ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM, 1)
 
     self.observation_space = binding.featurized_single_observation_space
     self.single_observation_space = binding.single_observation_space
 
     self.policy_head = PolicyHead(
-        ModelArchitecture.LSTM_HIDDEN, ModelArchitecture.ACTION_NUM_DIM)
+        ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM,
+        ModelArchitecture.ACTION_NUM_DIM)
 
   def critic(self, hidden):
       hidden = hidden.view(
-        -1, ModelArchitecture.NUM_PLAYERS_PER_TEAM, ModelArchitecture.LSTM_HIDDEN)
+        -1, ModelArchitecture.NUM_PLAYERS_PER_TEAM,
+        ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM)
       return self.value_head(hidden.mean(dim=1))
 
   def encode_observations(self, env_outputs):
@@ -67,15 +79,17 @@ class RealikunPolicy(pufferlib.models.Policy):
 
     h_self = self.self_net(x) # (batch_size, num_agents, SELF_EMBED)
 
-    h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
-    h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
-    h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
+    # xcxc
+    # h_ally = self.ally_net(self._self_as_ally_feature(h_self), h_self)
+    # h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
+    # h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
 
-    h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
+    # h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
+    h_inter = self.interact_net(h_self) # (batch_size, MA.SELF_EMBED)
 
-    self.recurrent_policy.h_self = h_self
-    self.recurrent_policy.h_inter = h_inter
-    self.recurrent_policy.reset = x["reset"]
+    # self.recurrent_policy.h_self = h_self
+    # self.recurrent_policy.h_inter = h_inter
+    # self.recurrent_policy.reset = x["reset"]
 
     batch_size, num_agents, num_features = h_inter.shape
     h_inter = h_inter.view(batch_size, num_agents*num_features)
@@ -86,7 +100,7 @@ class RealikunPolicy(pufferlib.models.Policy):
     batch_size = hidden.shape[0]
 
     # reshape the batch so that we compute actions per-agent
-    hidden = hidden.view(-1, 512)
+    hidden = hidden.view(-1, ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM)
     action_logits = self.policy_head(hidden)
     if concat:
       action_logits = torch.cat(action_logits, dim=-1)
@@ -124,8 +138,8 @@ class RealikunPolicy(pufferlib.models.Policy):
   @staticmethod
   def create_policy():
     return pufferlib.frameworks.cleanrl.make_policy(
-      RealikunPolicy,
-      recurrent_cls=MemoryBlock,
-      recurrent_args=[2048, 4096],
+      RealikunSimplifiedPolicy,
+      # recurrent_cls=MemoryBlock, # xcxc
+      recurrent_args=[ModelArchitecture.LSTM_HIDDEN // 2, ModelArchitecture.LSTM_HIDDEN],
       recurrent_kwargs={'num_layers': 1},
     )

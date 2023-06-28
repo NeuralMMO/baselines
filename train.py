@@ -1,25 +1,34 @@
 import argparse
+import logging
 import os
 import re
 import sys
+from numpy import save
 
-import nmmo
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 import torch
-from env.nmmo_config import NmmoConfig
-from env.nmmo_env import RewardsConfig
+from env.nmmo_config import NmmoMoveConfig, nmmo_config
+from env.nmmo_env import NMMOEnv, RewardsConfig
+from env.postprocessor import Postprocessor
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 
-from model.realikun.baseline_agent import BaselineAgent
+from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
+from nmmo.render.replay_helper import DummyReplayHelper
 
 import cleanrl_ppo_lstm as cleanrl_ppo_lstm
-from model.realikun.policy import BaselinePolicy
 from env.nmmo_team_env import NMMOTeamEnv
+from lib.team.team_env import TeamEnv
 from lib.team.team_helper import TeamHelper
+
+import nmmo
+
+import logging
+
+from lib.team.team_replay_helper import TeamReplayHelper
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -30,6 +39,10 @@ if __name__ == "__main__":
     "--model.init_from_path",
     dest="model_init_from_path", type=str, default=None,
     help="path to model to load (default: None)")
+  parser.add_argument(
+    "--model.type",
+    dest="model_type", type=str, default="realikun",
+    help="model type (default: realikun)")
 
   parser.add_argument(
     "--env.num_teams", dest="num_teams", type=int, default=16,
@@ -50,13 +63,19 @@ if __name__ == "__main__":
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
     help="number of ticks before death fog starts (default: None)")
   parser.add_argument(
-    "--env.moves_only", dest="moves_only",
+    "--env.combat_enabled", dest="combat_enabled",
     action="store_true", default=False,
     help="only allow moves (default: False)")
   parser.add_argument(
-    "--env.num_maps", dest="num_maps", type=int, default=5,
-    help="number of maps to use for training (default: 1)"
-  )
+    "--env.reset_on_death", dest="reset_on_death",
+    action="store_true", default=False,
+    help="reset on death (default: False)")
+  parser.add_argument(
+    "--env.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for training (default: 1)")
+  parser.add_argument(
+    "--env.maps_path", dest="maps_path", type=str, default="maps/train/medium",
+    help="path to maps to use for training (default: None)")
 
   parser.add_argument(
     "--reward.hunger", dest="rewards_hunger",
@@ -74,11 +93,15 @@ if __name__ == "__main__":
     "--reward.achievements", dest="rewards_achievements",
     action="store_true", default=False,
     help="enable achievement rewards (default: False)")
+  parser.add_argument(
+    "--reward.environment", dest="rewards_environment",
+    action="store_true", default=False,
+    help="enable environment rewards (default: False)")
 
   parser.add_argument(
-    "--reward.disable_symlog", dest="symlog_rewards",
-    action="store_false", default=True,
-    help="disable symlog rewards (default: True)")
+    "--reward.symlog", dest="symlog_rewards",
+    action="store_true", default=False,
+    help="symlog rewards (default: True)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -144,24 +167,30 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
-  config = NmmoConfig(
-    num_teams=args.num_teams,
-    team_size=args.team_size,
-    num_npcs=args.num_npcs,
-    num_maps=args.num_maps,
-    max_episode_length=args.max_episode_length,
-    death_fog_tick=args.death_fog_tick
-  )
-
-  # Historic self play is not yet working, so we require
-  # all the players to be learners
-  assert args.num_teams == args.num_learners
-
   # Set up the teams
   team_helper = TeamHelper({
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
     for i in range(args.num_teams)}
   )
+
+  config = nmmo_config(
+    team_helper,
+    dict(
+      # num_npcs=args.num_npcs,
+      num_maps=args.num_maps,
+      maps_path=args.maps_path,
+      max_episode_length=args.max_episode_length,
+      death_fog_tick=args.death_fog_tick,
+      combat_enabled=args.combat_enabled,
+    )
+  )
+  config.RESET_ON_DEATH = args.reset_on_death
+
+  # Historic self play is not yet working, so we require
+  # all the players to be learners
+  # assert args.num_teams == args.num_learners
+
+
 
   # Create a pool of opponents
   if args.opponent_pool is None:
@@ -171,47 +200,70 @@ if __name__ == "__main__":
 
   binding = None
 
+  rewards_config = RewardsConfig(
+    symlog_rewards=args.symlog_rewards,
+    hunger=args.rewards_hunger,
+    thirst=args.rewards_thirst,
+    health=args.rewards_health,
+    achievements=args.rewards_achievements,
+    environment=args.rewards_environment
+  )
+
   # Create an environment factory that uses the opponent pool
   # for some of the agents, while letting the rest be learners
   def make_agent(model_weights):
     if binding is None:
       return None
-    return BaselineAgent(model_weights, binding)
+    return BaselineAgent(binding, model_weights=model_weights)
 
   def make_env():
-    return OpponentPoolEnv(
-      NMMOTeamEnv(config, team_helper,
-                  RewardsConfig(
-                    symlog_rewards=args.symlog_rewards,
-                    hunger=args.rewards_hunger,
-                    thirst=args.rewards_thirst,
-                    health=args.rewards_health,
-                    achievements=args.rewards_achievements
-                  ),
-                  moves_only=args.moves_only),
-      range(args.num_learners, team_helper.num_teams),
-      opponent_pool,
-      make_agent
-    )
+    if args.model_type in ["realikun", "realikun-simplified"]:
+      env = NMMOTeamEnv(
+        config, team_helper, rewards_config, moves_only=args.moves_only)
+    elif args.model_type in ["random", "basic", "basic-lstm", "basic-teams", "basic-teams-lstm"]:
+      env = nmmo.Env(config)
+    else:
+      raise ValueError(f"Unknown model type: {args.model_type}")
+
+    return env
+
+    # return OpponentPoolEnv(
+    #   env,
+    #   range(args.num_learners, team_helper.num_teams),
+    #   opponent_pool,
+    #   make_agent
+    # )
 
   # Create a pufferlib binding, and use it to initialize the
   # opponent pool and create the learner agent
+  puffer_teams = None
+  if args.model_type == "basic-teams":
+    puffer_teams = team_helper.teams
+
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
+    teams=puffer_teams,
+    postprocessor_cls=Postprocessor,
+    postprocessor_args=[rewards_config]
   )
   opponent_pool.binding = binding
-  learner_agent = BaselinePolicy.create_policy()(binding)
 
   # Initialize the learner agent from a pretrained model
+  learner_policy = None
   if args.model_init_from_path is not None:
-    print(f"Initializing model from {args.model_init_from_path}...")
+    logging.info(f"Initializing model from {args.model_init_from_path}...")
+    model = torch.load(args.model_init_from_path)
+    learner_policy = BaselineAgent.policy_class(
+      model.get("model_type", "realikun"))(binding)
     cleanrl_ppo_lstm.load_matching_state_dict(
-      learner_agent,
-      torch.load(args.model_init_from_path)["agent_state_dict"]
+      learner_policy,
+      model["agent_state_dict"]
     )
+  else:
+    learner_policy = BaselineAgent.policy_class(args.model_type)(binding)
 
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
@@ -225,67 +277,72 @@ if __name__ == "__main__":
 
   experiment_dir = os.path.join(args.experiments_dir, args.experiment_name)
 
-  print("Experiment directory:", experiment_dir)
   os.makedirs(experiment_dir, exist_ok=True)
+  logging.info(f"Experiment directory {experiment_dir}")
+
+  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
+  if args.use_serial_vecenv:
+    vec_env_cls = pufferlib.vectorization.serial.VecEnv
+
+
+  logging.info("Starting training...")
+  trainer = cleanrl_ppo_lstm.CleanPuffeRL(
+    binding,
+    learner_policy,
+
+    run_name = args.experiment_name,
+
+    cuda=torch.cuda.is_available(),
+    vec_backend=vec_env_cls,
+    total_timesteps=args.train_num_steps,
+
+    num_envs=args.num_envs,
+    num_cores=args.num_cores or args.num_envs,
+    num_buffers=args.num_buffers,
+
+    num_agents=args.num_teams,
+    num_steps=args.num_steps,
+
+    # wandb loggin
+    config=vars(args),
+
+    # PPO
+    learning_rate=args.ppo_learning_rate,
+    # clip_coef=0.2, # ratio_clip
+    # dual_clip_c=3.,
+    # ent_coef=0.001 # entropy_loss_weight,
+    # grad_clip=1.0,
+    # bptt_trunc_len=16,
+  )
+
   resume_from_path = None
   checkpoins = os.listdir(experiment_dir)
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
+    trainer.resume_model(resume_from_path)
 
-  def epoch_end_callback(state):
-    if experiment_dir is not None and state["update"] % args.checkpoint_interval == 0:
-        save_path = os.path.join(experiment_dir, f'{state["update"]:06d}.pt')
-        temp_path = os.path.join(experiment_dir, f'.{state["update"]:06d}.pt.tmp')
-        print(f'Saving checkpoint to {save_path}')
-        torch.save(state, temp_path)
-        os.rename(temp_path, save_path)
-        print(f"Adding {save_path} to policy pool. reward={state['mean_reward']}")
-        opponent_pool.add_policy(save_path, state["mean_reward"])
+  trainer_state = trainer.allocate_storage()
+  if args.wandb_project is not None:
+    trainer.init_wandb(args.wandb_project, args.wandb_entity)
 
-  print("Starting training...")
-  try:
-    cleanrl_ppo_lstm.train(
-      binding,
-      learner_agent,
-      run_name = args.experiment_name,
-
-      cuda=torch.cuda.is_available(),
-      total_timesteps=args.train_num_steps,
-      track=(args.wandb_project is not None),
-
-      num_envs=args.num_envs,
-      num_cores=args.num_cores or args.num_envs,
-      num_buffers=args.num_buffers,
-      use_serial_vecenv=args.use_serial_vecenv,
-
+  num_updates = 1000000
+  for update in range(trainer.update+1, num_updates + 1):
+    trainer.evaluate(learner_policy, trainer_state)
+    trainer.train(
+      learner_policy,
+      trainer_state,
       num_minibatches=args.ppo_num_minibatches,
       update_epochs=args.ppo_update_epochs,
-
-      num_agents=args.num_learners,
-      num_steps=args.num_steps,
       bptt_horizon=args.bptt_horizon,
-
-      wandb_project_name=args.wandb_project,
-      wandb_entity=args.wandb_entity,
-
-      epoch_end_callback=epoch_end_callback,
-      resume_from_path=resume_from_path,
-
-      # PPO
-      learning_rate=args.ppo_learning_rate,
-      # clip_coef=0.2, # ratio_clip
-      # dual_clip_c=3.,
-      # ent_coef=0.001 # entropy_loss_weight,
-      # grad_clip=1.0,
-      # bptt_trunc_len=16,
     )
+    if experiment_dir is not None and update % args.checkpoint_interval == 1:
+      save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
+      trainer.save_model(save_path,
+                         model_type=args.model_type)
+      logging.info(f"Adding {save_path} to policy pool.")
+      opponent_pool.add_policy(save_path)
 
-  except RuntimeError as e:
-    if "CUDA out of memory" in str(e):
-        print("Exitting due to CUDA out of memory")
-        sys.exit(101)
-    else:
-      raise e
+  trainer.close()
 
 # lr: 0.0001 -> 0.00001
 # ratio_clip: 0.2
