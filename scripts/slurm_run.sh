@@ -53,7 +53,7 @@ if [ ! -z "$experiment_name" ]; then
   ln -s "$logfile" "$symlink"
 fi
 
-max_retries=5
+max_retries=50
 retry_count=0
 
 while true; do
