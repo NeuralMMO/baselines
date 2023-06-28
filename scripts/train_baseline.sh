@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python -u -m train \
+python -u -O -m train \
 --rollout.num_envs=8 \
 --rollout.num_buffers=2  \
 --ppo.bptt_horizon=8 \
