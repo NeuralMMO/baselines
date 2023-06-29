@@ -171,7 +171,7 @@ if __name__ == "__main__":
       # num_npcs=args.num_npcs,
       num_maps=args.num_maps,
       maps_path=f"{args.maps_path}/{args.map_size}/",
-      maps_size=args.map_size,
+      map_size=args.map_size,
       max_episode_length=args.max_episode_length,
       death_fog_tick=args.death_fog_tick,
       combat_enabled=args.combat_enabled,
