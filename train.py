@@ -63,8 +63,11 @@ if __name__ == "__main__":
     "--env.num_maps", dest="num_maps", type=int, default=128,
     help="number of maps to use for training (default: 1)")
   parser.add_argument(
-    "--env.maps_path", dest="maps_path", type=str, default="maps/train/medium",
+    "--env.maps_path", dest="maps_path", type=str, default="maps/train/",
     help="path to maps to use for training (default: None)")
+  parser.add_argument(
+    "--env.map_size", dest="map_size", type=int, default=128,
+    help="size of maps to use for training (default: 128)")
 
   parser.add_argument(
     "--reward.hunger", dest="rewards_hunger",
@@ -167,7 +170,8 @@ if __name__ == "__main__":
     dict(
       # num_npcs=args.num_npcs,
       num_maps=args.num_maps,
-      maps_path=args.maps_path,
+      maps_path=f"{args.maps_path}/{args.map_size}/",
+      maps_size=args.map_size,
       max_episode_length=args.max_episode_length,
       death_fog_tick=args.death_fog_tick,
       combat_enabled=args.combat_enabled,

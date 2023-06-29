@@ -14,8 +14,9 @@ class NmmoMoveConfig(
   def __init__(
       self,
       team_helper,
+      maps_path = None,
+      map_size = 128,
       num_maps=5,
-      maps_path=None,
       max_episode_length=1024,
       death_fog_tick=None,
       **args
@@ -31,6 +32,8 @@ class NmmoMoveConfig(
     self.PLAYER_DEATH_FOG = death_fog_tick
     if maps_path is not None:
       self.PATH_MAPS = maps_path
+    self.MAP_CENTER = map_size
+
     self.PLAYER_LOADER = lambda config, np_rand: TeamLoader(config, team_helper, np_rand)
 
 class NmmoCombatConfig(NmmoMoveConfig, nmmo.config.Combat):
