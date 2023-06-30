@@ -2,6 +2,8 @@ from types import ModuleType
 import ast
 import inspect
 import json
+from typing import List
+import torch
 
 from tqdm import tqdm
 from transformers import AutoTokenizer, CodeGenModel
@@ -24,11 +26,14 @@ def extract_module_fn(module: ModuleType):
 # TODO: when given multiple tasks, can agents prioritize and/or multi-task?
 #   It seems to be a research questions.
 class TaskEncoder:
-  def __init__(self, checkpoint: str, context: ModuleType): # OpenELM default
-    self.model = CodeGenModel.from_pretrained(checkpoint)
+  def __init__(self, checkpoint: str, context: ModuleType, batch_size=64): # OpenELM default
+    self.device = "cuda" if torch.cuda.is_available() else "cpu"
+    self.model = CodeGenModel.from_pretrained(checkpoint).to(self.device)
     self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    self.tokenizer.pad_token = self.tokenizer.eos_token
+    self.batch_size = batch_size
 
-    blank_embedding = self._get_embedding("# just to get the embedding size")
+    blank_embedding = self._get_embedding(["# just to get the embedding size"])
     self.embed_dim = len(blank_embedding)
 
     # context is usually the module where the task_spec is defined,
@@ -39,10 +44,16 @@ class TaskEncoder:
   def update_context(self, context: ModuleType):
     self._fn_dict = extract_module_fn(context)
 
-  def _get_embedding(self, prompt):
-    tokens = self.tokenizer(prompt, return_tensors="pt", truncation=True)
-    embedding = self.model(**tokens)[0].mean(dim=1)
-    return embedding[0].detach().numpy()
+  def _get_embedding(self, prompts: List[str]):
+    all_embeddings = []
+    for i in range(0, len(prompts), self.batch_size):
+      # print(i)
+      batch = prompts[i:i+self.batch_size]
+      tokens = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(self.device)
+      embeddings = self.model(**tokens)[0].mean(dim=1).detach().cpu().numpy()
+      print(embeddings.shape)
+      all_embeddings.extend(embeddings)
+    return all_embeddings
 
   def _get_task_deps_src(self, eval_fn):
     eval_src = inspect.getsource(eval_fn)
@@ -78,9 +89,9 @@ class TaskEncoder:
 
     return task_specific_prompt
 
-  def get_task_embedding(self, task_spec,
-                         save_to_file:str =None):
+  def get_task_embedding(self, task_spec, save_to_file:str =None):
     task_spec_with_embedding = []
+    prompts = []
     for single_spec in tqdm(task_spec):
       if len(single_spec) == 3:
         reward_to, eval_fn, eval_kwargs = single_spec
@@ -92,8 +103,12 @@ class TaskEncoder:
         raise ValueError('len(single_spec) must be either 3 or 4')
 
       prompt = self._construct_prompt(reward_to, eval_fn, eval_kwargs)
-      task_kwargs['embedding'] = self._get_embedding(prompt)
+      prompts.append(prompt)
       task_spec_with_embedding.append((reward_to, eval_fn, eval_kwargs, task_kwargs))
+
+    embeddings = self._get_embedding(prompts)
+    for embedding, task_spec in zip(embeddings, task_spec_with_embedding):
+      task_spec[3]['embedding'] = embedding
 
     if save_to_file: # use save_to_file as the file name, and assume it's json
       with open(save_to_file, "w+", encoding="utf-8") as f:
