@@ -2,17 +2,16 @@
 
 # allow custom functions to use pre-built eval functions without prefix
 from nmmo.task.base_predicates import *
-from nmmo.task.base_predicates import norm as norm_progress
 
 ##############################################################################
 # define custom evaluation functions
 # pylint: disable=redefined-outer-name
 
 def PracticeFormation(gs, subject, dist, num_tick):
-  return norm_progress(AllMembersWithinRange(gs, subject, dist) * TickGE(gs, subject, num_tick))
+  return norm(AllMembersWithinRange(gs, subject, dist) * TickGE(gs, subject, num_tick))
 
 def PracticeInventoryManagement(gs, subject, space, num_tick):
-  return norm_progress(InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick))
+  return norm(InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick))
 
 def PracticeEating(gs, subject):
   """The progress, the max of which is 1, should
@@ -26,7 +25,7 @@ def PracticeEating(gs, subject):
     progress += .1
   if num_eat >= 3:
     progress += .3
-  return norm_progress(progress)
+  return norm(progress)
 
 ##############################################################################
 # define learning task spec, a list of tuple: (reward_to, eval_fn, eval_fn_kwargs)

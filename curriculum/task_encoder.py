@@ -26,7 +26,7 @@ def extract_module_fn(module: ModuleType):
 # TODO: when given multiple tasks, can agents prioritize and/or multi-task?
 #   It seems to be a research questions.
 class TaskEncoder:
-  def __init__(self, checkpoint: str, context: ModuleType, batch_size=64): # OpenELM default
+  def __init__(self, checkpoint: str, context: ModuleType, batch_size=64):
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
     self.model = CodeGenModel.from_pretrained(checkpoint).to(self.device)
     self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
@@ -34,7 +34,7 @@ class TaskEncoder:
     self.batch_size = batch_size
 
     blank_embedding = self._get_embedding(["# just to get the embedding size"])
-    self.embed_dim = len(blank_embedding)
+    self.embed_dim = len(blank_embedding[0])
 
     # context is usually the module where the task_spec is defined,
     # so this assumes that it imports and contains all the necessary functions,
@@ -47,11 +47,10 @@ class TaskEncoder:
   def _get_embedding(self, prompts: List[str]):
     all_embeddings = []
     for i in range(0, len(prompts), self.batch_size):
-      # print(i)
       batch = prompts[i:i+self.batch_size]
-      tokens = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(self.device)
+      tokens = self.tokenizer(batch, return_tensors="pt",
+                              padding=True, truncation=True).to(self.device)
       embeddings = self.model(**tokens)[0].mean(dim=1).detach().cpu().numpy()
-      print(embeddings.shape)
       all_embeddings.extend(embeddings)
     return all_embeddings
 
@@ -107,8 +106,8 @@ class TaskEncoder:
       task_spec_with_embedding.append((reward_to, eval_fn, eval_kwargs, task_kwargs))
 
     embeddings = self._get_embedding(prompts)
-    for embedding, task_spec in zip(embeddings, task_spec_with_embedding):
-      task_spec[3]['embedding'] = embedding
+    for embedding, single_spec in zip(embeddings, task_spec_with_embedding):
+      single_spec[3]['embedding'] = embedding
 
     if save_to_file: # use save_to_file as the file name, and assume it's json
       with open(save_to_file, "w+", encoding="utf-8") as f:

@@ -14,7 +14,8 @@ class TestTaskEncoder(unittest.TestCase):
   # pylint: disable=protected-access,bad-builtin
   @classmethod
   def setUpClass(cls):
-    cls.task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum.manual_curriculum)
+    cls.task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum.manual_curriculum,
+                                   batch_size=1) # see test_batch_process()
 
   def test_embed_dim(self):
     self.assertEqual(self.task_encoder.embed_dim, EMBEDDING_DIM)
@@ -42,6 +43,13 @@ class TestTaskEncoder(unittest.TestCase):
     prompt = self.task_encoder._construct_prompt(*single_spec)
     print(prompt)
 
+  def test_batch_process(self):
+    batch_size = 8
+    task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum.manual_curriculum,
+                               batch_size=batch_size)
+    batch_embedding = task_encoder._get_embedding(
+      ["# just to get the embedding size"]*batch_size)
+    self.assertEqual(len(batch_embedding), batch_size)
 
 if __name__ == '__main__':
   unittest.main()
