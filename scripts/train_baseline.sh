@@ -6,7 +6,6 @@ python -u -O -m train \
 --ppo.bptt_horizon=8 \
 --wandb.entity=daveey \
 --wandb.project=nmmo \
---train.opponent_pool=/fsx/home-daveey/experiments/pool.json \
 --train.experiments_dir=/fsx/home-daveey/experiments \
 --train.num_steps=10000000000 \
 --env.num_maps=100 \
