@@ -11,6 +11,5 @@ python -u -O -m train \
 --env.num_maps=100 \
 --env.team_size=8 \
 --env.num_teams=16 \
---env.num_npcs=256 \
 --env.num_learners=16 \
 "${@}"
