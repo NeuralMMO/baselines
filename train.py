@@ -175,6 +175,7 @@ if __name__ == "__main__":
       max_episode_length=args.max_episode_length,
       death_fog_tick=args.death_fog_tick,
       combat_enabled=args.combat_enabled,
+      num_npcs=args.num_npcs,
     )
   )
   config.RESET_ON_DEATH = args.reset_on_death

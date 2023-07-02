@@ -40,10 +40,10 @@ class NmmoCombatConfig(NmmoMoveConfig, nmmo.config.Combat):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-# class NmmoNPCConfig(NmmoCombatConfig, nmmo.config.NPC):
-#   def __init__(self, *args, **kwargs):
-#     super().__init__(*args, **kwargs)
-#     self.NPC_N = kwargs["num_npcs"]
+class NmmoNPCConfig(NmmoCombatConfig, nmmo.config.NPC):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.NPC_N = kwargs["num_npcs"]
 
 # class NmmoProffessionConfig(NmmoNPCConfig, nmmo.config.Profession):
 #   pass
@@ -52,6 +52,9 @@ def nmmo_config(team_helper, args):
   config_cls = NmmoMoveConfig
   if args["combat_enabled"]:
     config_cls = NmmoCombatConfig
+  if args["num_npcs"]:
+    assert args["combat_enabled"], "NPCs require combat"
+    config_cls = NmmoNPCConfig
 
   return config_cls(team_helper, **args)
 
