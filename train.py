@@ -216,6 +216,8 @@ if __name__ == "__main__":
   else:
     learner_policy = BaselineAgent.policy_class(args.model_type)(binding)
 
+  device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
+  learner_policy = learner_policy.to(device)
   opponent_pool = pufferlib.policy_pool.PolicyPool(
     args.num_teams * args.team_size * args.num_envs,
     policies=[learner_policy],
