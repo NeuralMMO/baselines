@@ -216,6 +216,18 @@ if __name__ == "__main__":
   else:
     learner_policy = BaselineAgent.policy_class(args.model_type)(binding)
 
+  opponent_pool = pufferlib.policy_pool.PolicyPool(
+    args.num_teams * args.team_size * args.num_envs,
+    policies=[learner_policy],
+    names=['baseline'],
+    tenured=[True],
+    sample_weights=[1, 1],
+    max_policies=8,
+    path='pool'
+  )
+  opponent_pool.add_policy_copy('baseline', 'anchor', anchor=True)
+
+
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
   if args.experiment_name is None:
@@ -251,6 +263,8 @@ if __name__ == "__main__":
 
     batch_size=args.rollout_batch_size,
 
+    policy_pool=opponent_pool,
+
     # PPO
     learning_rate=args.ppo_learning_rate,
     # clip_coef=0.2, # ratio_clip
@@ -284,6 +298,8 @@ if __name__ == "__main__":
       save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
       trainer.save_model(save_path,
                          model_type=args.model_type)
+      opponent_pool.add_policy_copy('baseline', f'baseline{update}')
+
 
   trainer.close()
 

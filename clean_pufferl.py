@@ -103,6 +103,7 @@ class CleanPuffeRL:
                 max_policies=8,
                 path='pool'
             )
+            self.policy_pool.add_policy_copy('baseline', 'anchor', anchor=True)
 
         # Setup optimizer
         self.optimizer = optim.Adam(
