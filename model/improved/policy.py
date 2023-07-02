@@ -72,6 +72,7 @@ class ImprovedPolicy(pufferlib.models.Policy):
     # This is cursed without clone??
     tile[:, :, :2] -= tile[:, 112:113, :2].clone()
     tile[:, :, :2] += 7
+    print("devices", self.embedding.weight.device, tile.device, self.tile_offset.device)
     tile = self.embedding(
         tile.long().clip(0, 255) + self.tile_offset.to(tile.device)
     )
