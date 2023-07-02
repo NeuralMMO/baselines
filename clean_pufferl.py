@@ -24,6 +24,7 @@ import pufferlib.utils
 import pufferlib.frameworks.cleanrl
 import pufferlib.vectorization.multiprocessing
 import pufferlib.vectorization.serial
+import pufferlib.policy_pool
 import wandb
 
 def unroll_nested_dict(d):
@@ -94,7 +95,14 @@ class CleanPuffeRL:
         # Setup policy pool
         if self.policy_pool is None:
             self.policy_pool = pufferlib.policy_pool.PolicyPool(
-                self.agent, self.num_agents * self.num_envs)
+                self.num_agents * self.num_envs,
+                policies=[self.agent],
+                names=['baseline'],
+                tenured=[True],
+                sample_weights=[1, 1],
+                max_policies=8,
+                path='pool'
+            )
 
         # Setup optimizer
         self.optimizer = optim.Adam(
@@ -270,7 +278,7 @@ class CleanPuffeRL:
             for pol, item in enumerate(i):
                 for agent_info in item:
                     if not agent_info:
-                        continue 
+                        continue
 
                     for name, stat in unroll_nested_dict(agent_info):
                         try:

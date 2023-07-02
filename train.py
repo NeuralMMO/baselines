@@ -15,8 +15,6 @@ from env.nmmo_config import nmmo_config
 from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.agent.baseline_agent import BaselineAgent
-from lib.policy_pool.json_policy_pool import JsonPolicyPool
-from lib.policy_pool.policy_pool import PolicyPool
 from lib.team.team_helper import TeamHelper
 
 if __name__ == "__main__":
@@ -42,9 +40,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.num_npcs", dest="num_npcs", type=int, default=0,
     help="number of NPCs to use for training (default: 256)")
-  parser.add_argument(
-    "--env.num_learners", dest="num_learners", type=int, default=16,
-    help="number of agents running he learner policy (default: 16)")
   parser.add_argument(
     "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
@@ -180,12 +175,6 @@ if __name__ == "__main__":
   )
   config.RESET_ON_DEATH = args.reset_on_death
 
-  # Create a pool of opponents
-  if args.opponent_pool is None:
-    opponent_pool = PolicyPool()
-  else:
-    opponent_pool = JsonPolicyPool(args.opponent_pool)
-
   binding = None
 
   rewards_config = RewardsConfig(
@@ -212,7 +201,6 @@ if __name__ == "__main__":
     postprocessor_cls=Postprocessor,
     postprocessor_args=[rewards_config]
   )
-  opponent_pool.binding = binding
 
   # Initialize the learner agent from a pretrained model
   learner_policy = None
@@ -254,7 +242,6 @@ if __name__ == "__main__":
 
     run_name = args.experiment_name,
 
-    cuda=torch.cuda.is_available(),
     vec_backend=vec_env_cls,
     total_timesteps=args.train_num_steps,
 
@@ -297,8 +284,6 @@ if __name__ == "__main__":
       save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
       trainer.save_model(save_path,
                          model_type=args.model_type)
-      logging.info(f"Adding {save_path} to policy pool.")
-      opponent_pool.add_policy(save_path)
 
   trainer.close()
 
