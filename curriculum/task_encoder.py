@@ -29,6 +29,7 @@ class TaskEncoder:
   def __init__(self, checkpoint: str, context: ModuleType, batch_size=64):
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
     self.model = CodeGenModel.from_pretrained(checkpoint).to(self.device)
+    self.model.eval()
     self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     self.tokenizer.pad_token = self.tokenizer.eos_token
     self.batch_size = batch_size
