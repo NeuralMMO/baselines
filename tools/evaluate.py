@@ -11,10 +11,8 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.policy_pool
 import pufferlib.registry.nmmo
 import torch
-from nmmo.render.replay_helper import DummyReplayHelper
 
 import clean_pufferl
-from env.nmmo_config import NmmoMoveConfig
 from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
@@ -137,9 +135,10 @@ if __name__ == "__main__":
 
     def reset(self, **kwargs):
       if self.realm.tick and self._replay_helper is not None:
-        self._replay_helper.save(
-          f"{args.replay_save_dir}/{ReplayEnv.num_replays_saved}")
         ReplayEnv.num_replays_saved += 1
+        self._replay_helper.save(
+          f"{args.replay_save_dir}/{ReplayEnv.num_replays_saved}",
+          compress=False)
       return super().reset()
 
   def make_env():
