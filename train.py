@@ -1,8 +1,8 @@
 import argparse
+import imp
 import logging
 import os
 import re
-from ctypes import util
 
 import nmmo
 import pufferlib.emulation
@@ -16,6 +16,7 @@ from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.agent.baseline_agent import BaselineAgent
 from lib.team.team_helper import TeamHelper
+import lib.agent.util
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -209,7 +210,7 @@ if __name__ == "__main__":
     model = torch.load(args.model_init_from_path)
     learner_policy = BaselineAgent.policy_class(
       model.get("model_type", "realikun"))(binding)
-    util.load_matching_state_dict(
+    lib.agent.util.load_matching_state_dict(
       learner_policy,
       model["agent_state_dict"]
     )

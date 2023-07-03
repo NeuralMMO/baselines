@@ -1,45 +1,26 @@
 # pylint: disable=bad-builtin, no-member, protected-access
 import argparse
-from email.policy import Policy
 import logging
 import os
-import time
 from venv import logger
+
 import nmmo
-
-import pandas as pd
-
-from env.nmmo_config import NmmoMoveConfig
-from nmmo.render.replay_helper import DummyReplayHelper
-
-from env.nmmo_env import RewardsConfig
-import lib
-from lib.policy_pool.json_policy_pool import JsonPolicyPool
-from lib.policy_pool.policy_pool import PolicyPool
-from lib.rollout import Rollout
-from lib.team.team_helper import TeamHelper
-from lib.team.team_replay_helper import TeamReplayHelper
-
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
-import pufferlib.registry.nmmo
 import pufferlib.policy_pool
-
+import pufferlib.registry.nmmo
 import torch
-from env.nmmo_config import NmmoMoveConfig
-from env.nmmo_env import NMMOEnv, RewardsConfig
-from env.postprocessor import Postprocessor
-from lib.policy_pool.json_policy_pool import JsonPolicyPool
-
-from lib.agent.baseline_agent import BaselineAgent
-from lib.policy_pool.policy_pool import PolicyPool
-from lib.policy_pool.opponent_pool_env import OpponentPoolEnv
 from nmmo.render.replay_helper import DummyReplayHelper
 
 import clean_pufferl
-from env.nmmo_team_env import NMMOTeamEnv
-from lib.team.team_env import TeamEnv
+from env.nmmo_config import NmmoMoveConfig
+from env.nmmo_env import RewardsConfig
+from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
+from lib.team.team_replay_helper import TeamReplayHelper
+from env.nmmo_config import nmmo_config
+from lib.agent.baseline_agent import BaselineAgent
+import lib.agent.util
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -79,10 +60,20 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.maps_path", dest="maps_path", type=str, default="maps/eval/medium",
     help="path to maps to use for evaluation (default: None)")
+  parser.add_argument(
+    "--env.map_size", dest="map_size", type=int, default=128,
+    help="size of maps to use for training (default: 128)")
+  parser.add_argument(
+    "--env.combat_enabled", dest="combat_enabled",
+    action="store_true", default=False,
+    help="only allow moves (default: False)")
 
   parser.add_argument(
     "--eval.num_rounds", dest="num_rounds", type=int, default=1,
     help="number of rounds to use for evaluation (default: 1)")
+  parser.add_argument(
+    "--eval.num_envs", dest="num_envs", type=int, default=1,
+    help="number of environments to use for evaluation (default: 1)")
 
   parser.add_argument(
     "--eval.num_policies", dest="num_policies", type=int, default=2,
@@ -92,6 +83,13 @@ if __name__ == "__main__":
     "--replay.save_dir", dest="replay_save_dir", type=str, default=None,
     help="path to save replay files (default: auto-generated)")
 
+  parser.add_argument(
+    "--wandb.project", dest="wandb_project", type=str, default=None,
+      help="wandb project name (default: None)")
+  parser.add_argument(
+    "--wandb.entity", dest="wandb_entity", type=str, default=None,
+      help="wandb entity name (default: None)")
+
   args = parser.parse_args()
 
   team_helper = TeamHelper({
@@ -99,13 +97,17 @@ if __name__ == "__main__":
     for i in range(args.num_teams)}
   )
 
-  config = NmmoMoveConfig(
+  config = nmmo_config(
     team_helper,
-    num_npcs=args.num_npcs,
-    max_episode_length=args.max_episode_length,
-    death_fog_tick=args.death_fog_tick,
-    num_maps=args.num_maps,
-    maps_path=args.maps_path
+    dict(
+      num_maps=args.num_maps,
+      maps_path=f"{args.maps_path}/{args.map_size}/",
+      map_size=args.map_size,
+      max_episode_length=args.max_episode_length,
+      death_fog_tick=args.death_fog_tick,
+      combat_enabled=args.combat_enabled,
+      num_npcs=args.num_npcs,
+    )
   )
 
   replay_helper = DummyReplayHelper()
@@ -117,116 +119,107 @@ if __name__ == "__main__":
     environment=True
   )
 
-policies = []
-if args.model_checkpoints is not None:
-  for p in args.model_checkpoints.split(","):
-    policies.append(torch.load(p))
 
-# TODO: Not hardcode this
-num_envs = 4
-num_agents = 128
+  puffer_teams = None
+  if args.team_size != 1:
+    puffer_teams = team_helper.teams
+
+  def make_env():
+    env = nmmo.Env(config)
+    env.realm.record_replay(replay_helper)
+    return env
 
 
-#while len(policy_pool._policies) < args.num_policies:
-#  logger.warn("Not enough policies to evaluate, waiting...")
-#  policy_pool._load()
-#  time.sleep(60)
-
-puffer_teams = None
-if args.team_size != 1:
-  puffer_teams = team_helper.teams
-
-def make_env():
-  env = nmmo.Env(config)
-  env.realm.record_replay(replay_helper)
-  return env
-
-binding = pufferlib.emulation.Binding(
-  env_creator=make_env,
-  env_name="Neural MMO",
-  suppress_env_prints=False,
-  emulate_const_horizon=args.max_episode_length,
-  teams=puffer_teams,
-  postprocessor_cls=Postprocessor,
-  postprocessor_args=[rewards_config]
-)
-
-from model.basic.policy import BasicPolicy
-BasicPolicy.INPUT_SIZE = 128
-BasicPolicy.HIDDEN_SIZE = 128
-
-agent = pufferlib.frameworks.cleanrl.make_policy(
-        BasicPolicy, recurrent_args=[],
-        recurrent_kwargs={'num_layers': 0}
-    )(binding).cuda()
-
-policy_pool = pufferlib.policy_pool.PolicyPool(
-    policies=[agent],
-    names=['baseline'],
-    tenured=[True],
-    sample_weights=[1, 1],
-    max_policies=8,
-    evaluation_batch_size=num_envs*num_agents,
-    path='pool'
-) 
-policy_pool.add_policy_copy('baseline', 'anchor', anchor=True)
- 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-for ri in range(args.num_rounds):
-  '''
-  models = list(set(
-      policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
-
-  assert len(models) == 1
-  model_data = torch.load(models[0], map_location=device)
-  agent = BaselineAgent.policy_class(
-    model_data.get("model_type", "realikun"))(binding)
-  lib.agent.util.load_matching_state_dict(
-    agent,
-    model_data["agent_state_dict"])
-  '''
-
-  evaluator = clean_pufferl.CleanPuffeRL(
-    binding,
-    agent,
-    policy_pool=policy_pool,
-
-    #cuda=torch.cuda.is_available(),
-    vec_backend=pufferlib.vectorization.serial.VecEnv,
-    total_timesteps=10000000,
-
-    num_envs=num_envs,
-    num_cores=num_envs,
-    num_buffers=1,
-    #num_steps=args.max_episode_length,
-
-    #num_agents=args.num_teams,
-    seed=args.seed+ri,
+  binding = pufferlib.emulation.Binding(
+    env_creator=make_env,
+    env_name="Neural MMO",
+    suppress_env_prints=False,
+    emulate_const_horizon=args.max_episode_length,
+    teams=puffer_teams,
+    postprocessor_cls=Postprocessor,
+    postprocessor_args=[rewards_config]
   )
-  eval_state = evaluator.allocate_storage()
-  evaluator.init_wandb()
 
-  #logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
-  evaluator.evaluate(agent, eval_state)
+  device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
-  if args.replay_save_dir is not None:
-    replay_helper.save(
-      os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
+  policies = []
+  names = []
+  if args.model_checkpoints is not None:
+    for policy_path in args.model_checkpoints.split(","):
+      logging.info(f"Loading model from {policy_path}...")
+      model = torch.load(policy_path, map_location=device)
+      policy = BaselineAgent.policy_class(
+        model.get("model_type", "realikun"))(binding)
+      lib.agent.util.load_matching_state_dict(
+        policy,
+        model["agent_state_dict"]
+      )
+      policies.append(policy)
+      names.append(os.path.basename(policy_path))
 
-  logger.info(f"Model rewards: {sum(eval_state.rewards)}")
+  policy_pool = pufferlib.policy_pool.PolicyPool(
+      policies=policies,
+      names=names,
+      tenured=[True],
+      sample_weights=[1 for p in policies],
+      max_policies=8,
+      evaluation_batch_size=args.num_envs*args.num_teams*args.team_size,
+      path='pool'
+  )
+  policy_pool.add_policy_copy(names[0], 'anchor', anchor=True)
 
-  # old_ranks = policy_pool._skill_rating.stats
-  # policy_pool.update_rewards(model_rewards)
-  # new_ranks = policy_pool._skill_rating.stats
+  for ri in range(args.num_rounds):
+    '''
+    models = list(set(
+        policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
 
-  # table = pd.DataFrame(models, columns=["Model"])
-  # table["Reward"] = [model_rewards[model] for model in table["Model"]]
-  # table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
-  # table["New Rank"] = [new_ranks.get(model, 1000) for model in table["Model"]]
-  # table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
+    assert len(models) == 1
+    model_data = torch.load(models[0], map_location=device)
+    agent = BaselineAgent.policy_class(
+      model_data.get("model_type", "realikun"))(binding)
+    lib.agent.util.load_matching_state_dict(
+      agent,
+      model_data["agent_state_dict"])
+    '''
 
-  # table = table.sort_values(by='Reward')
-  # logger.info("\n" + table.to_string(index=False))
+    evaluator = clean_pufferl.CleanPuffeRL(
+      binding,
+      policies[0],
+      policy_pool=policy_pool,
+      vec_backend=pufferlib.vectorization.serial.VecEnv,
+      total_timesteps=10000000,
+
+      num_envs=args.num_envs,
+      num_cores=args.num_envs,
+      num_buffers=1,
+      batch_size=args.num_envs*args.num_teams*args.team_size*args.max_episode_length,
+      seed=args.seed+ri,
+    )
+    eval_state = evaluator.allocate_storage()
+    if args.wandb_project is not None:
+      evaluator.init_wandb(args.wandb_project, args.wandb_entity, extra_data=vars(args))
+
+    #logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
+    evaluator.evaluate(policies[0], eval_state)
+
+    if args.replay_save_dir is not None:
+      replay_helper.save(
+        os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
+
+    logger.info(f"Model rewards: {sum(eval_state.rewards)}")
+
+    # old_ranks = policy_pool._skill_rating.stats
+    # policy_pool.update_rewards(model_rewards)
+    # new_ranks = policy_pool._skill_rating.stats
+
+    # table = pd.DataFrame(models, columns=["Model"])
+    # table["Reward"] = [model_rewards[model] for model in table["Model"]]
+    # table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
+    # table["New Rank"] = [new_ranks.get(model, 1000) for model in table["Model"]]
+    # table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
+
+    # table = table.sort_values(by='Reward')
+    # logger.info("\n" + table.to_string(index=False))
 
 
 
