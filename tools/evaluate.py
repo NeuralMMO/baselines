@@ -174,8 +174,8 @@ if __name__ == "__main__":
   policy_pool = pufferlib.policy_pool.PolicyPool(
       policies=policies,
       names=names,
-      tenured=[True],
-      sample_weights=[1 for p in policies],
+      tenured=[True for _ in policies],
+      sample_weights=[1 for _ in policies],
       max_policies=8,
       evaluation_batch_size=args.num_envs*args.num_teams*args.team_size,
       path='pool'
