@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+from typing import Any, Dict
 from venv import logger
 
 import nmmo
@@ -110,25 +111,39 @@ if __name__ == "__main__":
     )
   )
 
-  replay_helper = DummyReplayHelper()
-  if args.replay_save_dir is not None:
-    os.makedirs(args.replay_save_dir, exist_ok=True)
-    replay_helper = TeamReplayHelper(team_helper)
-
   rewards_config = RewardsConfig(
     environment=True
   )
-
 
   puffer_teams = None
   if args.team_size != 1:
     puffer_teams = team_helper.teams
 
-  def make_env():
-    env = nmmo.Env(config)
-    env.realm.record_replay(replay_helper)
-    return env
+  if args.replay_save_dir is not None:
+    os.makedirs(args.replay_save_dir, exist_ok=True)
 
+  class ReplayEnv(nmmo.Env):
+    num_replays_saved=0
+
+    def __init__(self, config):
+      super().__init__(config)
+      self._replay_helper = None
+      if args.replay_save_dir is not None:
+        self._replay_helper = TeamReplayHelper(team_helper)
+        self.realm.record_replay(self._replay_helper)
+
+    def step(self, actions: Dict[int, Dict[str, Dict[str, Any]]]):
+      return super().step(actions)
+
+    def reset(self, **kwargs):
+      if self.realm.tick and self._replay_helper is not None:
+        self._replay_helper.save(
+          f"{args.replay_save_dir}/{ReplayEnv.num_replays_saved}")
+        ReplayEnv.num_replays_saved += 1
+      return super().reset()
+
+  def make_env():
+    return ReplayEnv(config)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
@@ -169,19 +184,6 @@ if __name__ == "__main__":
   policy_pool.add_policy_copy(names[0], 'anchor', anchor=True)
 
   for ri in range(args.num_rounds):
-    '''
-    models = list(set(
-        policy_pool.select_least_tested_policies(args.num_policies*2)[:args.num_policies]))
-
-    assert len(models) == 1
-    model_data = torch.load(models[0], map_location=device)
-    agent = BaselineAgent.policy_class(
-      model_data.get("model_type", "realikun"))(binding)
-    lib.agent.util.load_matching_state_dict(
-      agent,
-      model_data["agent_state_dict"])
-    '''
-
     evaluator = clean_pufferl.CleanPuffeRL(
       binding,
       policies[0],
@@ -201,10 +203,6 @@ if __name__ == "__main__":
 
     #logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
     evaluator.evaluate(policies[0], eval_state)
-
-    if args.replay_save_dir is not None:
-      replay_helper.save(
-        os.path.join(args.replay_save_dir, f"replay_{ri}"), compress=False)
 
     logger.info(f"Model rewards: {sum(eval_state.rewards)}")
 
