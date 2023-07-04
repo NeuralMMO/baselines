@@ -1,5 +1,4 @@
 import argparse
-import imp
 import logging
 import os
 import re
