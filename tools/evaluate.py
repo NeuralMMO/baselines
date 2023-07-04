@@ -166,6 +166,7 @@ if __name__ == "__main__":
       model = torch.load(policy_path, map_location=device)
       policy = BaselineAgent.policy_class(
         model.get("model_type", "realikun"))(binding)
+      policy.to(device)
       lib.agent.util.load_matching_state_dict(
         policy,
         model["agent_state_dict"]
