@@ -74,6 +74,10 @@ if __name__ == "__main__":
   parser.add_argument(
     "--eval.num_envs", dest="num_envs", type=int, default=1,
     help="number of environments to use for evaluation (default: 1)")
+  parser.add_argument(
+    "--eval.use_serial_vecenv",
+    dest="use_serial_vecenv", action="store_true",
+    help="use serial vecenv impl (default: False)")
 
   parser.add_argument(
     "--eval.num_policies", dest="num_policies", type=int, default=2,
@@ -185,12 +189,16 @@ if __name__ == "__main__":
   )
   policy_pool.add_policy_copy(policy_names[0], 'anchor', anchor=True)
 
+  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
+  if args.use_serial_vecenv:
+    vec_env_cls = pufferlib.vectorization.serial.VecEnv
+
   for ri in range(args.num_rounds):
     evaluator = clean_pufferl.CleanPuffeRL(
       binding,
       policies[0],
       policy_pool=policy_pool,
-      vec_backend=pufferlib.vectorization.serial.VecEnv,
+      vec_backend=vec_env_cls,
       total_timesteps=10000000,
 
       num_envs=args.num_envs,
