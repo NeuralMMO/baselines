@@ -6,6 +6,7 @@ from typing import Any, Dict
 from venv import logger
 
 import nmmo
+import pandas as pd
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.policy_pool
@@ -157,7 +158,7 @@ if __name__ == "__main__":
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
   policies = []
-  names = []
+  policy_names = []
   if args.model_checkpoints is not None:
     for policy_path in args.model_checkpoints.split(","):
       logging.info(f"Loading model from {policy_path}...")
@@ -169,18 +170,18 @@ if __name__ == "__main__":
         model["agent_state_dict"]
       )
       policies.append(policy)
-      names.append(os.path.basename(policy_path))
+      policy_names.append(os.path.basename(policy_path))
 
   policy_pool = pufferlib.policy_pool.PolicyPool(
       policies=policies,
-      names=names,
+      names=policy_names,
       tenured=[True for _ in policies],
       sample_weights=[1 for _ in policies],
       max_policies=8,
       evaluation_batch_size=args.num_envs*args.num_teams*args.team_size,
       path='pool'
   )
-  policy_pool.add_policy_copy(names[0], 'anchor', anchor=True)
+  policy_pool.add_policy_copy(policy_names[0], 'anchor', anchor=True)
 
   for ri in range(args.num_rounds):
     evaluator = clean_pufferl.CleanPuffeRL(
@@ -205,18 +206,14 @@ if __name__ == "__main__":
 
     logger.info(f"Model rewards: {sum(eval_state.rewards)}")
 
-    # old_ranks = policy_pool._skill_rating.stats
-    # policy_pool.update_rewards(model_rewards)
-    # new_ranks = policy_pool._skill_rating.stats
+    stats = policy_pool.tournament.stats
 
-    # table = pd.DataFrame(models, columns=["Model"])
-    # table["Reward"] = [model_rewards[model] for model in table["Model"]]
-    # table["Old Rank"] = [old_ranks.get(model, 1000) for model in table["Model"]]
-    # table["New Rank"] = [new_ranks.get(model, 1000) for model in table["Model"]]
+    table = pd.DataFrame(policy_names, columns=["Model"])
+    table["New Rank"] = [stats.get(model, 1000) for model in table["Model"]]
     # table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
 
     # table = table.sort_values(by='Reward')
-    # logger.info("\n" + table.to_string(index=False))
+    logger.info("\n" + table.to_string(index=False))
 
 
 
