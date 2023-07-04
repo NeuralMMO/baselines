@@ -212,7 +212,7 @@ if __name__ == "__main__":
       evaluator.init_wandb(args.wandb_project, args.wandb_entity, extra_data=vars(args))
 
     #logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
-    evaluator.evaluate(policies[0], eval_state)
+    evaluator.evaluate(policies[0], eval_state, show_progress_bar=True)
 
     logger.info(f"Model rewards: {sum(eval_state.rewards)}")
 
