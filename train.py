@@ -127,6 +127,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--train.opponent_pool", dest="opponent_pool", type=str, default=None,
     help="json file containing the opponent pool (default: None)")
+  parser.add_argument(
+    "--train.max_opponent_policies", dest="max_opponent_policies", type=int, default=2,
+    help="maximum number of opponent policies to train against (default: 2)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -225,7 +228,7 @@ if __name__ == "__main__":
     names=['baseline'],
     tenured=[True],
     sample_weights=[1, 1],
-    max_policies=8,
+    max_policies=args.max_opponent_policies + 1,
     path='pool'
   )
   opponent_pool.add_policy_copy('baseline', 'anchor', anchor=True)
