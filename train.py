@@ -291,7 +291,7 @@ if __name__ == "__main__":
 
   num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
-    trainer.evaluate(learner_policy, trainer_state)
+    trainer.evaluate(learner_policy, trainer_state, show_progress_bar=True)
     trainer.train(
       learner_policy,
       trainer_state,
