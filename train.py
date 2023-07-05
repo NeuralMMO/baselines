@@ -238,7 +238,7 @@ if __name__ == "__main__":
   os.makedirs(experiment_dir, exist_ok=True)
   logging.info(f"Experiment directory {experiment_dir}")
 
-  pool_dir = os.path.join(experiments_dir, "pool")
+  pool_dir = os.path.join(experiment_dir, "pool")
   os.makedirs(pool_dir, exist_ok=True)
   opponent_pool = pufferlib.policy_pool.PolicyPool(
       evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
