@@ -283,7 +283,7 @@ if __name__ == "__main__":
   )
 
   resume_from_path = None
-  checkpoins = os.listdir(experiment_dir)
+  checkpoins = [cp for cp in os.listdir(experiment_dir) if cp.endswith(".pt")]
   if len(checkpoins) > 0:
     resume_from_path = os.path.join(experiment_dir, max(checkpoins))
     trainer.resume_model(resume_from_path)
