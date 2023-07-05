@@ -8,17 +8,43 @@ from nmmo.systems.item import ItemState
 from feature_extractor.item_helper import ItemHelper
 from feature_extractor.market_helper import MarketHelper
 from feature_extractor.entity_helper import EntityHelper
+from lib.team.team_helper import TeamHelper
 
 from model.realikun.model import ModelArchitecture
 
-from tests.featurizer.testhelpers import FeaturizerTestTemplate, provide_item
+from tests.featurizer.testhelpers import FeatureTestConfig, provide_item
 
 ItemAttr = ItemState.State.attr_name_to_col
 
 RANDOM_SEED = 0
 
 
-class TestItemHelper(FeaturizerTestTemplate):
+# NOTE: these test cases assume a team_size of 8 agents
+class TestItemHelper(unittest.TestCase):
+  @classmethod
+  def setUpClass(cls):
+    cls.config = FeatureTestConfig()
+    cls.config.PLAYER_N = 128 # 16 teams x 8 agents
+
+    # pylint: disable=invalid-name
+    cls.config.PROVIDE_ACTION_TARGETS = True
+
+    # default: 16 teams x 8 players
+    cls.num_team = len(cls.config.PLAYERS)
+    cls.team_size = int(cls.config.PLAYER_N / cls.num_team)
+
+    # match the team definition to the default nmmo
+    teams = {team_id: [cls.num_team*j+team_id+1 for j in range(cls.team_size)]
+              for team_id in range(cls.num_team)}
+    cls.team_helper = TeamHelper(teams)
+
+  def _filter_obs(self, obs, team_id):
+    flt_obs = {}
+    for ent_id, ent_obs in obs.items():
+      if ent_id in self.team_helper.teams[team_id]:
+        flt_obs[ent_id] = ent_obs
+    return flt_obs
+
   # pylint: disable=protected-access
   def _create_test_env(self):
     # init map_helper for team 1

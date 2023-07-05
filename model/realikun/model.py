@@ -17,7 +17,7 @@ def sort_dict_by_key(dict):
 class ModelArchitecture:
 
   NUM_TEAMS = 16
-  NUM_PLAYERS_PER_TEAM = 8
+  NUM_PLAYERS_PER_TEAM = 1 # 8 # TODO: make all work with 8 later
   INVENTORY_CAPACITY = 12
 
   # Observations

@@ -35,6 +35,10 @@ class TestEntityHelper(unittest.TestCase):
     teams = { tid: list(range(1+tid*self.team_size, 1+(tid+1)*self.team_size))
               for tid in range(self.num_team) }
 
+    # NOTE: for now, it's teams of single agent, so self.team_size == 1
+    self.assertDictEqual(teams,
+                         {0: [1], 1: [2], 2: [3], 3: [4], 4: [5], 5: [6], 6: [7], 7: [8], 8: [9],
+                          9: [10], 10: [11], 11: [12], 12: [13], 13: [14], 14: [15], 15: [16]})
     self.team_id = 0
     self.team_helper = TeamHelper(teams)
     self.entity_helper = EntityHelper(self.config, self.team_helper, self.team_id)

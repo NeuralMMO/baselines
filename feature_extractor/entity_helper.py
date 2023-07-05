@@ -72,6 +72,7 @@ class EntityHelper:
     self.member_location = {} # id -> (row, col)
     self._entity_features = {} # id -> entity_features
 
+    # NOTE: for now, it's teams of single agent, so len(obs) == 1
     for agent_id, agent_obs in obs.items():
       entity_rows = agent_obs['Entity'][:,EntityAttr["id"]] != 0
       for entity_ob in agent_obs['Entity'][entity_rows]:
@@ -103,6 +104,7 @@ class EntityHelper:
 
 
   def team_features_and_mask(self, map_helper):
+    # NOTE: for now, it's teams of single agent, so self.team_size == 1
     team_members_features = np.zeros((
       self.team_size, ModelArchitecture.TEAM_NUM_FEATURES))
     team_mask = np.zeros(self.team_size, dtype=np.float32)
