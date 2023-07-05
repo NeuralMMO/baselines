@@ -222,6 +222,7 @@ if __name__ == "__main__":
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
   learner_policy = learner_policy.to(device)
 
+  os.makedirs('pool', exist_ok=True)
   opponent_pool = pufferlib.policy_pool.PolicyPool(
       evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
       learner=learner_policy,
@@ -229,7 +230,7 @@ if __name__ == "__main__":
       sample_weights=[1, 1],
       active_policies=2,
       path='pool'
-  ) 
+  )
   opponent_pool.add_policy_copy('learner', 'anchor',
           tenured=True, anchor=True)
 
@@ -291,7 +292,7 @@ if __name__ == "__main__":
 
   num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
-    trainer.evaluate(learner_policy, trainer_state, show_progress_bar=True)
+    trainer.evaluate(learner_policy, trainer_state)
     trainer.train(
       learner_policy,
       trainer_state,
