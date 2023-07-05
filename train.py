@@ -221,17 +221,17 @@ if __name__ == "__main__":
 
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
   learner_policy = learner_policy.to(device)
-  opponent_pool = pufferlib.policy_pool.PolicyPool(
-    args.num_teams * args.team_size * args.num_envs,
-    policies=[learner_policy],
-    names=['baseline'],
-    tenured=[True],
-    sample_weights=[1, 1],
-    max_policies=args.max_opponent_policies + 1,
-    path='pool'
-  )
-  opponent_pool.add_policy_copy('baseline', 'anchor', anchor=True)
 
+  opponent_pool = pufferlib.policy_pool.PolicyPool(
+      evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
+      learner=learner_policy,
+      name='learner',
+      sample_weights=[1, 1],
+      active_policies=2,
+      path='pool'
+  ) 
+  opponent_pool.add_policy_copy('learner', 'anchor',
+          tenured=True, anchor=True)
 
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
@@ -303,7 +303,7 @@ if __name__ == "__main__":
       save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
       trainer.save_model(save_path,
                          model_type=args.model_type)
-      opponent_pool.add_policy_copy('baseline', f'baseline{update}')
+      opponent_pool.add_policy_copy('learner', f'learner{update}')
 
 
   trainer.close()

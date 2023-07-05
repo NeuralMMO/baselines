@@ -179,15 +179,14 @@ if __name__ == "__main__":
       policy_names.append(os.path.basename(policy_path))
 
   policy_pool = pufferlib.policy_pool.PolicyPool(
-      policies=policies,
-      names=policy_names,
-      tenured=[True for _ in policies],
-      sample_weights=[1 for _ in policies],
-      max_policies=8,
-      evaluation_batch_size=args.num_envs*args.num_teams*args.team_size,
+      evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
+      learner=policies[0],
+      name='learner',
+      sample_weights=[1, 1],
+      active_policies=2,
       path='pool'
-  )
-  policy_pool.add_policy_copy(policy_names[0], 'anchor', anchor=True)
+  ) 
+  policy_pool.add_policy(policies[1], 'anchor', tenured=True, anchor=True)
 
   vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
   if args.use_serial_vecenv:
@@ -207,12 +206,13 @@ if __name__ == "__main__":
       batch_size=args.num_envs*args.num_teams*args.team_size*args.max_episode_length,
       seed=args.seed+ri,
     )
+
     eval_state = evaluator.allocate_storage()
     if args.wandb_project is not None:
       evaluator.init_wandb(args.wandb_project, args.wandb_entity, extra_data=vars(args))
 
     #logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
-    evaluator.evaluate(policies[0], eval_state, show_progress_bar=True)
+    evaluator.evaluate(policies[0], eval_state)#, show_progress_bar=True)
 
     logger.info(f"Model rewards: {sum(eval_state.rewards)}")
 
