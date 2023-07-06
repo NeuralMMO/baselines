@@ -129,6 +129,9 @@ if __name__ == "__main__":
   parser.add_argument(
     "--train.max_opponent_policies", dest="max_opponent_policies", type=int, default=2,
     help="maximum number of opponent policies to train against (default: 2)")
+  parser.add_argument(
+    "--train.learner_ratio", dest="learner_ratio", type=float, default=1.0,
+    help="the percent of agents controlled by the learner policy (default: 1.0)")
 
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
@@ -222,7 +225,6 @@ if __name__ == "__main__":
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
   learner_policy = learner_policy.to(device)
 
-
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
   if args.experiment_name is None:
@@ -239,13 +241,21 @@ if __name__ == "__main__":
   logging.info(f"Experiment directory {experiment_dir}")
 
   pool_dir = os.path.join(experiment_dir, "pool")
+  num_agents = args.num_teams * args.team_size
+  num_learners = int(num_agents * args.learner_ratio)
+  num_opponents = num_agents - num_learners
+  sample_weights = [num_learners]
+  if args.max_opponent_policies > 0:
+    sample_weights = [num_learners, num_opponents]
+  print(f"Sample weights: {sample_weights}")
+
   os.makedirs(pool_dir, exist_ok=True)
   opponent_pool = pufferlib.policy_pool.PolicyPool(
-      evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
+      evaluation_batch_size=num_agents * args.num_envs,
       learner=learner_policy,
       name='learner',
-      sample_weights=[1, 1],
-      active_policies=2,
+      sample_weights=sample_weights,
+      active_policies=len([i for i in sample_weights if i != 0]),
       path=pool_dir
   )
   opponent_pool.add_policy_copy('learner', 'anchor',
