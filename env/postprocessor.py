@@ -74,13 +74,13 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       if self._rewards_config.symlog_rewards:
         team_reward = _symlog(rewards[agent_id])
 
-      if agent_id in dones:
-        if agent.damage.val > 0:
-          team_info["stats"]["cod/attacked"] += 1
-        elif agent.food.val == 0:
-          team_info["stats"]["cod/starved"] += 1
-        elif agent.water.val == 0:
-          team_info["stats"]["cod/dehydrated"] += 1
+      # if agent_id in dones:
+      #   if agent.damage.val > 0:
+      #     team_info["stats"]["cod/attacked"] += 1
+      #   elif agent.food.val == 0:
+      #     team_info["stats"]["cod/starved"] += 1
+      #   elif agent.water.val == 0:
+      #     team_info["stats"]["cod/dehydrated"] += 1
 
         # team_info["stats"].update(get_player_history(self.env.realm, agent_id, agent))
 

@@ -5,7 +5,7 @@
 # sbatch ./scripts/slurm_run.sh scripts/train_baseline.sh \
 #   --train.experiment_name=realikun_16x8_0001
 
-#SBATCH --comment=carperai
+#SBATCH --account=carperai
 #SBATCH --partition=g40
 #SBATCH --nodes=1
 #SBATCH --gpus=1
