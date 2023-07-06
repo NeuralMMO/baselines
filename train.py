@@ -13,14 +13,19 @@ import clean_pufferl
 from env.nmmo_config import nmmo_config
 from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
-from lib.agent.baseline_agent import BaselineAgent
 from lib.team.team_helper import TeamHelper
 import lib.agent.util
+from model.policies import policy_class
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
   parser = argparse.ArgumentParser()
+
+  parser.add_argument(
+    "--show_progress",
+    dest="show_progress", action="store_true", default=False,
+    help="show progress bar (default: False)")
 
   parser.add_argument(
     "--model.init_from_path",
@@ -213,14 +218,14 @@ if __name__ == "__main__":
   if args.model_init_from_path is not None:
     logging.info(f"Initializing model from {args.model_init_from_path}...")
     model = torch.load(args.model_init_from_path)
-    learner_policy = BaselineAgent.policy_class(
+    learner_policy = policy_class(
       model.get("model_type", "realikun"))(binding)
     lib.agent.util.load_matching_state_dict(
       learner_policy,
       model["agent_state_dict"]
     )
   else:
-    learner_policy = BaselineAgent.policy_class(args.model_type)(binding)
+    learner_policy = policy_class(args.model_type)(binding)
 
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
   learner_policy = learner_policy.to(device)
@@ -304,7 +309,7 @@ if __name__ == "__main__":
 
   num_updates = 1000000
   for update in range(trainer.update+1, num_updates + 1):
-    trainer.evaluate(learner_policy, trainer_state, show_progress=True)
+    trainer.evaluate(learner_policy, trainer_state, show_progress=args.show_progress)
     trainer.train(
       learner_policy,
       trainer_state,

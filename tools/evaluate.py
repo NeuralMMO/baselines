@@ -19,8 +19,8 @@ from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
 from env.nmmo_config import nmmo_config
-from lib.agent.baseline_agent import BaselineAgent
 import lib.agent.util
+from model.policies import policy_class
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     for policy_path in args.model_checkpoints.split(","):
       logging.info(f"Loading model from {policy_path}...")
       model = torch.load(policy_path, map_location=device)
-      policy = BaselineAgent.policy_class(
+      policy = policy_class(
         model.get("model_type", "realikun"))(binding)
       policy.to(device)
       lib.agent.util.load_matching_state_dict(
@@ -185,7 +185,7 @@ if __name__ == "__main__":
       sample_weights=[1, 1],
       active_policies=2,
       path='pool'
-  ) 
+  )
   policy_pool.add_policy(policies[1], 'anchor', tenured=True, anchor=True)
 
   vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
