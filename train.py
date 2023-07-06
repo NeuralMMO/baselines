@@ -258,8 +258,8 @@ if __name__ == "__main__":
       active_policies=len([i for i in sample_weights if i != 0]),
       path=pool_dir
   )
-  opponent_pool.add_policy_copy('learner', 'anchor',
-          tenured=True, anchor=True)
+  # opponent_pool.add_policy_copy('learner', 'anchor',
+  #         tenured=True, anchor=True)
 
   vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
   if args.use_serial_vecenv:
