@@ -25,6 +25,10 @@ class NMMOTeamEnv(TeamEnv):
       for tid in team_helper.teams
     ]
 
+    # NOTE: this is hack to NOT change postprocessor.py,
+    #   which works with the NMMOEnv directly
+    self.realm = self._env.realm
+
   def _box(self, *shape):
     return gym.spaces.Box(low=-2**20, high=2**20, shape=shape, dtype=np.float32)
 

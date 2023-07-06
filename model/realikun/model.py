@@ -75,6 +75,8 @@ class ModelArchitecture:
   # Model
   SELF_EMBED = 512
   SELF_AS_ALLY_EMBED = 256
+
+  # Hardcoded for compatibility with CleanRL wrapper shape checks
   LSTM_HIDDEN = 512
   ATTENTION_HIDDEN = 256
 
@@ -223,13 +225,12 @@ class MemoryBlock(nn.Module):
   def __init__(self, n_attn_hidden, n_lstm_hidden, num_layers):
     super().__init__()
 
+    # Assert for compatibility with CleanRL wrapper shape checks
+    assert n_attn_hidden == 256, "n_attn_hidden must be 256 for compatibility with CleanRL"
+    assert n_lstm_hidden == 512, "n_lstm_hidden must be 512 for compatibility with CleanRL"
+
     self.num_layers = num_layers
     self.hidden_size = n_lstm_hidden
-
-    # Hardcoded for compatibility with CleanRL wrapper shape checks
-    n_attn_hidden = 256
-    n_lstm_hidden = 512
-
     self.n_attn_hidden = n_attn_hidden
     self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden, num_layers)
 
@@ -240,8 +241,8 @@ class MemoryBlock(nn.Module):
     h_self = self.h_self
     h_inter = self.h_inter
 
-    hxs = hxs.view(-1, teams*8, 512)
-    cxs = cxs.view(-1, teams*8, 512)
+    hxs = hxs.view(-1, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
+    cxs = cxs.view(-1, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
 
     h = torch.cat([h_self[:, :, self.n_attn_hidden:], h_inter], dim=-1)
     bs, na, nf = h.shape  # batch_size, num_agent, num_feature

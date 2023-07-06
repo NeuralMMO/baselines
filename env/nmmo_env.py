@@ -44,6 +44,18 @@ class NMMOEnv(nmmo.Env):
       if agent_id not in infos:
         infos[agent_id] = {}
 
+      if agent_id in self._dead_this_tick: # dead agent
+        agent = self.realm.players.dead_this_tick.get(
+          agent_id, self.realm.players.get(agent_id))
+        assert agent is not None, f'Agent {agent_id} not found'
+
+        infos[agent_id]["cod/starved"] = agent.food.val == 0
+        infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
+        infos[agent_id]["cod/attacked"] = agent.damage.val > 0
+        infos[agent_id]["lifespan"] = self.realm.tick
+        infos[agent_id].update(get_player_history(self.realm, agent_id, agent))
+        continue
+
       agent = self.realm.players.get(agent_id)
       assert agent is not None, f'Agent {agent_id} not found'
 
@@ -64,21 +76,6 @@ class NMMOEnv(nmmo.Env):
 
       if self._rewards_config.symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
-
-    for agent_id in self._dead_this_tick:
-      agent = self.realm.players.dead_this_tick.get(
-        agent_id, self.realm.players.get(agent_id))
-      assert agent is not None, f'Agent {agent_id} not found'
-
-      if agent_id not in infos:
-        infos[agent_id] = {}
-
-      infos[agent_id]["cod/starved"] = agent.food.val == 0
-      infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
-      infos[agent_id]["cod/attacked"] = agent.damage.val > 0
-      infos[agent_id]["lifespan"] = self.realm.tick
-
-      infos[agent_id].update(get_player_history(self.realm, agent_id, agent))
 
     return rewards, infos
 

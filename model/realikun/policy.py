@@ -126,6 +126,7 @@ class RealikunPolicy(pufferlib.models.Policy):
     return pufferlib.frameworks.cleanrl.make_policy(
       RealikunPolicy,
       recurrent_cls=MemoryBlock,
-      recurrent_args=[2048, 4096],
+      recurrent_args=[ModelArchitecture.ATTENTION_HIDDEN,
+                      ModelArchitecture.LSTM_HIDDEN],
       recurrent_kwargs={'num_layers': 1},
     )
