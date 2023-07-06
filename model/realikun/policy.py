@@ -8,11 +8,11 @@ from env.nmmo_team_env import NMMOTeamEnv
 
 class RealikunPolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
-    super().__init__(binding, input_size, hidden_size)
+    super().__init__(binding)
 
     # CHECK: Do these belong here?
-    self.state_handler_dict = {}
-    torch.set_num_threads(1)
+    #self.state_handler_dict = {}
+    #torch.set_num_threads(1)
 
     self.self_net = SelfEncoder(
       ModelArchitecture.TILE_NUM_CHANNELS,

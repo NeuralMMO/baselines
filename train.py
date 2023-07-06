@@ -13,6 +13,7 @@ import torch
 import clean_pufferl
 from env.nmmo_config import nmmo_config
 from env.nmmo_env import RewardsConfig
+from env.nmmo_team_env import NMMOTeamEnv
 from env.postprocessor import Postprocessor
 from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
@@ -198,10 +199,9 @@ if __name__ == "__main__":
   )
 
   def make_env():
+    if args.model_type in ["realikun", "realikun-simplified"]:
+      return NMMOTeamEnv(config, team_helper, rewards_config)
     return nmmo.Env(config)
-    # if args.model_type in ["realikun", "realikun-simplified"]:
-    #   env = NMMOTeamEnv(
-    #     config, team_helper, rewards_config, moves_only=args.moves_only)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,

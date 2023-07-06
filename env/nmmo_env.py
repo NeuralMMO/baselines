@@ -35,12 +35,12 @@ class NMMOEnv(nmmo.Env):
     }
     return super().reset(map_id, seed, options)
 
-  def _compute_rewards(self, agents: List[AgentID], dones: Dict[AgentID, bool]):
-    rewards, infos = super()._compute_rewards(agents, dones)
+  def _compute_rewards(self): #, agents: List[AgentID], dones: Dict[AgentID, bool]):
+    rewards, infos = super()._compute_rewards()
     if not self._rewards_config.environment:
-      rewards = { id: 0 for id in agents }
+      rewards = { id: 0 for id in self.agents }
 
-    for agent_id in agents:
+    for agent_id in self.agents:
       if agent_id not in infos:
         infos[agent_id] = {}
 
@@ -65,9 +65,7 @@ class NMMOEnv(nmmo.Env):
       if self._rewards_config.symlog_rewards:
         rewards[agent_id] = _symlog(rewards[agent_id])
 
-    for agent_id in dones.keys():
-      assert dones[agent_id], f'Agent {agent_id} is not done'
-      # TODO: sometimes dead agents haven't been culled yet
+    for agent_id in self._dead_this_tick:
       agent = self.realm.players.dead_this_tick.get(
         agent_id, self.realm.players.get(agent_id))
       assert agent is not None, f'Agent {agent_id} not found'
