@@ -49,6 +49,7 @@ class NMMOEnv(nmmo.Env):
           agent_id, self.realm.players.get(agent_id))
         assert agent is not None, f'Agent {agent_id} not found'
 
+        rewards[agent_id] = -1
         infos[agent_id]["cod/starved"] = agent.food.val == 0
         infos[agent_id]["cod/dehydrated"] = agent.water.val == 0
         infos[agent_id]["cod/attacked"] = agent.damage.val > 0
@@ -167,7 +168,7 @@ def score_unique_events(realm, agent_id, score_diff=True):
 
   # make every EARN_GOLD events unique
   idx = log[:,attr_to_col['event']] == EventCode.EARN_GOLD
-  log[idx,attr_to_col['number']] = log[idx,attr_to_col['id']].copy() # this is a hack
+  log[idx,attr_to_col['number']] = log[idx,attr_to_col['tick']].copy() # this is a hack
 
   # remove redundant events after masking
   unique_all = np.unique(log[:,attr_to_col['event']:], axis=0)

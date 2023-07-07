@@ -81,8 +81,9 @@ class NMMOTeamEnv(TeamEnv):
       for tid, a in actions.items()
     }
 
-    obs, rewards, dones, infos = super().step(trans_actions)
-    for tid, team_obs in obs.items():
+    obs = {}
+    raw_obs, rewards, dones, infos = super().step(trans_actions)
+    for tid, team_obs in raw_obs.items():
       obs[tid] = self._feature_extractors[tid](
         self._convert_team_obs_to_agent_ids(tid, team_obs))
 

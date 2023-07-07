@@ -216,6 +216,8 @@ class InteractionBlock(nn.Module):
     mask = mask.to(bool).view(bs * na, ne)
     h = h.view(bs * na, ne, nf).transpose(0, 1)
     h = self.transformer(h, src_key_padding_mask=mask)
+    # trasformer returns nan when mask is all true
+    h = h.masked_fill(torch.isnan(h), 0)
     h = h.transpose(0, 1).view(bs, na, ne, nf)
     h = h.max(dim=2)[0]
     return h
@@ -237,6 +239,13 @@ class MemoryBlock(nn.Module):
   def forward(self, x, state):
     # @daveey - Any idea on where seq_len comes from?
     seq_len, teams, _ = x.shape
+    # CHECK ME: is this correct? in pufferlib, clean_pufferl.py, train() line 356
+    #   agent.get_action_and_value() is called with lstm_state = None
+    if state is None:
+      shape = (self.num_layers, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
+      state = [torch.zeros(shape, dtype=torch.float32, device=x.device),
+               torch.zeros(shape, dtype=torch.float32, device=x.device),]
+
     hxs, cxs = state
     h_self = self.h_self
     h_inter = self.h_inter
