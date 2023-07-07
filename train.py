@@ -14,8 +14,7 @@ from env.nmmo_config import nmmo_config
 from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
-import lib.agent.util
-from model.policies import policy_class
+import model
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -135,9 +134,8 @@ if __name__ == "__main__":
     "--train.max_opponent_policies", dest="max_opponent_policies", type=int, default=2,
     help="maximum number of opponent policies to train against (default: 2)")
   parser.add_argument(
-    "--train.learner_ratio", dest="learner_ratio", type=float, default=1.0,
-    help="the percent of agents controlled by the learner policy (default: 1.0)")
-
+    "--train.sample_weights", dest="sample_weights", type=str, default="1",
+    help="comma separated list of sample rates (default: 1)")
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
@@ -214,21 +212,11 @@ if __name__ == "__main__":
   )
 
   # Initialize the learner agent from a pretrained model
-  learner_policy = None
   if args.model_init_from_path is not None:
-    logging.info(f"Initializing model from {args.model_init_from_path}...")
-    model = torch.load(args.model_init_from_path)
-    learner_policy = policy_class(
-      model.get("model_type", "realikun"))(binding)
-    lib.agent.util.load_matching_state_dict(
-      learner_policy,
-      model["agent_state_dict"]
-    )
+    logging.info(f"Loading model from {args.model_init_from_path}")
+    learner_policy = model.load_policy(args.model_init_from_path, binding)
   else:
-    learner_policy = policy_class(args.model_type)(binding)
-
-  device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
-  learner_policy = learner_policy.to(device)
+    learner_policy = model.create_policy(args.model_type, binding)
 
   # Create an experiment directory for saving model checkpoints
   os.makedirs(args.experiments_dir, exist_ok=True)
@@ -247,11 +235,7 @@ if __name__ == "__main__":
 
   pool_dir = os.path.join(experiment_dir, "pool")
   num_agents = args.num_teams * args.team_size
-  num_learners = int(num_agents * args.learner_ratio)
-  num_opponents = num_agents - num_learners
-  sample_weights = [num_learners]
-  if args.max_opponent_policies > 0:
-    sample_weights = [num_learners, num_opponents]
+  sample_weights = [int(i) for i in args.sample_weights.split(",")]
   print(f"Sample weights: {sample_weights}")
 
   os.makedirs(pool_dir, exist_ok=True)
