@@ -1,12 +1,10 @@
 import os
 
 from attr import dataclass
-from scipy import optimize
 import torch
 import wandb
 
 from clean_pufferl import CleanPuffeRL
-from pufferlib.utils import PersistentObject
 import logging
 
 @dataclass
@@ -54,8 +52,12 @@ class TrainingRun():
     trainer.update = self._state.num_epochs_trained
     if self._state.optimizer_state_dict is not None:
       trainer.optimizer.load_state_dict(self._state.optimizer_state_dict)
+    trainer.wandb_initialized = True
 
   def enable_wandb(self, project: str, entity: str):
+    if project is None:
+      return
+
     self._state.wandb_project = project
     self._state.wandb_entity = entity
     if self._state.wandb_run_id is None:
@@ -140,8 +142,4 @@ class TrainingRun():
   # def learner_policy(self):
   #   return PolicyLoader.policy_class(args.model_type)(binding)
 
-class FileTrainingRun(PersistentObject, TrainingRun):
-  def __init__(self, path, *args, **kwargs):
-      # First, initialize the PersistentObject
-      PersistentObject.__init__(self, TrainingRun, path, *args, **kwargs)
 
