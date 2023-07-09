@@ -5,7 +5,6 @@ import pufferlib.models
 import pufferlib.frameworks.cleanrl
 
 from model.realikun_simple.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
-from env.nmmo_team_env import NMMOTeamEnv
 
 class RealikunSimplifiedPolicy(pufferlib.models.Policy):
   def __init__(

@@ -1,21 +1,23 @@
 import argparse
 import logging
 import os
-import re
 
 import nmmo
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
-import torch
+from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
+from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import clean_pufferl
 from env.nmmo_config import nmmo_config
-from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
-import model
+from lib.training_run import FileTrainingRun, TrainingRun
+from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore
+from pufferlib.policy_pool import PolicyPool
 
+from model.improved.policy import ImprovedPolicy
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
@@ -26,10 +28,6 @@ if __name__ == "__main__":
     dest="show_progress", action="store_true", default=False,
     help="show progress bar (default: False)")
 
-  parser.add_argument(
-    "--model.init_from_path",
-    dest="model_init_from_path", type=str, default=None,
-    help="path to model to load (default: None)")
   parser.add_argument(
     "--model.type",
     dest="model_type", type=str, default="realikun",
@@ -55,10 +53,6 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="only allow moves (default: False)")
   parser.add_argument(
-    "--env.reset_on_death", dest="reset_on_death",
-    action="store_true", default=False,
-    help="reset on death (default: False)")
-  parser.add_argument(
     "--env.num_maps", dest="num_maps", type=int, default=128,
     help="number of maps to use for training (default: 1)")
   parser.add_argument(
@@ -67,32 +61,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--env.map_size", dest="map_size", type=int, default=128,
     help="size of maps to use for training (default: 128)")
-
-  parser.add_argument(
-    "--reward.hunger", dest="rewards_hunger",
-    action="store_true", default=False,
-    help="enable hunger rewards (default: False)")
-  parser.add_argument(
-    "--reward.thirst", dest="rewards_thirst",
-    action="store_true", default=False,
-    help="enable thirst rewards (default: False)")
-  parser.add_argument(
-    "--reward.health", dest="rewards_health",
-    action="store_true", default=False,
-    help="enable health rewards (default: False)")
-  parser.add_argument(
-    "--reward.achievements", dest="rewards_achievements",
-    action="store_true", default=False,
-    help="enable achievement rewards (default: False)")
-  parser.add_argument(
-    "--reward.environment", dest="rewards_environment",
-    action="store_true", default=False,
-    help="enable environment rewards (default: False)")
-
-  parser.add_argument(
-    "--reward.symlog", dest="symlog_rewards",
-    action="store_true", default=False,
-    help="symlog rewards (default: True)")
 
   parser.add_argument(
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
@@ -112,17 +80,25 @@ if __name__ == "__main__":
     dest="train_num_steps", type=int, default=10_000_000,
     help="number of steps to train (default: 10_000_000)")
   parser.add_argument(
+    "--train.max_epochs",
+    dest="train_max_epochs", type=int, default=10_000_000,
+    help="number of epochs to train (default: 10_000_000)")
+  parser.add_argument(
     "--train.checkpoint_interval",
     dest="checkpoint_interval", type=int, default=10,
     help="interval to save models (default: 10)")
   parser.add_argument(
-    "--train.experiment_name",
-    dest="experiment_name", type=str, default=None,
-    help="experiment name (default: None)")
+    "--train.run_name",
+    dest="run_name", type=str, default="training_run",
+    help="run name (default: None)")
   parser.add_argument(
-    "--train.experiments_dir",
-    dest="experiments_dir", type=str, default="experiments",
-    help="experiments directory (default: experiments)")
+    "--train.runs_dir",
+    dest="runs_dir", type=str, default=None,
+    help="runs_dir directory (default: runs)")
+  parser.add_argument(
+    "--train.policy_store_dir",
+    dest="policy_store_dir", type=str, default=None,
+    help="policy_store directory (default: runs)")
   parser.add_argument(
     "--train.use_serial_vecenv",
     dest="use_serial_vecenv", action="store_true",
@@ -133,9 +109,6 @@ if __name__ == "__main__":
   parser.add_argument(
     "--train.max_opponent_policies", dest="max_opponent_policies", type=int, default=2,
     help="maximum number of opponent policies to train against (default: 2)")
-  parser.add_argument(
-    "--train.sample_weights", dest="sample_weights", type=str, default="1",
-    help="comma separated list of sample rates (default: 1)")
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
@@ -163,16 +136,19 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
+  training_run = TrainingRun.load_or_create(args.run_name, args.runs_dir)
+  training_run.enable_wandb(args.wandb_project, args.wandb_entity)
+
   # Set up the teams
   team_helper = TeamHelper({
     i: [i*args.team_size+j+1 for j in range(args.team_size)]
     for i in range(args.num_teams)}
   )
 
+  # Set up the environment
   config = nmmo_config(
     team_helper,
     dict(
-      # num_npcs=args.num_npcs,
       num_maps=args.num_maps,
       maps_path=f"{args.maps_path}/{args.map_size}/",
       map_size=args.map_size,
@@ -182,131 +158,69 @@ if __name__ == "__main__":
       num_npcs=args.num_npcs,
     )
   )
-  config.RESET_ON_DEATH = args.reset_on_death
-
-  binding = None
-
-  rewards_config = RewardsConfig(
-    symlog_rewards=args.symlog_rewards,
-    hunger=args.rewards_hunger,
-    thirst=args.rewards_thirst,
-    health=args.rewards_health,
-    achievements=args.rewards_achievements,
-    environment=args.rewards_environment
-  )
-
-  def make_env():
-    return nmmo.Env(config)
-    # if args.model_type in ["realikun", "realikun-simplified"]:
-    #   env = NMMOTeamEnv(
-    #     config, team_helper, rewards_config, moves_only=args.moves_only)
 
   binding = pufferlib.emulation.Binding(
-    env_creator=make_env,
+    env_creator=lambda: nmmo.Env(config),
     env_name="Neural MMO",
     suppress_env_prints=False,
     emulate_const_horizon=args.max_episode_length,
-    # teams=team_helper.teams,
     postprocessor_cls=Postprocessor,
-    postprocessor_args=[rewards_config]
+    postprocessor_args=[]
   )
 
-  # Initialize the learner agent from a pretrained model
-  if args.model_init_from_path is not None:
-    logging.info(f"Loading model from {args.model_init_from_path}")
-    learner_policy = model.load_policy(args.model_init_from_path, binding)
+  make_policy_fn = lambda pr: ImprovedPolicy.create_policy(num_lstm_layers=0)(binding)
+
+  if args.policy_store_dir:
+    logging.info(f"Using policy store from {args.policy_store_dir}")
+    policy_store = DirectoryPolicyStore(args.policy_store_dir)
   else:
-    learner_policy = model.create_policy(args.model_type, binding)
+    logging.info("Using MemoryPolicyStore. Policies will not be saved to disk.")
+    policy_store = MemoryPolicyStore()
 
-  # Create an experiment directory for saving model checkpoints
-  os.makedirs(args.experiments_dir, exist_ok=True)
-  if args.experiment_name is None:
-    prefix = f"{args.num_teams}x{args.team_size}_"
-    existing = os.listdir(args.experiments_dir)
-    prefix_pattern = re.compile(f'^{prefix}(\\d{{4}})$')
-    existing_numbers = [int(match.group(1)) for name in existing for match in [prefix_pattern.match(name)] if match]
-    next_number = max(existing_numbers, default=0) + 1
-    args.experiment_name = f"{prefix}{next_number:04}"
+  if training_run.has_policy_checkpoint():
+    logging.info(f"Train: resuming training from {training_run.latest_policy_name()}")
+    learner_policy = policy_store.get_policy(
+      training_run.latest_policy_name()).policy(make_policy_fn)
+  else:
+    logging.info("No policy checkpoint found. Creating new policy.")
+    learner_policy = make_policy_fn("improved")
 
-  experiment_dir = os.path.join(args.experiments_dir, args.experiment_name)
-
-  os.makedirs(experiment_dir, exist_ok=True)
-  logging.info(f"Experiment directory {experiment_dir}")
-
-  pool_dir = os.path.join(experiment_dir, "pool")
-  num_agents = args.num_teams * args.team_size
-  sample_weights = [int(i) for i in args.sample_weights.split(",")]
-  print(f"Sample weights: {sample_weights}")
-
-  os.makedirs(pool_dir, exist_ok=True)
-  opponent_pool = pufferlib.policy_pool.PolicyPool(
-      evaluation_batch_size=num_agents * args.num_envs,
-      learner=learner_policy,
-      name='learner',
-      sample_weights=sample_weights,
-      active_policies=len([i for i in sample_weights if i != 0]),
-      path=pool_dir
+  policy_pool = PolicyPool(
+      learner_policy,
+      'learner',
+      batch_size = args.num_envs * args.num_teams * args.team_size,
+      num_policies = 1,
+      learner_weight =1
   )
-  # opponent_pool.add_policy_copy('learner', 'anchor',
-  #         tenured=True, anchor=True)
 
-  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
-  if args.use_serial_vecenv:
-    vec_env_cls = pufferlib.vectorization.serial.VecEnv
-
-  logging.info("Starting training...")
   trainer = clean_pufferl.CleanPuffeRL(
     binding,
     learner_policy,
+    policy_pool=policy_pool,
+    vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
 
-    run_name = args.experiment_name,
-
-    vec_backend=vec_env_cls,
     total_timesteps=args.train_num_steps,
-
     num_envs=args.num_envs,
     num_cores=args.num_cores or args.num_envs,
     num_buffers=args.num_buffers,
-
     batch_size=args.rollout_batch_size,
-
-    policy_pool=opponent_pool,
-
-    # PPO
     learning_rate=args.ppo_learning_rate,
-    # clip_coef=0.2, # ratio_clip
-    # dual_clip_c=3.,
-    # ent_coef=0.001 # entropy_loss_weight,
-    # grad_clip=1.0,
-    # bptt_trunc_len=16,
   )
 
-  resume_from_path = None
-  checkpoins = [cp for cp in os.listdir(experiment_dir) if cp.endswith(".pt")]
-  if len(checkpoins) > 0:
-    resume_from_path = os.path.join(experiment_dir, max(checkpoins))
-    trainer.resume_model(resume_from_path)
+  training_run.resume_training(trainer)
+  while not trainer.done_training():
+    trainer.evaluate()
 
-  trainer_state = trainer.allocate_storage()
-  if args.wandb_project is not None:
-    trainer.init_wandb(args.wandb_project, args.wandb_entity, extra_data=vars(args))
-
-  num_updates = 1000000
-  for update in range(trainer.update+1, num_updates + 1):
-    trainer.evaluate(learner_policy, trainer_state, show_progress=args.show_progress)
     trainer.train(
-      learner_policy,
-      trainer_state,
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
       batch_rows=args.ppo_training_batch_size
     )
-    if experiment_dir is not None and update % args.checkpoint_interval == 1:
-      save_path = os.path.join(experiment_dir, f'{update:06d}.pt')
-      trainer.save_model(save_path,
-                         model_type=args.model_type)
-      opponent_pool.add_policy_copy('learner', f'learner{update}')
 
+    if (trainer.update) % args.checkpoint_interval == 0:
+      cp = f'{training_run.name}.{trainer.update}'
+      policy_store.add_policy(cp, learner_policy)
+      training_run.save_checkpoint(trainer)
 
   trainer.close()
 

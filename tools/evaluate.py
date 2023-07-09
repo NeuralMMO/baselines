@@ -14,7 +14,6 @@ import pufferlib.registry.nmmo
 import torch
 
 import clean_pufferl
-from env.nmmo_env import RewardsConfig
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
@@ -114,10 +113,6 @@ if __name__ == "__main__":
     )
   )
 
-  rewards_config = RewardsConfig(
-    environment=True
-  )
-
   puffer_teams = None
   if args.team_size != 1:
     puffer_teams = team_helper.teams
@@ -156,7 +151,7 @@ if __name__ == "__main__":
     emulate_const_horizon=args.max_episode_length,
     teams=puffer_teams,
     postprocessor_cls=Postprocessor,
-    postprocessor_args=[rewards_config]
+    postprocessor_args=[]
   )
 
   policies = []
@@ -172,8 +167,6 @@ if __name__ == "__main__":
       active_policies=len(policies),
       path='pool'
   )
-
-    policy_pool.add_policy(p)
 
   vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
   if args.use_serial_vecenv:

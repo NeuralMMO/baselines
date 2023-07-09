@@ -4,7 +4,6 @@ import pufferlib.models
 import pufferlib.frameworks.cleanrl
 
 from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  ModelArchitecture,  PolicyHead, SelfEncoder
-from env.nmmo_team_env import NMMOTeamEnv
 
 class RealikunPolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
