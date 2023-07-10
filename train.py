@@ -1,6 +1,5 @@
 import argparse
 import logging
-import os
 
 import nmmo
 import pufferlib.emulation
@@ -13,7 +12,7 @@ import clean_pufferl
 from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
-from lib.training_run import FileTrainingRun, TrainingRun
+from lib.training_run import TrainingRun
 from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore
 from pufferlib.policy_pool import PolicyPool
 
