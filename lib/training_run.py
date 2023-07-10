@@ -15,11 +15,8 @@ class RunState():
   wandb_run_id: str = None
   policy_checkpoint_name: str = None
 
+  trainer: dict = None
   num_epochs_trained: int = 0
-  global_step: int = 0
-  agent_step: int = 0
-  optimizer_state_dict: dict = None
-
   args: dict = dict()
 
 class TrainingRun():
@@ -27,6 +24,7 @@ class TrainingRun():
     self.name = name
     self._state = run_state or RunState(name)
     self._persist_path = None
+    self._use_wandb = False
 
   def has_policy_checkpoint(self):
     return self._state.policy_checkpoint_name is not None
@@ -39,20 +37,15 @@ class TrainingRun():
 
     policy_name = f'{self.name}.{trainer.update}'
 
-    self._state.global_step = trainer.global_step
-    self._state.agent_step = trainer.agent_step
+    self._state.trainer = trainer.get_trainer_state()
+    self._state.num_epochs_trained = self._state.trainer.update
     self._state.policy_checkpoint_name = policy_name
-    self._state.num_epochs_trained = trainer.update
-    self._state.optimizer_state_dict = trainer.optimizer.state_dict()
     self._save()
 
   def resume_training(self, trainer):
-    trainer.global_step = self._state.global_step
-    trainer.agent_step = self._state.agent_step
-    trainer.update = self._state.num_epochs_trained
-    if self._state.optimizer_state_dict is not None:
-      trainer.optimizer.load_state_dict(self._state.optimizer_state_dict)
-    trainer.wandb_initialized = True
+    trainer.load_trainer_state(self._state.trainer)
+    if self._use_wandb:
+      trainer.wandb_initialized = True
 
   def enable_wandb(self, project: str, entity: str):
     if project is None:
@@ -62,6 +55,7 @@ class TrainingRun():
     self._state.wandb_entity = entity
     if self._state.wandb_run_id is None:
       self._state.wandb_run_id = wandb.util.generate_id()
+    self._use_wandb = True
 
     wandb.init(
       id = self._state.wandb_run_id,

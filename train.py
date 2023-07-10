@@ -13,10 +13,10 @@ from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
 from lib.training_run import TrainingRun
-from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore
+from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore, PolicySelector
 from pufferlib.policy_pool import PolicyPool
+import model
 
-from model.improved.policy import ImprovedPolicy
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
@@ -102,12 +102,16 @@ if __name__ == "__main__":
     "--train.use_serial_vecenv",
     dest="use_serial_vecenv", action="store_true",
     help="use serial vecenv impl (default: False)")
+
   parser.add_argument(
-    "--train.opponent_pool", dest="opponent_pool", type=str, default=None,
-    help="json file containing the opponent pool (default: None)")
+    "--train.learner_weight",
+    dest="learner_weight", type=float, default=1.0,
+    help="weight of learner policy (default: 1.0)")
+
   parser.add_argument(
     "--train.max_opponent_policies", dest="max_opponent_policies", type=int, default=2,
     help="maximum number of opponent policies to train against (default: 2)")
+
   parser.add_argument(
     "--wandb.project", dest="wandb_project", type=str, default=None,
       help="wandb project name (default: None)")
@@ -167,8 +171,7 @@ if __name__ == "__main__":
     postprocessor_args=[]
   )
 
-  make_policy_fn = lambda pr: ImprovedPolicy.create_policy(num_lstm_layers=0)(binding)
-
+  make_policy = lambda mc: model.create_policy(mc.metadata()["policy_type"], binding)
   if args.policy_store_dir:
     logging.info(f"Using policy store from {args.policy_store_dir}")
     policy_store = DirectoryPolicyStore(args.policy_store_dir)
@@ -178,18 +181,20 @@ if __name__ == "__main__":
 
   if training_run.has_policy_checkpoint():
     logging.info(f"Train: resuming training from {training_run.latest_policy_name()}")
-    learner_policy = policy_store.get_policy(
-      training_run.latest_policy_name()).policy(make_policy_fn)
+    pr =  policy_store.get_policy(training_run.latest_policy_name())
+    policy_type = pr.metadata()['policy_type']
+    learner_policy = pr.policy(make_policy)
   else:
     logging.info("No policy checkpoint found. Creating new policy.")
-    learner_policy = make_policy_fn("improved")
+    policy_type = args.model_type
+    learner_policy = model.create_policy(policy_type, binding)
 
   policy_pool = PolicyPool(
       learner_policy,
-      'learner',
+      "learner",
       batch_size = args.num_envs * args.num_teams * args.team_size,
-      num_policies = 1,
-      learner_weight =1
+      num_policies = args.max_opponent_policies + 1,
+      learner_weight = args.learner_weight,
   )
 
   trainer = clean_pufferl.CleanPuffeRL(
@@ -207,7 +212,11 @@ if __name__ == "__main__":
   )
 
   training_run.resume_training(trainer)
+  ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
+
   while not trainer.done_training():
+    sp = policy_store.select_policies(ps)
+    policy_pool.update_policies({p.name: p.policy(make_policy) for p in sp })
     trainer.evaluate()
 
     trainer.train(
@@ -218,8 +227,9 @@ if __name__ == "__main__":
 
     if (trainer.update) % args.checkpoint_interval == 0:
       cp = f'{training_run.name}.{trainer.update}'
-      policy_store.add_policy(cp, learner_policy)
+      policy_store.add_policy(cp, learner_policy, {"policy_type": policy_type})
       training_run.save_checkpoint(trainer)
+
 
   trainer.close()
 
