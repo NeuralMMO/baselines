@@ -1,4 +1,5 @@
 import argparse
+import time
 import logging
 
 import nmmo
@@ -7,6 +8,7 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+import pandas as pd
 
 import clean_pufferl
 from env.nmmo_config import nmmo_config
@@ -15,6 +17,8 @@ from lib.team.team_helper import TeamHelper
 from lib.training_run import TrainingRun
 from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore, PolicySelector
 from pufferlib.policy_pool import PolicyPool
+from pufferlib.policy_ranker import OpenSkillRanker
+import copy
 import model
 
 if __name__ == "__main__":
@@ -88,7 +92,7 @@ if __name__ == "__main__":
     help="interval to save models (default: 10)")
   parser.add_argument(
     "--train.run_name",
-    dest="run_name", type=str, default="training_run",
+    dest="run_name", type=str, default=None,
     help="run name (default: None)")
   parser.add_argument(
     "--train.runs_dir",
@@ -139,7 +143,9 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
 
-  training_run = TrainingRun.load_or_create(args.run_name, args.runs_dir)
+  if args.run_name is None:
+    args.run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
+  training_run = TrainingRun(args.run_name, args.runs_dir, args)
   training_run.enable_wandb(args.wandb_project, args.wandb_entity)
 
   # Set up the teams
@@ -172,12 +178,11 @@ if __name__ == "__main__":
   )
 
   make_policy = lambda mc: model.create_policy(mc.metadata()["policy_type"], binding)
-  if args.policy_store_dir:
-    logging.info(f"Using policy store from {args.policy_store_dir}")
-    policy_store = DirectoryPolicyStore(args.policy_store_dir)
-  else:
-    logging.info("Using MemoryPolicyStore. Policies will not be saved to disk.")
-    policy_store = MemoryPolicyStore()
+
+  if args.policy_store_dir is None:
+    args.policy_store_dir = training_run.data_dir()
+  logging.info(f"Using policy store from {args.policy_store_dir}")
+  policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
   if training_run.has_policy_checkpoint():
     logging.info(f"Train: resuming training from {training_run.latest_policy_name()}")
@@ -213,11 +218,25 @@ if __name__ == "__main__":
 
   training_run.resume_training(trainer)
   ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
+  ranker = OpenSkillRanker("learner")
+  ratings = copy.deepcopy(ranker.ratings())
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
     policy_pool.update_policies({p.name: p.policy(make_policy) for p in sp })
     trainer.evaluate()
+
+    ranker.update_ranks({
+        name: score for name, score in policy_pool.scores.items()
+    })
+    policy_pool.scores = {}
+
+
+    rank_changes = pd.DataFrame({
+      "name": [name for name in ranker.ratings().keys()],
+      "mu": [rating.mu for rating in ranker.ratings().values()],
+      "sigma": [rating.sigma for rating in ranker.ratings().values()],
+    })
 
     trainer.train(
       update_epochs=args.ppo_update_epochs,
@@ -225,11 +244,14 @@ if __name__ == "__main__":
       batch_rows=args.ppo_training_batch_size
     )
 
-    if (trainer.update) % args.checkpoint_interval == 0:
-      cp = f'{training_run.name}.{trainer.update}'
-      policy_store.add_policy(cp, learner_policy, {"policy_type": policy_type})
+    if trainer.update % args.checkpoint_interval == 1:
       training_run.save_checkpoint(trainer)
+      policy_store.add_policy(
+        training_run.latest_policy_name(),
+        learner_policy, {"policy_type": policy_type})
+      ranker.add_policy_copy(training_run.latest_policy_name(), "learner")
 
+    ratings = copy.deepcopy(ranker.ratings())
 
   trainer.close()
 
