@@ -3,7 +3,7 @@
 # Example ussage:
 #
 # sbatch ./scripts/slurm_run.sh scripts/train_baseline.sh \
-#   --train.experiment_name=realikun_16x8_0001
+#   --train.run_name=realikun_16x8_0001
 
 #SBATCH --account=carperai
 #SBATCH --partition=g40
@@ -25,14 +25,14 @@ ulimit -a
 
 wandb login --host=https://stability.wandb.io
 
-# Extract experiment_name from the arguments
-experiment_name=""
+# Extract run_name from the arguments
+run_name=""
 args=()
 for i in "$@"
 do
   case $i in
-    --train.experiment_name=*)
-    experiment_name="${i#*=}"
+    --train.run_name=*)
+    run_name="${i#*=}"
     args+=("$i")
     shift
     ;;
@@ -44,9 +44,9 @@ do
 done
 
 # Create symlink to the log file
-if [ ! -z "$experiment_name" ]; then
+if [ ! -z "$run_name" ]; then
   logfile="$SLURM_JOB_ID.log"
-  symlink="sbatch/${experiment_name}.log"
+  symlink="sbatch/${run_name}.log"
   if [ -L "$symlink" ]; then
     rm "$symlink"
   fi
@@ -80,14 +80,14 @@ while true; do
       kill $child_pids  # This kills the child processes
     fi
 
-    # Killing processes that have the experiment name in their command line
-    experiment_pids=$(pgrep -f "python.*$experiment_name")
-    if [ "$experiment_pids" != "" ]; then
-      echo "The following processes with '$experiment_name' will be killed:"
-      for pid in $experiment_pids; do
+    # Killing processes that have the run name in their command line
+    run_pids=$(pgrep -f "python.*$run_name")
+    if [ "$run_pids" != "" ]; then
+      echo "The following processes with '$run_name' will be killed:"
+      for pid in $run_pids; do
         echo "Experiment PID $pid: $(ps -p $pid -o cmd=)"
       done
-      kill $experiment_pids  # This kills the processes
+      kill $run_pids  # This kills the processes
     fi
   elif [ $exit_status -eq 143 ]; then
     echo "Killing Zombie processes..."
