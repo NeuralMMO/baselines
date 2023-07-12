@@ -15,7 +15,7 @@ from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
 from lib.training_run import TrainingRun
-from pufferlib.policy_store import DirectoryPolicyStore, MemoryPolicyStore, PolicySelector
+from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
 from pufferlib.policy_pool import PolicyPool
 from pufferlib.policy_ranker import OpenSkillRanker
 import copy

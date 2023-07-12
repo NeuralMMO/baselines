@@ -17,12 +17,17 @@ from nmmo.lib.log import EventCode
 import pufferlib
 import pufferlib.emulation
 from traitlets import default
+from feature_extractor import FeatureExtractor
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id):
     self._achievements = {}
     super().__init__(env, teams, team_id)
 
+    self._feature_extractors = [
+      FeatureExtractor(teams, tid, env.config)
+      for tid in teams
+    ]
   def reset(self, team_obs):
     super().reset(team_obs)
     self._achievements = {
@@ -43,6 +48,9 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         continue
 
     return team_reward, team_info
+
+  def features(self, obs, step):
+    return super().features(obs, step)
 
 # Not currently used
 
