@@ -16,7 +16,7 @@ def sort_dict_by_key(dict):
 @dataclass
 class ModelArchitecture:
 
-  NUM_TEAMS = 16
+  NUM_TEAMS = 128
   NUM_PLAYERS_PER_TEAM = 1 # 8 # TODO: make all work with 8 later
   INVENTORY_CAPACITY = 12
 
@@ -77,7 +77,8 @@ class ModelArchitecture:
   SELF_AS_ALLY_EMBED = 256
 
   # Hardcoded for compatibility with CleanRL wrapper shape checks
-  LSTM_HIDDEN = 512
+  LSTM_HIDDEN = 256
+  # LSTM_HIDDEN = 512
   ATTENTION_HIDDEN = 256
 
 

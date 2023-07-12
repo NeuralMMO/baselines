@@ -57,7 +57,7 @@ class RealikunPolicy(pufferlib.models.Policy):
       x = pufferlib.emulation.unpack_batched_obs(
         self.observation_space,
         env_outputs
-      )[0]
+      )
 
     batch_size = x['tile'].shape[0]
     num_agents = x['tile'].shape[1]
@@ -72,9 +72,10 @@ class RealikunPolicy(pufferlib.models.Policy):
 
     h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
 
-    self.recurrent_policy.h_self = h_self
-    self.recurrent_policy.h_inter = h_inter
-    self.recurrent_policy.reset = x["reset"]
+    if "recurrent_policy" in self.__dict__:
+      self.recurrent_policy.h_self = h_self
+      self.recurrent_policy.h_inter = h_inter
+      self.recurrent_policy.reset = x["reset"]
 
     batch_size, num_agents, num_features = h_inter.shape
     h_inter = h_inter.view(batch_size, num_agents*num_features)
@@ -85,7 +86,7 @@ class RealikunPolicy(pufferlib.models.Policy):
     batch_size = hidden.shape[0]
 
     # reshape the batch so that we compute actions per-agent
-    hidden = hidden.view(-1, 512)
+    # hidden = hidden.view(-1, 512)
     action_logits = self.policy_head(hidden)
     if concat:
       action_logits = torch.cat(action_logits, dim=-1)
@@ -121,11 +122,16 @@ class RealikunPolicy(pufferlib.models.Policy):
     return tmp_x
 
   @staticmethod
-  def create_policy():
-    return pufferlib.frameworks.cleanrl.make_policy(
-      RealikunPolicy,
-      recurrent_cls=MemoryBlock,
-      recurrent_args=[ModelArchitecture.ATTENTION_HIDDEN,
-                      ModelArchitecture.LSTM_HIDDEN],
-      recurrent_kwargs={'num_layers': 1},
-    )
+  def create_policy(num_lstm_layers=1):
+    if num_lstm_layers == 0:
+      policy =  pufferlib.frameworks.cleanrl.make_policy(
+        RealikunPolicy, recurrent_kwargs={'num_layers': 0})
+    else:
+      policy =  pufferlib.frameworks.cleanrl.make_policy(
+        RealikunPolicy,
+        recurrent_cls=MemoryBlock,
+        recurrent_args=[ModelArchitecture.ATTENTION_HIDDEN,
+                        ModelArchitecture.LSTM_HIDDEN],
+        recurrent_kwargs={'num_layers': 1},
+      )
+    return policy

@@ -47,7 +47,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     return self._feature_extractor(obs)
 
   def actions(self, actions, step):
-    return self._feature_extractor.trabslate_actions(actions)
+    return self._feature_extractor.translate_actions(actions)
 
 # Not currently used
 

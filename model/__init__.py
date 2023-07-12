@@ -10,9 +10,10 @@ import lib.agent.util
 import pufferlib.emulation
 
 policy_dict = {
-    "realikun": RealikunPolicy.create_policy,
-    "realikun-simplified": RealikunSimplifiedPolicy.create_policy,
-    "random": RandomPolicy.create_policy,
+    "realikun": lambda: RealikunPolicy.create_policy(num_lstm_layers=0),
+    "realikun-lstm": lambda: RealikunPolicy.create_policy(num_lstm_layers=1),
+    "realikun-simplified": lambda: RealikunSimplifiedPolicy.create_policy,
+    "random": lambda: RandomPolicy.create_policy,
     "basic": lambda: BasicPolicy.create_policy(num_lstm_layers=0),
     "basic-lstm": lambda: BasicPolicy.create_policy(num_lstm_layers=1),
     "improved": lambda: ImprovedPolicy.create_policy(num_lstm_layers=0),

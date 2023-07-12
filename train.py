@@ -172,6 +172,7 @@ if __name__ == "__main__":
     env_creator=lambda: nmmo.Env(config),
     env_name="Neural MMO",
     suppress_env_prints=False,
+    teams=team_helper.teams,
     emulate_const_horizon=args.max_episode_length,
     postprocessor_cls=Postprocessor,
     postprocessor_args=[]
