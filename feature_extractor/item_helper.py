@@ -162,7 +162,7 @@ class ItemHelper:
     self._reset_obs_best_force()
 
   def _reset_obs_best_force(self):
-    self._obs_inv: Dict = {}
+    self._obs_inv: Dict = {} # also use this as an alive flag
 
     self.force_use_idx = [None] * self._team_size
     self.force_sell_idx = [None] * self._team_size
@@ -200,8 +200,9 @@ class ItemHelper:
     self._equip_best_item(obs)
 
     for agent_id, agent_obs in obs.items():
-      # save for later use, e.g., legal_use(), legal_sell()
-      self._obs_inv[agent_id] = agent_obs['Inventory']
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._obs_inv: # i.e., dead agent
+        continue
 
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
       # evaluate which items to sell in the order of priority:
@@ -281,9 +282,14 @@ class ItemHelper:
 
   def _evaluate_best_item(self, obs):
     for agent_id, agent_obs in obs.items():
-      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
       agent = self._entity_helper.agent_or_none(agent_id)
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent is None: # i.e., dead agent
+        continue
+      # save for later use, e.g., legal_use(), legal_sell(), alive flag
+      self._obs_inv[agent_id] = agent_obs['Inventory']
 
+      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
       eval_types = [*ARMORS, *TOOLS,
         ATK_TO_WEAPON[self._entity_helper.member_professions[member_pos]]]
 
@@ -302,8 +308,11 @@ class ItemHelper:
 
   def _equip_best_item(self, obs):
     for agent_id, agent_obs in obs.items():
-      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._obs_inv: # i.e., dead agent
+        continue
 
+      member_pos = self._entity_helper.agent_id_to_pos(agent_id)
       # priority: weapon -> hat -> top -> bottom -> then tools
       # NOTE: if there are level-3 Hat and level-4 Top, this results in
       #   using level-3 Hat due to the below priority

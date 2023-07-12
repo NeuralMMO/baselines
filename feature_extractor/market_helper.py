@@ -79,6 +79,10 @@ class MarketHelper:
     self._agent_health = np.zeros(self._team_size)
     self._restore_score = np.zeros(self._team_size)
     for agent_id, agent_obs in obs.items():
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._item._obs_inv: # i.e., dead agent
+        continue
+
       member_pos = self._entity_helper.agent_id_to_pos(agent_id)
       agent = self._entity_helper.agent_or_none(agent_id)
       obs_inv = agent_obs['Inventory']
@@ -112,8 +116,8 @@ class MarketHelper:
     proc_order = np.argsort(self._agent_health)
     for member_pos in proc_order: # start from lowest health
       agent_id = self._entity_helper.pos_to_agent_id(member_pos)
-      agent = self._entity_helper.agent_or_none(agent_id)
-      if agent_id not in obs: # skip dead
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._item._obs_inv: # i.e., dead agent
         continue
 
       if self._agent_health[member_pos] > LOW_HEALTH: # in good health
@@ -124,6 +128,7 @@ class MarketHelper:
 
       # this agent should get one
       obs_mkt = obs[agent_id]['Market']
+      agent = self._entity_helper.agent_or_none(agent_id)
       listings = self._filter_market_obs(agent, obs_mkt, Item.Potion.ITEM_TYPE_ID)
       if len(listings) > 0:
         # randomly selecting a listing
@@ -142,7 +147,8 @@ class MarketHelper:
     proc_order = np.argsort(self._combat_score)
     for member_pos in proc_order: # start from lowest restore score
       agent_id = self._entity_helper.pos_to_agent_id(member_pos)
-      if agent_id not in obs: # skip dead
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._item._obs_inv: # i.e., dead agent
         continue
 
       agent = self._entity_helper.agent_or_none(agent_id)
@@ -181,7 +187,8 @@ class MarketHelper:
     proc_order = np.argsort(self._restore_score)
     for member_pos in proc_order: # start from lowest restore score
       agent_id = self._entity_helper.pos_to_agent_id(member_pos)
-      if agent_id not in obs: # skip dead
+      # NOTE: obs contains both alive and dead_this_tick agents
+      if agent_id not in self._item._obs_inv: # i.e., dead agent
         continue
 
       agent = self._entity_helper.agent_or_none(agent_id)

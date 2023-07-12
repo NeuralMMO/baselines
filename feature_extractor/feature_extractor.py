@@ -96,7 +96,8 @@ class FeatureExtractor():
 
     # attack
     legal_moves["style"] = np.ones((self.team_size,
-                                       ModelArchitecture.ACTION_NUM_DIM["style"]))
+                                    ModelArchitecture.ACTION_NUM_DIM["style"]),
+                                    dtype=np.float32)
     legal_moves["target"] = self.entity_helper.legal_target()
 
     # use, destroy

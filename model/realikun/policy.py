@@ -7,11 +7,11 @@ from model.realikun.model import EntityEncoder, InteractionBlock, MemoryBlock,  
 
 class RealikunPolicy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=2048, hidden_size=4096):
-    super().__init__(binding, input_size, hidden_size)
+    super().__init__(binding)
 
     # CHECK: Do these belong here?
-    self.state_handler_dict = {}
-    torch.set_num_threads(1)
+    #self.state_handler_dict = {}
+    #torch.set_num_threads(1)
 
     self.self_net = SelfEncoder(
       ModelArchitecture.TILE_NUM_CHANNELS,
@@ -125,6 +125,7 @@ class RealikunPolicy(pufferlib.models.Policy):
     return pufferlib.frameworks.cleanrl.make_policy(
       RealikunPolicy,
       recurrent_cls=MemoryBlock,
-      recurrent_args=[2048, 4096],
+      recurrent_args=[ModelArchitecture.ATTENTION_HIDDEN,
+                      ModelArchitecture.LSTM_HIDDEN],
       recurrent_kwargs={'num_layers': 1},
     )

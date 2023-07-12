@@ -8,6 +8,8 @@ from scripted import baselines
 
 from lib.team.team_helper import TeamHelper
 
+
+# TODO: make all work with 16 teams x 8 agents
 class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
   SPECIALIZE = True
   # config.Medium's PLAYER_N = 128
@@ -18,6 +20,8 @@ class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
     baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver,
     baselines.Alchemist, baselines.Melee, baselines.Range, baselines.Mage]
 
+  # NOTE: for now, just making the featurizer run for 16 teams, with 1 agent per team
+  PLAYER_N = len(PLAYERS) # each team has 1 player
 
 class FeaturizerTestTemplate(unittest.TestCase):
   @classmethod
@@ -25,8 +29,6 @@ class FeaturizerTestTemplate(unittest.TestCase):
     cls.config = FeatureTestConfig()
 
     # pylint: disable=invalid-name
-    # CHECK ME: this provides action targets, at the cost of performance
-    #   We may want to revisit this
     cls.config.PROVIDE_ACTION_TARGETS = True
 
     # default: 16 teams x 8 players

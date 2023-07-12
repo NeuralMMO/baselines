@@ -242,7 +242,7 @@ if __name__ == "__main__":
     trainer.train(
       update_epochs=args.ppo_update_epochs,
       bptt_horizon=args.bptt_horizon,
-      batch_rows=args.ppo_training_batch_size
+      batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
     )
 
     if trainer.update % args.checkpoint_interval == 1:

@@ -17,7 +17,7 @@ def sort_dict_by_key(dict):
 class ModelArchitecture:
 
   NUM_TEAMS = 16
-  NUM_PLAYERS_PER_TEAM = 8
+  NUM_PLAYERS_PER_TEAM = 1 # 8 # TODO: make all work with 8 later
   INVENTORY_CAPACITY = 12
 
   # Observations
@@ -75,6 +75,8 @@ class ModelArchitecture:
   # Model
   SELF_EMBED = 512
   SELF_AS_ALLY_EMBED = 256
+
+  # Hardcoded for compatibility with CleanRL wrapper shape checks
   LSTM_HIDDEN = 512
   ATTENTION_HIDDEN = 256
 
@@ -213,7 +215,12 @@ class InteractionBlock(nn.Module):
     mask = torch.cat([x['team_mask'], x['npc_mask'], x['enemy_mask']], dim=-1)
     mask = mask.to(bool).view(bs * na, ne)
     h = h.view(bs * na, ne, nf).transpose(0, 1)
+
+    # trasformer returns nan when mask is all true
+    # Masking with zeros produces nan in action sampling
+    mask[mask.all(dim=1)] = False
     h = self.transformer(h, src_key_padding_mask=mask)
+
     h = h.transpose(0, 1).view(bs, na, ne, nf)
     h = h.max(dim=2)[0]
     return h
@@ -223,25 +230,31 @@ class MemoryBlock(nn.Module):
   def __init__(self, n_attn_hidden, n_lstm_hidden, num_layers):
     super().__init__()
 
+    # Assert for compatibility with CleanRL wrapper shape checks
+    assert n_attn_hidden == 256, "n_attn_hidden must be 256 for compatibility with CleanRL"
+    assert n_lstm_hidden == 512, "n_lstm_hidden must be 512 for compatibility with CleanRL"
+
     self.num_layers = num_layers
     self.hidden_size = n_lstm_hidden
-
-    # Hardcoded for compatibility with CleanRL wrapper shape checks
-    n_attn_hidden = 256
-    n_lstm_hidden = 512
-
     self.n_attn_hidden = n_attn_hidden
     self.lstm = nn.LSTMCell(n_lstm_hidden, n_lstm_hidden, num_layers)
 
   def forward(self, x, state):
     # @daveey - Any idea on where seq_len comes from?
     seq_len, teams, _ = x.shape
+    # CHECK ME: is this correct? in pufferlib, clean_pufferl.py, train() line 356
+    #   agent.get_action_and_value() is called with lstm_state = None
+    if state is None:
+      shape = (self.num_layers, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
+      state = [torch.zeros(shape, dtype=torch.float32, device=x.device),
+               torch.zeros(shape, dtype=torch.float32, device=x.device),]
+
     hxs, cxs = state
     h_self = self.h_self
     h_inter = self.h_inter
 
-    hxs = hxs.view(-1, teams*8, 512)
-    cxs = cxs.view(-1, teams*8, 512)
+    hxs = hxs.view(-1, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
+    cxs = cxs.view(-1, teams*ModelArchitecture.NUM_PLAYERS_PER_TEAM, self.hidden_size)
 
     h = torch.cat([h_self[:, :, self.n_attn_hidden:], h_inter], dim=-1)
     bs, na, nf = h.shape  # batch_size, num_agent, num_feature
