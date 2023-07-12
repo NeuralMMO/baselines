@@ -197,7 +197,8 @@ if __name__ == "__main__":
   policy_pool = PolicyPool(
       learner_policy,
       "learner",
-      batch_size = args.num_envs * args.num_teams * args.team_size,
+      num_envs = args.num_envs,
+      num_agents = args.num_teams * args.team_size,
       num_policies = args.max_opponent_policies + 1,
       learner_weight = args.learner_weight,
   )
