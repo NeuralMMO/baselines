@@ -205,9 +205,16 @@ class FeatureExtractor:
                         nmmo.action.MarketItem: buy_idx
                     }
 
+        # Bounds: [3, 100, 1024, 12, 12, 100, 99, 100, 5, 12, 99, 12]
+        flat_actions = [0] * 12
+        flat_actions[0] = actions_dict['style'][0]
+        flat_actions[1] = actions_dict['target'][0]
+        #flat_actions[3] = actions_dict['destroy'][0]
+        flat_actions[8] = actions_dict['move'][0]
+        #flat_actions[9] = actions_dict['sell'][0]
+        #flat_actions[11] = actions_dict['use'][0]
         # TODO: give, give-gold
-
         # TODO: prioritize when there are multiple actions on the same item
         #   currently, the actions will be executed in the order of
         #   Use -> Give -> Destroy -> Sell
-        return trans_actions[0]
+        return np.array(flat_actions)

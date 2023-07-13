@@ -43,6 +43,7 @@ class RealikunPolicy(pufferlib.models.Policy):
     self.observation_space = binding.featurized_single_observation_space
     self.single_observation_space = binding.single_observation_space
 
+    #from pdb import set_trace as T; T()
     self.policy_head = PolicyHead(
         ModelArchitecture.LSTM_HIDDEN, ModelArchitecture.ACTION_NUM_DIM)
 
