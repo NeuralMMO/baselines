@@ -6,7 +6,6 @@
 # train_helper provides the dummy functions/classes to make this run
 # TODO: replace these with the actual functions/classes
 from curriculum.train_helper import train_on_tasks, evaluate_on_tasks, load_agent_model
-from curriculum.train_helper import SyllabusTaskSampler
 
 # actual working code, with a lot to improve
 from curriculum.task_encoder import TaskEncoder
@@ -39,6 +38,10 @@ EPOCHS_PER_ELM_UPDATE = 10
 # setting DEBUG=True bypass running open elm
 DEBUG = True
 
+# the curriculum file, a pickled list of training task TaskSpec
+# its file path is fed into the nmmo env, and task sampling is done within the env
+CURRICULUM_FILE_PATH = 'submission/custom_curriculum_with_embedding.pkl'
+
 def train_with_curriculum(use_elm=True):
   # participant's custom task spec is provided in a separate file, custom_curriculum.py
   if use_elm:
@@ -49,15 +52,15 @@ def train_with_curriculum(use_elm=True):
   else:
     task_generator = SimpleTaskGenerator(cc.task_spec)
   train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
-  eval_task_spec = task_generator.generate_tasks(NUM_TEST_TASKS)
+  # eval_task_spec = task_generator.generate_tasks(NUM_TEST_TASKS)
 
   # get task embeddings: pass in the module itself to provide context
-  task_encoder = TaskEncoder(LLM_CHECKPOINT, cc)
-  train_task_spec_with_embedding = task_encoder.get_task_embedding(train_task_spec)
-  eval_task_spec_with_embedding = task_encoder.get_task_embedding(eval_task_spec)
+  #   the whole curriculum (task spec with embedding) will be sent to the env as a file
+  task_encoder = TaskEncoder(LLM_CHECKPOINT, cc, batch_size=2)
+  task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
 
-  # initialize task sampler
-  task_sampler = SyllabusTaskSampler(train_task_spec_with_embedding)
+  # Revisit when evaluate_on_tasks is implemented
+  # eval_task_spec_with_embedding = task_encoder.get_task_embedding(eval_task_spec)
 
   # This will likely have to work off of a pretrained model
   agent_model = load_agent_model(AGENT_MODEL_PATH)
@@ -73,24 +76,15 @@ def train_with_curriculum(use_elm=True):
       #   may need to update_context, which have the new func definition
       new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS,
                                                   debug=DEBUG)
-      new_task_spec_with_embedding = task_encoder.get_task_embedding(new_task_spec)
-      task_sampler.add_new_tasks(new_task_spec_with_embedding)
-
-    # Sample one task per team. Note that the trainer runs many
-    # envs in parallel, and these are vectorized
-    batch_task_spec_with_embedding = task_sampler.sample_tasks(num_tasks=64)
+      train_task_spec += new_task_spec
+      task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
 
     # Joseph will provide an API for training and evaluation with CleanRL
-    # David has specific ideas on how to pass around the embedding in and out of the env
-    agent_model, train_stats = train_on_tasks(agent_model, batch_task_spec_with_embedding)
+    agent_model, train_stats = train_on_tasks(agent_model, CURRICULUM_FILE_PATH)
 
-    # Sampler updates its heuristics based on performance delta
-    task_sampler.update(batch_task_spec_with_embedding, train_stats)
-
-    # We also want to check performance on held-out tasks
     # This is just a split from the heuristics and is separate from
     # the competition evaluation tasks used to score models
-    eval_stats = evaluate_on_tasks(agent_model, eval_task_spec_with_embedding)
+    #eval_stats = evaluate_on_tasks(agent_model, eval_task_spec_with_embedding)
 
     #wandb.log(train_stats, eval_stats)
 

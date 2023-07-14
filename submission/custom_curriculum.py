@@ -2,14 +2,14 @@
 
 # allow custom functions to use pre-built eval functions without prefix
 from nmmo.task.base_predicates import *
+from nmmo.task.task_spec import TaskSpec
 
 ##############################################################################
 # define custom evaluation functions
 # pylint: disable=redefined-outer-name
 
-def PracticeFormation(gs, subject, dist, num_tick):
-  return norm(AllMembersWithinRange(gs, subject, dist) * TickGE(gs, subject, num_tick))
-
+# NOTE: norm is a helper function to normalize the value to [0, 1]
+#    imported from nmmo.task.base_predicates
 def PracticeInventoryManagement(gs, subject, space, num_tick):
   return norm(InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick))
 
@@ -28,13 +28,11 @@ def PracticeEating(gs, subject):
   return norm(progress)
 
 ##############################################################################
-# define learning task spec, a list of tuple: (reward_to, eval_fn, eval_fn_kwargs)
-#   * reward_to: 'agent' or 'team'
-#   * eval_fn: one eval function defined above or in nmmo.task.base_predicates
-#   * eval_fn_kwargs: parameters to pass into eval_fn
+# Use TaskSpec class to define each training task
+# See curriculum/manual_curriculum.py for detailed examples based on pre-built eval fns
 
 STAY_ALIVE_GOAL = [50, 100, 150, 200, 300, 500]
-EVENT_NUMBER_GOAL = [1, 2, 3, 4, 5, 7, 9, 12, 15, 20, 30, 50]
+EVENT_NUMBER_GOAL = [3, 4, 5, 7, 9, 12, 15, 20, 30, 50]
 
 task_spec = []
 
@@ -43,15 +41,13 @@ task_spec = []
 essential_skills = ['GO_FARTHEST', 'EAT_FOOD', 'DRINK_WATER',
                     'SCORE_HIT', 'HARVEST_ITEM', 'LEVEL_UP']
 for event_code in essential_skills:
-  task_spec += [('agent', CountEvent, {'event': event_code, 'N': cnt})
-                for cnt in EVENT_NUMBER_GOAL]
-
-for dist in [1, 3, 5, 10]:
-  task_spec += [('team', PracticeFormation, {'dist': dist, 'num_tick': num_tick})
-                for num_tick in STAY_ALIVE_GOAL]
+  task_spec += [TaskSpec(eval_fn=CountEvent, eval_fn_kwargs={'event': event_code, 'N': cnt},
+                         sampling_weight=3) for cnt in EVENT_NUMBER_GOAL]
 
 for space in [2, 4, 8]:
-  task_spec += [('agent', PracticeInventoryManagement, {'space': space, 'num_tick': num_tick})
+  task_spec += [TaskSpec(eval_fn=PracticeInventoryManagement,
+                         eval_fn_kwargs={'space': space, 'num_tick': num_tick})
                 for num_tick in STAY_ALIVE_GOAL]
 
-task_spec.append(('agent', PracticeEating, {}))
+task_spec.append(TaskSpec(eval_fn=PracticeEating, eval_fn_kwargs={},
+                          sampling_weight=5))
