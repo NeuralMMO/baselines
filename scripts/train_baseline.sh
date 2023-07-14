@@ -9,6 +9,7 @@ python -u -O -m train \
 --rollout.num_buffers=2 \
 --rollout.num_envs=12 \
 --env.team_size=1 \
+--env.num_npcs=266 \
 --ppo.training_batch_size=128 \
 --rollout.batch_size=131072 \
 --env.combat_enabled \

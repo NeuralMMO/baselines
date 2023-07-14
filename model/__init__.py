@@ -24,5 +24,6 @@ policy_dict = {
 
 
 def create_policy(name: str, binding: pufferlib.emulation.Binding):
+  # pylint: disable=E1101
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
   return policy_dict[name]()(binding).to(device)

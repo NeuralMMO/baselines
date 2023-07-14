@@ -129,18 +129,18 @@ if __name__ == "__main__":
       postprocessor_args=[],
   )
 
-  def make_policy(mc): return model.create_policy(
-      mc.metadata()["policy_type"], binding)
+  def make_policy(mc):
+    return model.create_policy(
+        mc.metadata()["policy_type"], binding)
 
   if args.policy_store_dir is None:
     args.policy_store_dir = training_run.data_dir()
-  logging.info(f"Using policy store from {args.policy_store_dir}")
+  logging.info("Using policy store from %s", args.policy_store_dir)
   policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
   if training_run.has_policy_checkpoint():
-    logging.info(
-        f"Train: resuming training from {training_run.latest_policy_name()}"
-    )
+    logging.info("Train: resuming training from %s",
+                 training_run.latest_policy_name())
     pr = policy_store.get_policy(training_run.latest_policy_name())
     policy_type = pr.metadata()["policy_type"]
     learner_policy = pr.policy(make_policy)
