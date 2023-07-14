@@ -1,3 +1,4 @@
+from typing import List
 from types import ModuleType
 import re
 import sys
@@ -13,7 +14,7 @@ import nmmo
 from nmmo.lib.material import Harvestable
 import nmmo.task
 from nmmo.task import constraint as c
-from nmmo.task.task_api import make_team_tasks
+from nmmo.task import task_spec as ts
 
 # required to run check_task_spec
 # pylint: disable=wildcard-import,unused-import,unused-wildcard-import
@@ -109,7 +110,7 @@ def sample_parameter(key, type_hint):
   return 1
 
 TIME_OUT = 15 # sec
-def is_task_spec_valid(spec_list):
+def is_task_spec_valid(spec_list: List[ts.TaskSpec]):
   # pylint: disable=bad-builtin,bare-except,inconsistent-return-statements
   teams = {0:[1,2,3], 1:[4,5], 2:[6,7], 3:[8,9], 4:[10,11]}
   config = nmmo.config.Default()
@@ -117,7 +118,7 @@ def is_task_spec_valid(spec_list):
   num_success = 0
   for single_spec in spec_list:
     # pylint: disable=cell-var-from-loop
-    test_task = make_team_tasks(teams, [single_spec])
+    test_task = ts.make_task_from_spec(teams, [single_spec])
     env.reset(make_task_fn=lambda: test_task)
     def run_env():
       for _ in range(3):
@@ -163,27 +164,28 @@ def generate_task_spec(result_str, fn_name, num_sample=3):
 
   included_kwargs = set()
   for _ in range(num_sample):
-    eval_kwargs = {}
+    task_fn_kwargs = {}
     for key, param in fn_params.items():
       if key in ['gs', 'subject']:
         continue
       type_hint = param.annotation.__name__
-      eval_kwargs[key] = sample_parameter(key, type_hint)
-    args_vals = tuple(eval_kwargs.values())
+      task_fn_kwargs[key] = sample_parameter(key, type_hint)
+    args_vals = tuple(task_fn_kwargs.values())
     if args_vals not in included_kwargs:
-      task_spec.append(('agent', task_fn, eval_kwargs))
+      task_spec.append(ts.TaskSpec(eval_fn=task_fn,
+                                   eval_fn_kwargs=task_fn_kwargs))
       included_kwargs.add(args_vals)
 
   return task_spec
 
-def task_spec_to_str(task_spec):
+def task_spec_to_str(task_spec: List[ts.TaskSpec]):
   # extract task_fn source code from task_spec
   extracted_fn_list = set()
   task_fn_src = []
   for single_spec in task_spec:
-    fn_name = single_spec[1].__name__
+    fn_name = single_spec.eval_fn.__name__
     if fn_name not in extracted_fn_list:
-      task_fn_src.append(inspect.getsource(single_spec[1]))
+      task_fn_src.append(inspect.getsource(single_spec.eval_fn))
       extracted_fn_list.add(fn_name)
   return "\n".join(task_fn_src)
 
@@ -218,7 +220,7 @@ item.Ration, item.Poultice
 tile_type.Lava, tile_type.Water,tile_type.Grass, tile_type.Scrub, 
 tile_type.Forest, tile_type.Stone, tile_type.Slag,  tile_type.Ore
 tile_type.Stump, tile_type.Tree, tile_type.Fragment, tile_type.Crystal,
-tile_type.Weeds, tile_type.Ocean, tile_type.Fish""", 
+tile_type.Weeds, tile_type.Ocean, tile_type.Fish""",
 
 "long_import":"""
 Base Predicates to use in tasks:

@@ -37,13 +37,13 @@ class TestElmForNmmo(unittest.TestCase):
       return 0"""
     task_spec = generate_task_spec(test_str, GEN_FN_NAME, num_sample=3)
     # the kwargs must have N
-    self.assertTrue("N" in task_spec[0][2])
+    self.assertTrue("N" in task_spec[0].eval_fn_kwargs)
 
     # the tasks with some pre-built functions
     task_spec = generate_task_spec(VALID_TASK_FN, GEN_FN_NAME, num_sample=3)
     # the kwargs must have dist and num_tick
-    self.assertTrue("dist" in task_spec[0][2])
-    self.assertTrue("num_tick" in task_spec[0][2])
+    self.assertTrue("dist" in task_spec[0].eval_fn_kwargs)
+    self.assertTrue("num_tick" in task_spec[0].eval_fn_kwargs)
 
   def test_is_task_spec_valid(self):
     # the tasks with some pre-built functions
@@ -79,8 +79,8 @@ def training_task(gs, subject):
     task_spec = gene.generate_task_spec(num_sample)
     self.assertEqual(len(task_spec), num_sample)
     for single_spec in task_spec:
-      self.assertTrue("dist" in single_spec[2])
-      self.assertTrue("num_tick" in single_spec[2])
+      self.assertTrue("dist" in single_spec.eval_fn_kwargs)
+      self.assertTrue("num_tick" in single_spec.eval_fn_kwargs)
 
   def test_elm_prompt(self):
     # pylint: disable=protected-access,bad-builtin

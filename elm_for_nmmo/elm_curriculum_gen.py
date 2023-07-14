@@ -1,8 +1,10 @@
+from typing import List
 import re
 import random
 import inspect
 
 import nmmo.task
+from nmmo.task import task_spec as ts
 
 from openelm import ELM
 from openelm.configs import ELMConfig, PromptModelConfig, MAPElitesConfig
@@ -15,7 +17,7 @@ from elm_for_nmmo.nmmo_env import NMMOConfig, NMMOEnvironment
 ######################################################################
 # NOTE: this is actually a random task sampler, which sample task specs with replacement
 class SimpleTaskGenerator:
-  def __init__(self, task_spec):
+  def __init__(self, task_spec: List[ts.TaskSpec]):
     self.task_spec = task_spec
     self.eval_fn_code = self._get_eval_fn_code()
 
@@ -23,9 +25,9 @@ class SimpleTaskGenerator:
     # get the whole pre-built eval functions
     code = inspect.getsource(nmmo.task.base_predicates)
     # go through the task_spec and include the code of new functions
-    for _, eval_fn, _ in self.task_spec:
-      if not hasattr(nmmo.task.base_predicates, eval_fn.__name__):
-        code += '\n' + inspect.getsource(eval_fn)
+    for spec in self.task_spec:
+      if not hasattr(nmmo.task.base_predicates, spec.eval_fn.__name__):
+        code += '\n' + inspect.getsource(spec.eval_fn)
     return code
 
   def generate_tasks(self, num_tasks):
@@ -37,7 +39,8 @@ class SimpleTaskGenerator:
 
 class OpenELMTaskGenerator(SimpleTaskGenerator):
   """Container class to include all the configs and generate tasks"""
-  def __init__(self, task_spec, checkpoint,
+  def __init__(self, task_spec: List[ts.TaskSpec],
+               checkpoint,
                temperature=1.1,
                batch_size=1,
                gen_fn_name="training_task"):
@@ -66,7 +69,8 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
 
     ENVS_DICT["NMMO"] = NMMOEnvironment
 
-  def evolve_tasks(self, task_spec, num_tasks, steps=10, debug=False):
+  def evolve_tasks(self, task_spec: List[ts.TaskSpec],
+                   num_tasks, steps=10, debug=False):
     """Evolve the given task specs for the given number of steps
           and return the num_tasks task specs
     """
