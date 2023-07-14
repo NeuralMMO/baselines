@@ -8,6 +8,7 @@ from model.basic_teams.policy import BasicTeamsPolicy
 from model.improved.policy import ImprovedPolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
+from model.decode.policy import Policy as DecodePolicy
 from model.realikun_simple.policy import RealikunSimplifiedPolicy
 
 
@@ -126,5 +127,7 @@ class BaselineAgent(Agent):
       return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
     elif model_type == "basic-teams-lstm":
       return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
+    elif model_type == "decode":
+      return DecodePolicy.create_policy()
     else:
       raise ValueError(f"Unsupported model type: {model_type}")
