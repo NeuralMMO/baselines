@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict
 from venv import logger
 
+import clean_pufferl
 import nmmo
 import pandas as pd
 import pufferlib.emulation
@@ -12,7 +13,6 @@ import pufferlib.frameworks.cleanrl
 import pufferlib.policy_pool
 import pufferlib.registry.nmmo
 
-import clean_pufferl
 import model
 from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor

@@ -3,8 +3,9 @@ from collections import defaultdict
 import pufferlib
 import pufferlib.emulation
 
-#pylint: disable=import-error
+# pylint: disable=import-error
 from feature_extractor.feature_extractor import FeatureExtractor
+
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id):
@@ -38,4 +39,3 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
   # def actions(self, actions, step):
   #   return self._feature_extractor.translate_actions(actions)
-

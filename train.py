@@ -3,21 +3,22 @@ import copy
 import logging
 import os
 import time
-from pufferlib.utils import PersistentObject
+
+import clean_pufferl
 import nmmo
-from numpy import mean
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
+from numpy import mean
 from pufferlib.policy_pool import PolicyPool
 from pufferlib.policy_ranker import OpenSkillRanker
 from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
+from pufferlib.utils import PersistentObject
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
-import wandb
 
-import clean_pufferl
 import model
+import wandb
 from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
@@ -320,8 +321,10 @@ if __name__ == "__main__":
   training_run.resume_training(trainer)
   ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
   ranker = PersistentObject(
-    os.path.join(training_run.data_dir(), "openskill.pickle"),
-    OpenSkillRanker, "learner")
+      os.path.join(training_run.data_dir(), "openskill.pickle"),
+      OpenSkillRanker,
+      "learner",
+  )
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
@@ -329,37 +332,50 @@ if __name__ == "__main__":
     trainer.evaluate()
 
     if policy_pool.scores:
-      logging.info("Ranker Ratings (Pre-Update): %s", {
-        n: ranker.ratings().get(n) for n in policy_pool.scores
-      })
-      logging.info("Policy Scores: %s", {
-        n: mean(v) for n, v in policy_pool.scores.items()
-      })
+      logging.info(
+          "Ranker Ratings (Pre-Update): %s",
+          {n: ranker.ratings().get(n) for n in policy_pool.scores},
+      )
+      logging.info(
+          "Policy Scores: %s", {n: mean(v)
+                                for n, v in policy_pool.scores.items()}
+      )
       ranker.update_ranks(policy_pool.scores)
-      logging.info("Ranker Ratings (Post Update): %s", {
-        n: ranker.ratings()[n].mu for n in policy_pool.scores
-      })
+      logging.info(
+          "Ranker Ratings (Post Update): %s",
+          {n: ranker.ratings()[n].mu for n in policy_pool.scores},
+      )
       if trainer.wandb_initialized:
-        wandb.log({
-          "skillrank/learner/mu": ranker.ratings()["learner"].mu,
-          "skillrank/learner/sigma": ranker.ratings()["learner"].sigma,
-          "skillrank/learner/score": mean(policy_pool.scores["learner"]),
-          "skillrank/opponent/mu": mean([
-            ranker.ratings()[n].mu for n in policy_pool.scores
-            if n != "learner"
-          ]),
-          "skillrank/opponent/sigma": mean([
-            ranker.ratings()[n].sigma for n in policy_pool.scores
-            if n != "learner"
-          ]),
-          "skillrank/opponent/score": mean([
-            mean(v) for n, v in policy_pool.scores.items()
-            if n != "learner"
-          ]),
-          "agent_steps": trainer.global_step,
-          "global_step": trainer.global_step,
-        })
-
+        wandb.log(
+            {
+                "skillrank/learner/mu": ranker.ratings()["learner"].mu,
+                "skillrank/learner/sigma": ranker.ratings()["learner"].sigma,
+                "skillrank/learner/score": mean(policy_pool.scores["learner"]),
+                "skillrank/opponent/mu": mean(
+                    [
+                        ranker.ratings()[n].mu
+                        for n in policy_pool.scores
+                        if n != "learner"
+                    ]
+                ),
+                "skillrank/opponent/sigma": mean(
+                    [
+                        ranker.ratings()[n].sigma
+                        for n in policy_pool.scores
+                        if n != "learner"
+                    ]
+                ),
+                "skillrank/opponent/score": mean(
+                    [
+                        mean(v)
+                        for n, v in policy_pool.scores.items()
+                        if n != "learner"
+                    ]
+                ),
+                "agent_steps": trainer.global_step,
+                "global_step": trainer.global_step,
+            }
+        )
 
     policy_pool.scores = {}
 
