@@ -31,11 +31,13 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
     return team_reward, team_info
 
-  def features(self, obs, step):
-    return self._feature_extractor(obs)
+  # def features(self, obs, step):
+  #   # for ob in obs.values():
+  #   #   ob["featurized"] = self._feature_extractor(obs)
+  #   return obs
 
-  def actions(self, actions, step):
-    return self._feature_extractor.translate_actions(actions)
+  # def actions(self, actions, step):
+  #   return self._feature_extractor.translate_actions(actions)
 
 
 # Not currently used
