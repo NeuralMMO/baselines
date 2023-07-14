@@ -65,12 +65,12 @@ class Policy(pufferlib.models.Policy):
 
   def encode_observations(self, env_outputs):
     # TODO: Change 0 for teams when teams are added
-    env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+  env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
 
     tile = env_outputs['Tile']
     # Center on player
     # This is cursed without clone??
-    tile[:, :, :2] -= tile[:, 112:113, :2].clone() 
+    tile[:, :, :2] -= tile[:, 112:113, :2].clone()
     tile[:, :, :2] += 7
     tile = self.embedding(
         tile.long().clip(0, 255) + tile_offset.to(tile.device)

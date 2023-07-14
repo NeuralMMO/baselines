@@ -73,7 +73,7 @@ if __name__ == "__main__":
   parser.add_argument("--train.learner_weight", dest="learner_weight",
                       type=float, default=1.0, help="weight of learner policy (default: 1.0)")
   parser.add_argument("--train.max_opponent_policies", dest="max_opponent_policies", type=int,
-                      default=2, help="maximum number of opponent policies to train against (default: 2)")
+                      default=0, help="maximum number of opponent policies to train against (default: 0)")
   parser.add_argument("--wandb.project", dest="wandb_project", type=str,
                       default=None, help="wandb project name (default: None)")
   parser.add_argument("--wandb.entity", dest="wandb_entity", type=str,
