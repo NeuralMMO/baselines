@@ -17,10 +17,6 @@ from submission import custom_curriculum as cc
 # if you want more task specs, use
 from curriculum import manual_curriculum as mc # and use mc.task_spec
 
-# Task spec, which is a list tuple and pickle-able, is passed around
-# task_spec: (reward_to, eval_fn, kwargs)
-# task_spec_with_embedding: (reward_to, eval_fn, kwargs, task_embedding)
-
 #####################################################################
 # this is the main training loop
 
