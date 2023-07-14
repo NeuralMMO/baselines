@@ -3,6 +3,7 @@ import torch
 from model.basic.policy import BasicPolicy
 from model.basic_teams.policy import BasicTeamsPolicy
 from model.improved.policy import ImprovedPolicy
+from model.decode.policy import Policy as DecodePolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
 from model.realikun_simple.policy import RealikunSimplifiedPolicy
@@ -17,6 +18,7 @@ policy_dict = {
     "basic": lambda: BasicPolicy.create_policy(num_lstm_layers=0),
     "basic-lstm": lambda: BasicPolicy.create_policy(num_lstm_layers=1),
     "improved": lambda: ImprovedPolicy.create_policy(num_lstm_layers=0),
+    "decode": lambda: DecodePolicy.create_policy(num_lstm_layers=0),
     "improved-lstm": lambda: ImprovedPolicy.create_policy(num_lstm_layers=1),
     "basic-teams": lambda: BasicTeamsPolicy.create_policy(num_lstm_layers=0),
     "basic-teams-lstm": lambda: BasicTeamsPolicy.create_policy(num_lstm_layers=0)
