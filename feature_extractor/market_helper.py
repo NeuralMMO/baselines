@@ -86,8 +86,10 @@ class MarketHelper:
             self._item.best_tops[member_pos][ItemAttr["level"]] * ARMOR_SCORE
         )
       if self._item.best_bottoms[member_pos] is not None:
-        score += (self._item.best_bottoms[member_pos]
-                  [ItemAttr["level"]] * ARMOR_SCORE)
+        score += (
+            self._item.best_bottoms[member_pos][ItemAttr["level"]
+                                                ] * ARMOR_SCORE
+        )
       self._combat_score[member_pos] = score
 
   def _calculate_restore_score(self, obs):
@@ -117,12 +119,7 @@ class MarketHelper:
       ration_score = min(1, sum(flt_ration & flt_level)) * RATION_SCORE
       self._restore_score[member_pos] = poultice_score + ration_score
 
-  def _filter_market_obs(
-          self,
-          agent,
-          obs_mkt,
-          item_type,
-          price=None) -> np.ndarray:
+  def _filter_market_obs(self, agent, obs_mkt, item_type, price=None) -> np.ndarray:
     # filter item_type with the already marked items, agent level/gold
     if price is None:
       price = agent.gold

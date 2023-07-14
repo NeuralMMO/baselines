@@ -5,10 +5,10 @@ from lib.agent.agent import Agent
 from lib.agent.util import load_matching_state_dict
 from model.basic.policy import BasicPolicy
 from model.basic_teams.policy import BasicTeamsPolicy
+from model.decode.policy import Policy as DecodePolicy
 from model.improved.policy import ImprovedPolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
-from model.decode.policy import Policy as DecodePolicy
 from model.realikun_simple.policy import RealikunSimplifiedPolicy
 
 
@@ -34,15 +34,11 @@ class BaselineAgent(Agent):
   def reset(self, num_batch=1):
     self._next_lstm_state = (
         torch.zeros(
-            self._policy.lstm.num_layers,
-            num_batch,
-            self._policy.lstm.hidden_size).to(
-            self._device),
+            self._policy.lstm.num_layers, num_batch, self._policy.lstm.hidden_size
+        ).to(self._device),
         torch.zeros(
-            self._policy.lstm.num_layers,
-            num_batch,
-            self._policy.lstm.hidden_size).to(
-            self._device),
+            self._policy.lstm.num_layers, num_batch, self._policy.lstm.hidden_size
+        ).to(self._device),
     )
     return self
 
@@ -53,15 +49,15 @@ class BaselineAgent(Agent):
       return {}
 
     # observation dim: (num_batch, num_features), done dim: (num_batch)
-    t_obs = torch.Tensor(
-        self._pack_unbatched_obs(observation)).to(
-        self._device)
+    t_obs = torch.Tensor(self._pack_unbatched_obs(
+        observation)).to(self._device)
 
     # NOTE: pufferlib/frameworks/cleanrl.py: get_action_and_value takes in done
     #   but not using it for now. Marked as TODO, so revisit later.
     with torch.no_grad():
       action, _, _, _, self._next_lstm_state = self._policy.get_action_and_value(
-          t_obs, self._next_lstm_state)
+          t_obs, self._next_lstm_state
+      )
     unpacked = self._unpack_actions(action[0].cpu().numpy())
     return unpacked
 

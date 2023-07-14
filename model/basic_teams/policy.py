@@ -33,7 +33,9 @@ class BasicTeamsPolicy(pufferlib.models.Policy):
     self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
 
     self.decoders = torch.nn.ModuleList(
-        [torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec])
+        [torch.nn.Linear(hidden_size, n)
+         for n in binding.single_action_space.nvec]
+    )
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
   """
@@ -59,14 +61,8 @@ class BasicTeamsPolicy(pufferlib.models.Policy):
     tile = torch.stack([env_outputs[i]["Tile"]
                        for i in range(num_bodies)], dim=1)
     num_teams, _, num_tiles, num_features = tile.shape
-    tile = tile.transpose(
-        2,
-        3).view(
-        num_teams *
-        num_bodies,
-        num_features,
-        15,
-        15)
+    tile = tile.transpose(2, 3).view(
+        num_teams * num_bodies, num_features, 15, 15)
 
     tile = self.tile_conv_1(tile)
     tile = F.relu(tile)
@@ -85,11 +81,9 @@ class BasicTeamsPolicy(pufferlib.models.Policy):
       mask = (entity_ids == my_id.unsqueeze(1)) & (entity_ids != 0)
       mask = mask.int()
       row_indices = torch.where(
-          mask.any(
-              dim=1), mask.argmax(
-              dim=1), torch.zeros_like(
-              mask.sum(
-                  dim=1)))
+          mask.any(dim=1), mask.argmax(
+              dim=1), torch.zeros_like(mask.sum(dim=1))
+      )
       entity = agentEmb[torch.arange(agentEmb.shape[0]), row_indices]
       entities.append(entity)
 

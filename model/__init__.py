@@ -3,9 +3,8 @@ import pufferlib.emulation
 import torch
 
 from model.basic.policy import BasicPolicy
-from model.basic_teams.policy import BasicTeamsPolicy
-from model.improved.policy import ImprovedPolicy
 from model.decode.policy import Policy as DecodePolicy
+from model.improved.policy import ImprovedPolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
 from model.realikun_simple.policy import RealikunSimplifiedPolicy

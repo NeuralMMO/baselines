@@ -131,8 +131,10 @@ class PrevActionEncoder(nn.Module):
     super().__init__()
 
     self.n_legal = n_legal
-    self.embedding = nn.ModuleDict({name: nn.Embedding(
-        n_input, n_embed) for name, n_input in n_legal.items()})
+    self.embedding = nn.ModuleDict(
+        {name: nn.Embedding(n_input, n_embed)
+         for name, n_input in n_legal.items()}
+    )
 
   def forward(self, x):
     # batch size, num actions, num action heads
@@ -147,13 +149,7 @@ class PrevActionEncoder(nn.Module):
 
 
 class SelfEncoder(nn.Module):
-  def __init__(
-          self,
-          in_img_ch,
-          in_img_size,
-          n_self_feat,
-          n_legal,
-          n_self_hidden):
+  def __init__(self, in_img_ch, in_img_size, n_self_feat, n_legal, n_self_hidden):
     super().__init__()
 
     prev_act_embed_size = 16
@@ -197,9 +193,8 @@ class EntityEncoder(nn.Module):
 
     self.entity_type = entity_type
     self.n_self_hidden_used = n_attn_hidden
-    self.net = MLPEncoder(
-        n_attn_hidden + n_entity_feat,
-        n_hiddens=[n_attn_hidden])
+    self.net = MLPEncoder(n_attn_hidden + n_entity_feat,
+                          n_hiddens=[n_attn_hidden])
 
   def forward(self, x, h_self):
     x_entity = x[self.entity_type]

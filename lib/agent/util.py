@@ -11,7 +11,8 @@ def load_matching_state_dict(model, state_dict):
         upgrade_required = True
         print(
             f"Skipping {name} due to shape mismatch. "
-            f"Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}")
+            f"Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}"
+        )
     else:
       upgrade_required = True
       print(f"Skipping {name} as it is not found in the model's state_dict")

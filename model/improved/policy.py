@@ -29,12 +29,7 @@ def make_binding():
 
 
 class ImprovedPolicy(pufferlib.models.Policy):
-  def __init__(
-          self,
-          binding,
-          input_size=256,
-          hidden_size=256,
-          output_size=256):
+  def __init__(self, binding, input_size=256, hidden_size=256, output_size=256):
     """Simple custom PyTorch policy subclassing the pufferlib BasePolicy
 
     This requires only that you structure your network as an observation encoder,
@@ -58,7 +53,9 @@ class ImprovedPolicy(pufferlib.models.Policy):
     self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
 
     self.decoders = torch.nn.ModuleList(
-        [torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec])
+        [torch.nn.Linear(hidden_size, n)
+         for n in binding.single_action_space.nvec]
+    )
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
     self.tile_offset = torch.tensor([i * 256 for i in range(3)])
@@ -136,10 +133,8 @@ class ImprovedPolicy(pufferlib.models.Policy):
       ImprovedPolicy.HIDDEN_SIZE = 256
       policy = pufferlib.frameworks.cleanrl.make_policy(
           ImprovedPolicy,
-          recurrent_args=[
-              ImprovedPolicy.INPUT_SIZE,
-              ImprovedPolicy.HIDDEN_SIZE],
-          recurrent_kwargs={
-              "num_layers": num_lstm_layers},
+          recurrent_args=[ImprovedPolicy.INPUT_SIZE,
+                          ImprovedPolicy.HIDDEN_SIZE],
+          recurrent_kwargs={"num_layers": num_lstm_layers},
       )
     return policy

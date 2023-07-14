@@ -38,7 +38,9 @@ class BasicPolicy(pufferlib.models.Policy):
     self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
 
     self.decoders = torch.nn.ModuleList(
-        [torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec])
+        [torch.nn.Linear(hidden_size, n)
+         for n in binding.single_action_space.nvec]
+    )
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
   """

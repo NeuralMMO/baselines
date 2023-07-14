@@ -10,10 +10,8 @@ from lib.team.team_helper import TeamHelper
 class TeamEnv(ParallelEnv):
   # pylint: disable=arguments-renamed
   def __init__(
-          self,
-          env: ParallelEnv,
-          team_helper: TeamHelper,
-          include_dummy_obs: bool = False):
+      self, env: ParallelEnv, team_helper: TeamHelper, include_dummy_obs: bool = False
+  ):
     self._env = env
     self._team_helper = team_helper
 

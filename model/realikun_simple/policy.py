@@ -59,16 +59,14 @@ class RealikunSimplifiedPolicy(pufferlib.models.Policy):
     )
 
     self.value_head = torch.nn.Linear(
-        ModelArchitecture.LSTM_HIDDEN //
-        ModelArchitecture.NUM_PLAYERS_PER_TEAM,
-        1)
+        ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM, 1
+    )
 
     self.observation_space = binding.featurized_single_observation_space
     self.single_observation_space = binding.single_observation_space
 
     self.policy_head = PolicyHead(
-        ModelArchitecture.LSTM_HIDDEN //
-        ModelArchitecture.NUM_PLAYERS_PER_TEAM,
+        ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM,
         ModelArchitecture.ACTION_NUM_DIM,
     )
 
@@ -116,8 +114,9 @@ class RealikunSimplifiedPolicy(pufferlib.models.Policy):
     batch_size = hidden.shape[0]
 
     # reshape the batch so that we compute actions per-agent
-    hidden = hidden.view(-1, ModelArchitecture.LSTM_HIDDEN //
-                         ModelArchitecture.NUM_PLAYERS_PER_TEAM)
+    hidden = hidden.view(
+        -1, ModelArchitecture.LSTM_HIDDEN // ModelArchitecture.NUM_PLAYERS_PER_TEAM
+    )
     action_logits = self.policy_head(hidden)
     if concat:
       action_logits = torch.cat(action_logits, dim=-1)

@@ -38,8 +38,7 @@ DEPLETION_MAP = {
 
 
 class MapHelper:
-  def __init__(self, config: nmmo.config.Config,
-               entity_helper: EntityHelper) -> None:
+  def __init__(self, config: nmmo.config.Config, entity_helper: EntityHelper) -> None:
     self.config = config
     self.map_size = self.config.MAP_SIZE
 
@@ -88,17 +87,20 @@ class MapHelper:
       tile_type = tile_obs[:, TileAttr["material_id"]].astype(int)
       self._mark_point(self.fog_map, tile_pos, DEFOGGING_VALUE)
       x, y = tile_pos[0]
-      self.tile_map[x: x + self.config.PLAYER_VISION_DIAMETER,
-                    y: y + self.config.PLAYER_VISION_DIAMETER,
-                    ] = tile_type.reshape(self.config.PLAYER_VISION_DIAMETER,
-                                          self.config.PLAYER_VISION_DIAMETER)
+      self.tile_map[
+          x: x + self.config.PLAYER_VISION_DIAMETER,
+          y: y + self.config.PLAYER_VISION_DIAMETER,
+      ] = tile_type.reshape(
+          self.config.PLAYER_VISION_DIAMETER, self.config.PLAYER_VISION_DIAMETER
+      )
 
       # mark team/enemy/npc
       entity_obs = player_obs["Entity"]
       valid_entity = entity_obs[:, EntityAttr["id"]] != 0
       entities = entity_obs[valid_entity, EntityAttr["id"]]
-      ent_in_team = [self._entity_helper.is_agent_in_team(
-          agent_id) for agent_id in entities]
+      ent_in_team = [
+          self._entity_helper.is_agent_in_team(agent_id) for agent_id in entities
+      ]
       ent_coords = entity_obs[
           valid_entity, EntityAttr["row"]: EntityAttr["col"] + 1
       ].astype(int)
@@ -111,21 +113,12 @@ class MapHelper:
           ent_coords,
           np.logical_and(np.logical_not(ent_in_team), entities > 0),
       )  # enemy
-      self._mark_point(
-          entity_map[2],
-          ent_coords,
-          npc_type == -
-          1)  # passive npcs
-      self._mark_point(
-          entity_map[3],
-          ent_coords,
-          npc_type == -
-          2)  # neutral npcs
-      self._mark_point(
-          entity_map[4],
-          ent_coords,
-          npc_type == -
-          3)  # hostile npcs
+      self._mark_point(entity_map[2], ent_coords,
+                       npc_type == -1)  # passive npcs
+      self._mark_point(entity_map[3], ent_coords,
+                       npc_type == -2)  # neutral npcs
+      self._mark_point(entity_map[4], ent_coords,
+                       npc_type == -3)  # hostile npcs
 
       # update visit map
       self._mark_point(

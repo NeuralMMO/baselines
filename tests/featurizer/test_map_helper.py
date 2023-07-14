@@ -64,9 +64,9 @@ class TestMapHelper(FeaturizerTestTemplate):
     # check legal_moves() output shape
     legal_moves = map_helper.legal_moves(team_obs)  # 4 dirs + 1 for no move
     self.assertEqual(
-        legal_moves.shape,
-        (team_size,
-         ModelArchitecture.ACTION_NUM_DIM["move"]))
+        legal_moves.shape, (team_size,
+                            ModelArchitecture.ACTION_NUM_DIM["move"])
+    )
 
   # TODO: add correctness testing with actual values
 

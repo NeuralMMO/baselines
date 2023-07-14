@@ -11,12 +11,7 @@ entity_offset = torch.tensor([i * 256 for i in range(3, 26)])
 
 
 class Policy(pufferlib.models.Policy):
-  def __init__(
-          self,
-          binding,
-          input_size=256,
-          hidden_size=256,
-          output_size=256):
+  def __init__(self, binding, input_size=256, hidden_size=256, output_size=256):
     """Simple custom PyTorch policy subclassing the pufferlib BasePolicy
 
     This requires only that you structure your network as an observation encoder,
@@ -40,7 +35,9 @@ class Policy(pufferlib.models.Policy):
     self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
 
     self.decoders = torch.nn.ModuleList(
-        [torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec])
+        [torch.nn.Linear(hidden_size, n)
+         for n in binding.single_action_space.nvec]
+    )
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
   def critic(self, hidden):
@@ -55,12 +52,8 @@ class Policy(pufferlib.models.Policy):
     # This is cursed without clone??
     tile[:, :, :2] -= tile[:, 112:113, :2].clone()
     tile[:, :, :2] += 7
-    tile = self.embedding(
-        tile.long().clip(
-            0,
-            255) +
-        tile_offset.to(
-            tile.device))
+    tile = self.embedding(tile.long().clip(
+        0, 255) + tile_offset.to(tile.device))
 
     agents, tiles, features, embed = tile.shape
     tile = (

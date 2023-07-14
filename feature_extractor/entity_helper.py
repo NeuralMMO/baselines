@@ -205,8 +205,7 @@ class EntityHelper:
     self.attack_target[member_pos] = attack_target_id
     return attack_target_id
 
-  def _extract_entity_features(
-          self, entity_observation: np.ndarray) -> np.ndarray:
+  def _extract_entity_features(self, entity_observation: np.ndarray) -> np.ndarray:
     play_area = self._config.MAP_SIZE - 2 * self._config.MAP_BORDER
     o = entity_observation
     attack_level = max(

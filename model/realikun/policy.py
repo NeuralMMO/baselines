@@ -60,9 +60,9 @@ class RealikunPolicy(pufferlib.models.Policy):
     )
 
   def critic(self, hidden):
-    hidden = hidden.view(-1,
-                         ModelArchitecture.NUM_PLAYERS_PER_TEAM,
-                         ModelArchitecture.LSTM_HIDDEN)
+    hidden = hidden.view(
+        -1, ModelArchitecture.NUM_PLAYERS_PER_TEAM, ModelArchitecture.LSTM_HIDDEN
+    )
     return self.value_head(hidden.mean(dim=1))
 
   def encode_observations(self, env_outputs):

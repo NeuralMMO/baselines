@@ -18,9 +18,7 @@ def test_prioritized_replay_distribution():
   dist = PrioritizedReplayDistribution()
 
   prioritized_dist = dist.create(
-      score_levels,
-      last_episode_levels,
-      last_episode)
+      score_levels, last_episode_levels, last_episode)
 
   assert isinstance(prioritized_dist, torch.Tensor)
   assert len(prioritized_dist) == len(score_levels)

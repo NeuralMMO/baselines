@@ -103,9 +103,7 @@ class TestEntityHelper(unittest.TestCase):
         set(self.entity_helper.member_professions).issubset(set(ATK_TYPE))
     )
     self.assertEqual(
-        len(
-            self.entity_helper.member_professions),
-        self.team_size)
+        len(self.entity_helper.member_professions), self.team_size)
 
   def test_update(self):
     obs = self.create_sample_obs(self.team_id, self.num_npcs)
@@ -131,9 +129,9 @@ class TestEntityHelper(unittest.TestCase):
     )
 
     self.assertEqual(
-        team_features.shape,
-        (self.team_size,
-         ModelArchitecture.TEAM_NUM_FEATURES))
+        team_features.shape, (self.team_size,
+                              ModelArchitecture.TEAM_NUM_FEATURES)
+    )
     self.assertEqual(team_mask.shape, (self.team_size,))
 
   def test_npcs_features_and_mask(self):

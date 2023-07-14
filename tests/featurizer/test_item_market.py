@@ -113,18 +113,8 @@ class TestItemHelper(unittest.TestCase):
         self.assertEqual(sum(item_types[member_pos]), 0)
 
     # item_arrs: check the values
-    expected_item_arr = [
-        0.5,
-        0.1,
-        0.0,
-        0.0,
-        0.0,
-        1.25,
-        1.25,
-        1.25,
-        0.0,
-        0.0,
-        0.0]
+    expected_item_arr = [0.5, 0.1, 0.0, 0.0,
+                         0.0, 1.25, 1.25, 1.25, 0.0, 0.0, 0.0]
     for i, e in enumerate(item_arrs[0][0]):
       self.assertAlmostEqual(e, expected_item_arr[i])
 
@@ -172,8 +162,9 @@ class TestItemHelper(unittest.TestCase):
         provide_item(env.realm, agent_id, Item.Runes, 3)
 
     # set levels
-    env.realm.players[entity_helper.pos_to_agent_id(
-        0)].skills.melee.level.update(10)
+    env.realm.players[entity_helper.pos_to_agent_id(0)].skills.melee.level.update(
+        10
+    )
     env.realm.players[entity_helper.pos_to_agent_id(
         1)].skills.melee.level.update(7)
     env.realm.players[entity_helper.pos_to_agent_id(1)].gold.update(
@@ -305,24 +296,30 @@ class TestItemHelper(unittest.TestCase):
 
     # set levels
     sklvl = 7
-    env.realm.players[entity_helper.pos_to_agent_id(
-        0)].skills.melee.level.update(sklvl)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        1)].skills.range.level.update(sklvl)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        2)].skills.mage.level.update(sklvl)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        3)].skills.fishing.level.update(sklvl)
+    env.realm.players[entity_helper.pos_to_agent_id(0)].skills.melee.level.update(
+        sklvl
+    )
+    env.realm.players[entity_helper.pos_to_agent_id(1)].skills.range.level.update(
+        sklvl
+    )
+    env.realm.players[entity_helper.pos_to_agent_id(2)].skills.mage.level.update(
+        sklvl
+    )
+    env.realm.players[entity_helper.pos_to_agent_id(3)].skills.fishing.level.update(
+        sklvl
+    )
     env.realm.players[
         entity_helper.pos_to_agent_id(4)
     ].skills.herbalism.level.update(sklvl)
     env.realm.players[
         entity_helper.pos_to_agent_id(5)
     ].skills.prospecting.level.update(sklvl)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        6)].skills.carving.level.update(sklvl)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        7)].skills.alchemy.level.update(sklvl)
+    env.realm.players[entity_helper.pos_to_agent_id(6)].skills.carving.level.update(
+        sklvl
+    )
+    env.realm.players[entity_helper.pos_to_agent_id(7)].skills.alchemy.level.update(
+        sklvl
+    )
 
     # step, get team obs, update the entity helper
     obs, _, _, _ = env.step({})
@@ -395,15 +392,18 @@ class TestItemHelper(unittest.TestCase):
             provide_item(env.realm, agent_id, Item.Potion, 1, list_price=i)
 
     # set agent attributes
-    env.realm.players[entity_helper.pos_to_agent_id(
-        0)].skills.fishing.level.update(5)
+    env.realm.players[entity_helper.pos_to_agent_id(0)].skills.fishing.level.update(
+        5
+    )
     env.realm.players[entity_helper.pos_to_agent_id(0)].gold.update(
         20
     )  # _buy_consumables()
-    env.realm.players[entity_helper.pos_to_agent_id(
-        2)].skills.fishing.level.update(6)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        3)].skills.fishing.level.update(6)
+    env.realm.players[entity_helper.pos_to_agent_id(2)].skills.fishing.level.update(
+        6
+    )
+    env.realm.players[entity_helper.pos_to_agent_id(3)].skills.fishing.level.update(
+        6
+    )
     # to force use poultice: 4 cannot use, 5 can
     #  also agent 4 goes into _emergency_buy_poultice()
     env.realm.players[entity_helper.pos_to_agent_id(
@@ -411,8 +411,9 @@ class TestItemHelper(unittest.TestCase):
     env.realm.players[entity_helper.pos_to_agent_id(4)].gold.update(20)
     env.realm.players[entity_helper.pos_to_agent_id(
         5)].resources.health.update(20)
-    env.realm.players[entity_helper.pos_to_agent_id(
-        5)].skills.carving.level.update(3)
+    env.realm.players[entity_helper.pos_to_agent_id(5)].skills.carving.level.update(
+        3
+    )
     # to force use ration
     env.realm.players[entity_helper.pos_to_agent_id(
         6)].resources.food.update(40)
@@ -428,8 +429,11 @@ class TestItemHelper(unittest.TestCase):
     item_helper.update(team_obs)
     market_helper.update(team_obs, 1)  # 1 = curr_step
 
-    for pos, (bt, bh, fb) in enumerate(zip(item_helper.best_tools,
-                                           item_helper.best_hats, item_helper.force_buy_idx)):
+    for pos, (bt, bh, fb) in enumerate(
+        zip(
+            item_helper.best_tools, item_helper.best_hats, item_helper.force_buy_idx
+        )
+    ):
       agent_id = entity_helper.pos_to_agent_id(pos)
       obs_inv = team_obs[agent_id]["Inventory"]
       force_use_idx = item_helper.force_use_idx[pos]

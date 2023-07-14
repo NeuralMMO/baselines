@@ -140,8 +140,7 @@ N_ITEM_LIMIT = 11  # inventory capacity (12) - 1
 
 
 class ItemHelper:
-  def __init__(self, config: nmmo.config.Config,
-               entity_helper: EntityHelper) -> None:
+  def __init__(self, config: nmmo.config.Config, entity_helper: EntityHelper) -> None:
     self._config = config
     self._entity_helper = entity_helper
     self._team_size = self._entity_helper.team_size
