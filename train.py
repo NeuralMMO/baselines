@@ -264,7 +264,7 @@ if __name__ == "__main__":
           "num_npcs": args.num_npcs,
       },
   )
-  config.CURRICULUM_FILE_PATH = ""
+  config.CURRICULUM_FILE_PATH = "tasks.pkl"
 
   binding = pufferlib.emulation.Binding(
       env_creator=lambda: nmmo.Env(config),
