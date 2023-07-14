@@ -2,20 +2,15 @@ import pufferlib
 import pufferlib.emulation
 import torch
 
-from model.basic.policy import BasicPolicy
 from model.decode.policy import Policy as DecodePolicy
 from model.improved.policy import ImprovedPolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
-from model.realikun_simple.policy import RealikunSimplifiedPolicy
 
 policy_dict = {
     "realikun": lambda: RealikunPolicy.create_policy(num_lstm_layers=0),
     "realikun-lstm": lambda: RealikunPolicy.create_policy(num_lstm_layers=1),
-    "realikun-simplified": lambda: RealikunSimplifiedPolicy.create_policy,
     "random": lambda: RandomPolicy.create_policy,
-    "basic": lambda: BasicPolicy.create_policy(num_lstm_layers=0),
-    "basic-lstm": lambda: BasicPolicy.create_policy(num_lstm_layers=1),
     "improved": lambda: ImprovedPolicy.create_policy(num_lstm_layers=0),
     "decode": lambda: DecodePolicy.create_policy(num_lstm_layers=0),
     "improved-lstm": lambda: ImprovedPolicy.create_policy(num_lstm_layers=1),
