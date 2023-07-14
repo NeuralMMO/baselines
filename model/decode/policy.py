@@ -65,7 +65,7 @@ class Policy(pufferlib.models.Policy):
 
   def encode_observations(self, env_outputs):
     # TODO: Change 0 for teams when teams are added
-  env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+    env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
 
     tile = env_outputs['Tile']
     # Center on player
