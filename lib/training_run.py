@@ -17,7 +17,7 @@ class RunState:
 
   trainer: dict = None
   num_epochs_trained: int = 0
-  args: dict = dict()
+  args: dict = {}
 
 
 class TrainingRun:

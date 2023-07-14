@@ -1,10 +1,11 @@
 import argparse
 import copy
 import logging
+import os
 import time
-
+from pufferlib.utils import PersistentObject
 import nmmo
-import pandas as pd
+from numpy import mean
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
@@ -13,6 +14,7 @@ from pufferlib.policy_ranker import OpenSkillRanker
 from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+import wandb
 
 import clean_pufferl
 import model
@@ -317,25 +319,47 @@ if __name__ == "__main__":
 
   training_run.resume_training(trainer)
   ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
-  ranker = OpenSkillRanker("learner")
-  ratings = copy.deepcopy(ranker.ratings())
+  ranker = PersistentObject(
+    os.path.join(training_run.data_dir(), "openskill.pickle"),
+    OpenSkillRanker, "learner")
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
     policy_pool.update_policies({p.name: p.policy(make_policy) for p in sp})
     trainer.evaluate()
 
-    ranker.update_ranks(
-        {name: score for name, score in policy_pool.scores.items()})
-    policy_pool.scores = {}
+    if policy_pool.scores:
+      logging.info("Ranker Ratings (Pre-Update): %s", {
+        n: ranker.ratings().get(n) for n in policy_pool.scores
+      })
+      logging.info("Policy Scores: %s", {
+        n: mean(v) for n, v in policy_pool.scores.items()
+      })
+      ranker.update_ranks(policy_pool.scores)
+      logging.info("Ranker Ratings (Post Update): %s", {
+        n: ranker.ratings()[n].mu for n in policy_pool.scores
+      })
+      if trainer.wandb_initialized:
+        wandb.log({
+          "skillrank/learner/mu": ranker.ratings()["learner"].mu,
+          "skillrank/learner/sigma": ranker.ratings()["learner"].sigma,
+          "skillrank/learner/score": mean(policy_pool.scores["learner"]),
+          "skillrank/opponent/mu": mean([
+            ranker.ratings()[n].mu for n in policy_pool.scores
+            if n != "learner"
+          ]),
+          "skillrank/opponent/sigma": mean([
+            ranker.ratings()[n].sigma for n in policy_pool.scores
+            if n != "learner"
+          ]),
+          "skillrank/opponent/score": mean([
+            mean(v) for n, v in policy_pool.scores.items()
+            if n != "learner"
+          ])
+        })
 
-    rank_changes = pd.DataFrame(
-        {
-            "name": [name for name in ranker.ratings()],
-            "mu": [rating.mu for rating in ranker.ratings().values()],
-            "sigma": [rating.sigma for rating in ranker.ratings().values()],
-        }
-    )
+
+    policy_pool.scores = {}
 
     trainer.train(
         update_epochs=args.ppo_update_epochs,

@@ -18,6 +18,7 @@ disable=C0103, # invalid name
         R0914, # too many local variables
         R0915, # too many statements
         W0105, # string is used as a statement
+        W1203, # use logging instead of print
         W0221, # arguments differ from overridden method
         W0511, # TODO/FIXME
 
