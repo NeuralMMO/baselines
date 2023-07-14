@@ -25,8 +25,8 @@ class TestTaskEncoder(unittest.TestCase):
     task_spec_with_embedding = self.task_encoder.get_task_embedding(task_spec)
 
     # TODO: automatically get the embedding dimension from the model info
-    for _, _ ,_, task_kwargs in task_spec_with_embedding:
-      self.assertTrue("embedding" in task_kwargs)
+    for single_spec in task_spec_with_embedding:
+      self.assertFalse(sum(single_spec.embedding) == 0)
 
   def test_get_task_deps_src(self):
     custom_fn = curriculum.manual_curriculum.PracticeInventoryManagement
@@ -40,7 +40,9 @@ class TestTaskEncoder(unittest.TestCase):
 
   def test_contruct_prompt(self):
     single_spec = random.choice(curriculum.manual_curriculum.task_spec)
-    prompt = self.task_encoder._construct_prompt(*single_spec)
+    prompt = self.task_encoder._construct_prompt(single_spec.reward_to,
+                                                 single_spec.eval_fn,
+                                                 single_spec.eval_fn_kwargs)
     print(prompt)
 
   def test_batch_process(self):

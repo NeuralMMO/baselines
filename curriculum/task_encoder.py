@@ -1,13 +1,15 @@
 from types import ModuleType
+from typing import List
 import ast
 import inspect
-import json
-from typing import List
-import torch
+import os
 
 from tqdm import tqdm
+import dill
+import torch
 from transformers import AutoTokenizer, CodeGenModel
 
+from nmmo.task import task_spec as ts
 
 def is_function_type(obj):
   return inspect.isfunction(obj) and not inspect.isbuiltin(obj)
@@ -26,13 +28,16 @@ def extract_module_fn(module: ModuleType):
 # TODO: when given multiple tasks, can agents prioritize and/or multi-task?
 #   It seems to be a research questions.
 class TaskEncoder:
-  def __init__(self, checkpoint: str, context: ModuleType, batch_size=64):
+  def __init__(self, checkpoint: str, context: ModuleType,
+               batch_size=64,
+               tmp_file_path="tmp_task_encoder.pkl"):
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
     self.model = CodeGenModel.from_pretrained(checkpoint).to(self.device)
     self.model.eval()
     self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     self.tokenizer.pad_token = self.tokenizer.eos_token
     self.batch_size = batch_size
+    self.temp_file_path = tmp_file_path
 
     blank_embedding = self._get_embedding(["# just to get the embedding size"])
     self.embed_dim = len(blank_embedding[0])
@@ -89,36 +94,22 @@ class TaskEncoder:
 
     return task_specific_prompt
 
-  def get_task_embedding(self, task_spec, save_to_file:str =None):
-    task_spec_with_embedding = []
-    prompts = []
-    for single_spec in tqdm(task_spec):
-      if len(single_spec) == 3:
-        reward_to, eval_fn, eval_kwargs = single_spec
-        task_kwargs = {}
-      elif len(single_spec) == 4:
-        reward_to, eval_fn, eval_kwargs, task_kwargs = single_spec
-        assert isinstance(task_kwargs, dict), 'task_kwargs must be a dict'
-      else:
-        raise ValueError('len(single_spec) must be either 3 or 4')
-
-      prompt = self._construct_prompt(reward_to, eval_fn, eval_kwargs)
-      prompts.append(prompt)
-      task_spec_with_embedding.append((reward_to, eval_fn, eval_kwargs, task_kwargs))
-
+  def get_task_embedding(self, task_spec: List[ts.TaskSpec],
+                         save_to_file:str =None):
+    prompts = [self._construct_prompt(single_spec.reward_to,
+                                      single_spec.eval_fn,
+                                      single_spec.eval_fn_kwargs)
+               for single_spec in tqdm(task_spec)]
     embeddings = self._get_embedding(prompts)
-    for embedding, single_spec in zip(embeddings, task_spec_with_embedding):
-      single_spec[3]['embedding'] = embedding
 
-    if save_to_file: # use save_to_file as the file name, and assume it's json
-      with open(save_to_file, "w+", encoding="utf-8") as f:
-        for reward_to, eval_fn, eval_kwargs, task_kwargs in task_spec_with_embedding:
-          line_data = {
-            'reward_to': reward_to,
-            'eval_fn': eval_fn.__name__,
-            'eval_kwargs': str(eval_kwargs),
-            'embedding': task_kwargs['embedding'].tolist()}
-          f.write(json.dumps(line_data) + '\n')
+    for single_spec, embedding in zip(task_spec, embeddings):
+      single_spec.embedding = embedding
+
+    if save_to_file: # use save_to_file as the file name
+      with open(self.temp_file_path, 'wb') as f:
+        dill.dump(task_spec, f)
       f.close()
+      # replace the old file with the new file, to avoid file locking issues
+      os.replace(self.temp_file_path, save_to_file)
 
-    return task_spec_with_embedding
+    return task_spec
