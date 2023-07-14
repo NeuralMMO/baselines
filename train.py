@@ -80,7 +80,8 @@ if __name__ == "__main__":
                       default=None, help="wandb entity name (default: None)")
 
   parser.add_argument("--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=8,
-                      help="train on bptt_horizon steps of a rollout at a time. " "use this to reduce GPU memory (default: 16)")
+                      help="train on bptt_horizon steps of a rollout at a time. "
+                      "use this to reduce GPU memory (default: 16)")
 
   parser.add_argument("--ppo.training_batch_size", dest="ppo_training_batch_size",
                       type=int, default=32, help="number of rows in a training batch (default: 32)")

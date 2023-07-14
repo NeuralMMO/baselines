@@ -20,8 +20,6 @@ policy_dict = {
     "improved": lambda: ImprovedPolicy.create_policy(num_lstm_layers=0),
     "decode": lambda: DecodePolicy.create_policy(num_lstm_layers=0),
     "improved-lstm": lambda: ImprovedPolicy.create_policy(num_lstm_layers=1),
-    "basic-teams": lambda: BasicTeamsPolicy.create_policy(num_lstm_layers=0),
-    "basic-teams-lstm": lambda: BasicTeamsPolicy.create_policy(num_lstm_layers=0),
 }
 
 
