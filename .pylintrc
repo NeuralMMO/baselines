@@ -5,6 +5,7 @@ disable=C0103, # invalid name
         C0115, # missing class docstring
         C0116, # missing function docstring
         C0301, # line too long
+        C0411, # wrong import order
         C0415, # import outside toplevel
         E0611, # no name in module
         R0401, # cyclic import

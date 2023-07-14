@@ -396,8 +396,6 @@ if __name__ == "__main__":
       )
       ranker.add_policy_copy(training_run.latest_policy_name(), "learner")
 
-    ratings = copy.deepcopy(ranker.ratings())
-
   trainer.close()
 
 # lr: 0.0001 -> 0.00001
