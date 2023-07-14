@@ -1,23 +1,10 @@
-
 from collections import defaultdict
-from os import environ
-import os
-from re import T
-import resource
-from typing import Dict, List
-from xxlimited import foo
-from attr import dataclass
-
-import nmmo
-from pettingzoo.utils.env import AgentID
-import numpy as np
-
-from nmmo.lib.log import EventCode
 
 import pufferlib
 import pufferlib.emulation
-from traitlets import default
+
 from feature_extractor.feature_extractor import FeatureExtractor
+
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id):
@@ -36,7 +23,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
     for agent_id in agents:
       agent = self.env.realm.players.dead_this_tick.get(
-        agent_id, self.env.realm.players.get(agent_id))
+          agent_id, self.env.realm.players.get(agent_id)
+      )
 
       if agent is None:
         continue
@@ -48,6 +36,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
   def actions(self, actions, step):
     return self._feature_extractor.translate_actions(actions)
+
 
 # Not currently used
 
@@ -69,7 +58,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 #                'consume_item', 'harvest_item', 'list_item', 'buy_item']
 #   for evt in key_event:
 #     key = 'event/' + evt
-#     history[key] = event_cnt[key] > 0 # interested in whether the agent did this or not
+# history[key] = event_cnt[key] > 0 # interested in whether the agent did
+# this or not
 
 #   history['achieved/unique_events'] = score_unique_events(realm, agent_id, score_diff=False)
 #   history['achieved/exploration'] = agent.history.exploration
@@ -125,7 +115,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
 #   # make every EARN_GOLD events unique
 #   idx = log[:,attr_to_col['event']] == EventCode.EARN_GOLD
-#   log[idx,attr_to_col['number']] = log[idx,attr_to_col['id']].copy() # this is a hack
+# log[idx,attr_to_col['number']] = log[idx,attr_to_col['id']].copy() #
+# this is a hack
 
 #   # remove redundant events after masking
 #   unique_all = np.unique(log[:,attr_to_col['event']:], axis=0)

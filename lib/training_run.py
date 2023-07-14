@@ -1,14 +1,14 @@
+import logging
 import os
 
-from attr import dataclass
 import torch
+from attr import dataclass
+
 import wandb
 
-from clean_pufferl import CleanPuffeRL
-import logging
 
 @dataclass
-class RunState():
+class RunState:
   run_name: str
   wandb_project: str = None
   wandb_entity: str = None
@@ -19,7 +19,8 @@ class RunState():
   num_epochs_trained: int = 0
   args: dict = dict()
 
-class TrainingRun():
+
+class TrainingRun:
   def __init__(self, name, runs_dir: str, args: dict):
     self.name = name
     self._data_dir = os.path.join(runs_dir, name, "data")
@@ -27,7 +28,8 @@ class TrainingRun():
     self._state = RunState(name, args=args)
     self._use_wandb = False
 
-    logging.info(f"TrainingRun: {self.name} data_dir {self._data_dir} args {args}")
+    logging.info(
+        f"TrainingRun: {self.name} data_dir {self._data_dir} args {args}")
 
     os.makedirs(self._data_dir, exist_ok=True)
     self._load()
@@ -42,7 +44,7 @@ class TrainingRun():
     return self._state.policy_checkpoint_name
 
   def save_checkpoint(self, trainer):
-    policy_name = f'{self.name}.{trainer.update:06d}'
+    policy_name = f"{self.name}.{trainer.update:06d}"
     logging.info(f"TrainingRun: {self.name} saving checkpoint {policy_name}")
 
     self._state.trainer = trainer.get_trainer_state()
@@ -66,15 +68,15 @@ class TrainingRun():
     self._use_wandb = True
 
     wandb.init(
-      id = self._state.wandb_run_id,
-      project=project,
-      entity=entity,
-      config=self._state.args,
-      sync_tensorboard=True,
-      name=self._state.run_name,
-      monitor_gym=True,
-      save_code=True,
-      resume="allow",
+        id=self._state.wandb_run_id,
+        project=project,
+        entity=entity,
+        config=self._state.args,
+        sync_tensorboard=True,
+        name=self._state.run_name,
+        monitor_gym=True,
+        save_code=True,
+        resume="allow",
     )
 
   def _save(self):

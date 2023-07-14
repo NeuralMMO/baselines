@@ -2,7 +2,6 @@ from collections import defaultdict
 from typing import Any, Dict, List, OrderedDict
 
 import gym
-import numpy as np
 from pettingzoo.utils.env import AgentID, ParallelEnv
 
 from lib.team.team_helper import TeamHelper
@@ -10,8 +9,11 @@ from lib.team.team_helper import TeamHelper
 
 class TeamEnv(ParallelEnv):
   # pylint: disable=arguments-renamed
-  def __init__(self, env: ParallelEnv, team_helper: TeamHelper,
-               include_dummy_obs: bool = False):
+  def __init__(
+          self,
+          env: ParallelEnv,
+          team_helper: TeamHelper,
+          include_dummy_obs: bool = False):
     self._env = env
     self._team_helper = team_helper
 
@@ -19,22 +21,31 @@ class TeamEnv(ParallelEnv):
     if include_dummy_obs:
       self._dummy_obs = {}
       for team_id in team_helper.teams:
-        self._dummy_obs[team_id] = self._env.observation_space(team_id).sample()
+        self._dummy_obs[team_id] = self._env.observation_space(
+            team_id).sample()
 
     self.possible_agents = list(range(team_helper.num_teams))
     self._num_alive = None
 
   def action_space(self, team: int) -> gym.Space:
-    return gym.spaces.Dict({
-      pos: self._env.action_space(self._team_helper.agent_for_team_and_position[team, pos]) \
-        for pos in range(self._team_helper.team_size[team])
-    })
+    return gym.spaces.Dict(
+        {
+            pos: self._env.action_space(
+                self._team_helper.agent_for_team_and_position[team, pos]
+            )
+            for pos in range(self._team_helper.team_size[team])
+        }
+    )
 
   def observation_space(self, team: int) -> gym.Space:
-    return gym.spaces.Dict({
-      pos: self._env.observation_space(self._team_helper.agent_for_team_and_position[team, pos]) \
-        for pos in range(self._team_helper.team_size[team])
-    })
+    return gym.spaces.Dict(
+        {
+            pos: self._env.observation_space(
+                self._team_helper.agent_for_team_and_position[team, pos]
+            )
+            for pos in range(self._team_helper.team_size[team])
+        }
+    )
 
   def _group_by_team(self, data: Dict[int, Any]) -> Dict[int, Dict[int, Any]]:
     grouped_data = defaultdict(OrderedDict)
@@ -43,8 +54,9 @@ class TeamEnv(ParallelEnv):
       grouped_data[team_id][pos] = value
     return OrderedDict(grouped_data)
 
-  def _team_actions_to_agent_actions(self,
-                                     team_actions: Dict[int, Dict[int, Any]]) -> Dict[int, Any]:
+  def _team_actions_to_agent_actions(
+      self, team_actions: Dict[int, Dict[int, Any]]
+  ) -> Dict[int, Any]:
     agent_actions = {}
     for team_id, team_action in team_actions.items():
       for pos in team_action:
@@ -54,7 +66,7 @@ class TeamEnv(ParallelEnv):
 
   def reset(self, **kwargs) -> Dict[int, Any]:
     self._num_alive = {
-      tid: len(team) for tid, team in self._team_helper.teams.items()
+        tid: len(team) for tid, team in self._team_helper.teams.items()
     }
     gym_obs = self._env.reset(**kwargs)
     return self._group_by_team(gym_obs)
@@ -72,8 +84,8 @@ class TeamEnv(ParallelEnv):
             print("filling dummy obs for team", team_id, "pos", pos)
 
     merged_rewards = {
-      tid: sum(vals.values()) / self._team_helper.team_size[tid]
-      for tid, vals in self._group_by_team(rewards).items()
+        tid: sum(vals.values()) / self._team_helper.team_size[tid]
+        for tid, vals in self._group_by_team(rewards).items()
     }
     merged_infos = self._group_by_team(infos)
 
@@ -88,7 +100,7 @@ class TeamEnv(ParallelEnv):
   # PettingZoo API
   ############################################################################
 
-  def render(self, mode='human'):
+  def render(self, mode="human"):
     return self._env.render(mode)
 
   @property

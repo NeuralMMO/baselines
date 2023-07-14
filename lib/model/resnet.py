@@ -1,6 +1,6 @@
-
-import torch.nn as nn
 import numpy as np
+import torch.nn as nn
+
 
 def same_padding(in_size, filter_size, stride_size):
   in_height, in_width = in_size
@@ -14,9 +14,17 @@ def same_padding(in_size, filter_size, stride_size):
   out_width = np.ceil(float(in_width) / float(stride_width))
 
   pad_along_height = int(
-    ((out_height - 1) * stride_height + filter_height - in_height))
+      (out_height -
+       1) *
+      stride_height +
+      filter_height -
+      in_height)
   pad_along_width = int(
-    ((out_width - 1) * stride_width + filter_width - in_width))
+      (out_width -
+       1) *
+      stride_width +
+      filter_width -
+      in_width)
   pad_top = pad_along_height // 2
   pad_bottom = pad_along_height - pad_top
   pad_left = pad_along_width // 2
@@ -25,10 +33,20 @@ def same_padding(in_size, filter_size, stride_size):
   output = (out_height, out_width)
   return padding, output
 
+
 class SlimConv2d(nn.Module):
-  def __init__(self, in_channels, out_channels, kernel, stride, padding,
-               initializer="default", activation_fn=None, bias_init=0):
-    super(SlimConv2d, self).__init__()
+  def __init__(
+      self,
+      in_channels,
+      out_channels,
+      kernel,
+      stride,
+      padding,
+      initializer="default",
+      activation_fn=None,
+      bias_init=0,
+  ):
+    super().__init__()
     layers = []
 
     # Padding layer.
@@ -39,7 +57,7 @@ class SlimConv2d(nn.Module):
     conv = nn.Conv2d(in_channels, out_channels, kernel, stride)
     if initializer:
       if initializer == "default":
-          initializer = nn.init.xavier_uniform_
+        initializer = nn.init.xavier_uniform_
       initializer(conv.weight)
     nn.init.constant_(conv.bias, bias_init)
     layers.append(conv)
@@ -50,7 +68,8 @@ class SlimConv2d(nn.Module):
     self._model = nn.Sequential(*layers)
 
   def forward(self, x):
-      return self._model(x)
+    return self._model(x)
+
 
 class ResidualBlock(nn.Module):
   def __init__(self, i_channel, o_channel, in_size, kernel_size=3, stride=1):
@@ -59,14 +78,23 @@ class ResidualBlock(nn.Module):
 
     padding, out_size = same_padding(in_size, kernel_size, [stride, stride])
     self._conv1 = SlimConv2d(
-      i_channel, o_channel,
-      kernel=3, stride=stride,
-      padding=padding, activation_fn=None)
+        i_channel,
+        o_channel,
+        kernel=3,
+        stride=stride,
+        padding=padding,
+        activation_fn=None,
+    )
 
     padding, out_size = same_padding(out_size, kernel_size, [stride, stride])
-    self._conv2 = SlimConv2d(o_channel, o_channel,
-                              kernel=3, stride=stride,
-                              padding=padding, activation_fn=None)
+    self._conv2 = SlimConv2d(
+        o_channel,
+        o_channel,
+        kernel=3,
+        stride=stride,
+        padding=padding,
+        activation_fn=None,
+    )
 
     self.padding, self.out_size = padding, out_size
 
@@ -88,23 +116,33 @@ class ResNet(nn.Module):
     if channel_and_blocks is None:
       channel_and_blocks = [(16, 2), (32, 2), (32, 2)]
 
-    for (out_ch, num_blocks) in channel_and_blocks:
+    for out_ch, num_blocks in channel_and_blocks:
       # Downscale
-      padding, out_size = same_padding(out_size, filter_size=3,
-                                        stride_size=[1, 1])
+      padding, out_size = same_padding(
+          out_size, filter_size=3, stride_size=[1, 1]
+      )
       conv_layers.append(
-        SlimConv2d(in_ch, out_ch, kernel=3, stride=1, padding=padding,
-                    activation_fn=None))
+          SlimConv2d(
+              in_ch,
+              out_ch,
+              kernel=3,
+              stride=1,
+              padding=padding,
+              activation_fn=None,
+          )
+      )
 
-      padding, out_size = same_padding(out_size, filter_size=3,
-                                       stride_size=[2, 2])
+      padding, out_size = same_padding(
+          out_size, filter_size=3, stride_size=[2, 2]
+      )
       conv_layers.append(nn.ZeroPad2d(padding))
       conv_layers.append(nn.MaxPool2d(kernel_size=3, stride=2))
 
       # Residual blocks
       for _ in range(num_blocks):
         res = ResidualBlock(
-          i_channel=out_ch, o_channel=out_ch, in_size=out_size)
+            i_channel=out_ch, o_channel=out_ch, in_size=out_size
+        )
         conv_layers.append(res)
 
       padding, out_size = res.padding, res.out_size

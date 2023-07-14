@@ -1,8 +1,7 @@
-
 import nmmo
 import numpy as np
-from lib.model.util import multi_hot_generator
 
+from lib.model.util import multi_hot_generator
 from model.realikun.model import ModelArchitecture
 
 
@@ -30,13 +29,18 @@ class GameState:
     n_progress_feat = ModelArchitecture.PROGRESS_NUM_FEATURES
     game_progress = self.curr_step / self.max_step
     n_alive = len(obs.keys())
-    arr = np.array([
-      game_progress,
-      n_alive / self.team_size,
-      *multi_hot_generator(n_feature=n_progress_feat,
-                           index=int(game_progress*n_progress_feat)+1),
-      *multi_hot_generator(n_feature=self.team_size, index=n_alive),
-    ], dtype=np.float32)
+    arr = np.array(
+        [
+            game_progress,
+            n_alive / self.team_size,
+            *multi_hot_generator(
+                n_feature=n_progress_feat,
+                index=int(game_progress * n_progress_feat) + 1,
+            ),
+            *multi_hot_generator(n_feature=self.team_size, index=n_alive),
+        ],
+        dtype=np.float32,
+    )
     return arr
 
   def previous_actions(self):

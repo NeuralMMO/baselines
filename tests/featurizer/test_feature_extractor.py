@@ -1,23 +1,23 @@
 import unittest
-import numpy as np
 
 import nmmo
+import numpy as np
 
 from feature_extractor.feature_extractor import FeatureExtractor
 
 from tests.featurizer.testhelpers import FeaturizerTestTemplate
 
-RANDOM_SEED = 0 # random.randint(0, 10000)
+RANDOM_SEED = 0  # random.randint(0, 10000)
 
 
 class TestFeatureExtractor(FeaturizerTestTemplate):
-
   feature_extractors = None
 
   def _create_test_env(self):
     feature_extractors = {
         team_id: FeatureExtractor(self.team_helper.teams, team_id, self.config)
-        for team_id in self.team_helper.teams }
+        for team_id in self.team_helper.teams
+    }
 
     env = nmmo.Env(self.config, RANDOM_SEED)
     init_obs = env.reset()
@@ -57,18 +57,24 @@ class TestFeatureExtractor(FeaturizerTestTemplate):
 
     # peeking featurizer.entity_helper._entity_targets
     entity_targets = featurizer.entity_helper._entity_targets
-    # the first four get the index of zeros, 
+    # the first four get the index of zeros,
     # the next four get the index of non-zeros
-    targets = [self._get_idx(entity_targets[member_pos]) if member_pos < 4
-               else self._get_idx(entity_targets[member_pos], get_zero=False)
-               for member_pos in range(team_size)]
-    
+    targets = [
+        self._get_idx(entity_targets[member_pos])
+        if member_pos < 4
+        else self._get_idx(entity_targets[member_pos], get_zero=False)
+        for member_pos in range(team_size)
+    ]
+
     # input actions are all zeros
     input_actions = {
-      'move': np.zeros(team_size, dtype=np.int32), # idx for action.Direction.edges
-      'style': np.zeros(team_size, dtype=np.int32), # idx for action.Style.edges
-      # idx for entity_helper._entity_targets[member_pos] -> entity id
-      'target': np.array(targets, dtype=np.int32),
+        "move": np.zeros(
+            team_size, dtype=np.int32
+        ),  # idx for action.Direction.edges
+        # idx for action.Style.edges
+        "style": np.zeros(team_size, dtype=np.int32),
+        # idx for entity_helper._entity_targets[member_pos] -> entity id
+        "target": np.array(targets, dtype=np.int32),
     }
 
     trans_actions = featurizer.translate_actions(input_actions)
@@ -76,15 +82,15 @@ class TestFeatureExtractor(FeaturizerTestTemplate):
     for member_pos in range(team_size):
       target_ent = entity_targets[member_pos][targets[member_pos]]
       if target_ent > 0:
-        self.assertEqual(target_ent,
-                         trans_actions[member_pos][nmmo.action.Attack][nmmo.action.Target])
+        self.assertEqual(
+            target_ent,
+            trans_actions[member_pos][nmmo.action.Attack][nmmo.action.Target],
+        )
       else:
         self.assertTrue(nmmo.action.Attack not in trans_actions[member_pos])
 
     print()
 
-    pass
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()

@@ -1,5 +1,5 @@
-
-# Loads a state dict into a model, skipping parameters that don't match in shape.
+# Loads a state dict into a model, skipping parameters that don't match in
+# shape.
 def load_matching_state_dict(model, state_dict):
   upgrade_required = False
   model_state_dict = model.state_dict()
@@ -9,8 +9,9 @@ def load_matching_state_dict(model, state_dict):
         model_state_dict[name].copy_(param)
       else:
         upgrade_required = True
-        print(f"Skipping {name} due to shape mismatch. " \
-              f"Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}")
+        print(
+            f"Skipping {name} due to shape mismatch. "
+            f"Model shape: {model_state_dict[name].shape}, checkpoint shape: {param.shape}")
     else:
       upgrade_required = True
       print(f"Skipping {name} as it is not found in the model's state_dict")
