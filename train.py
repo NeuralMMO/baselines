@@ -26,225 +26,68 @@ if __name__ == "__main__":
 
   parser = argparse.ArgumentParser()
 
-  parser.add_argument(
-      "--show_progress",
-      dest="show_progress",
-      action="store_true",
-      default=False,
-      help="show progress bar (default: False)",
-  )
+  parser.add_argument("--model.type", dest="model_type", type=str,
+                      default="realikun", help="model type (default: realikun)")
 
-  parser.add_argument(
-      "--model.type",
-      dest="model_type",
-      type=str,
-      default="realikun",
-      help="model type (default: realikun)",
-  )
+  parser.add_argument("--env.num_teams", dest="num_teams", type=int,
+                      default=16, help="number of teams to use for training (default: 16)")
+  parser.add_argument("--env.team_size", dest="team_size", type=int, default=8,
+                      help="number of agents per team to use for training (default: 8)")
+  parser.add_argument("--env.num_npcs", dest="num_npcs", type=int,
+                      default=0, help="number of NPCs to use for training (default: 256)")
+  parser.add_argument("--env.max_episode_length", dest="max_episode_length",
+                      type=int, default=1024, help="number of steps per episode (default: 1024)")
+  parser.add_argument("--env.death_fog_tick", dest="death_fog_tick", type=int,
+                      default=None, help="number of ticks before death fog starts (default: None)")
+  parser.add_argument("--env.combat_enabled", dest="combat_enabled",
+                      action="store_true", default=False, help="only allow moves (default: False)")
+  parser.add_argument("--env.num_maps", dest="num_maps", type=int,
+                      default=128, help="number of maps to use for training (default: 1)")
+  parser.add_argument("--env.maps_path", dest="maps_path", type=str,
+                      default="maps/train/", help="path to maps to use for training (default: None)")
+  parser.add_argument("--env.map_size", dest="map_size", type=int,
+                      default=128, help="size of maps to use for training (default: 128)")
 
-  parser.add_argument(
-      "--env.num_teams",
-      dest="num_teams",
-      type=int,
-      default=16,
-      help="number of teams to use for training (default: 16)",
-  )
-  parser.add_argument(
-      "--env.team_size",
-      dest="team_size",
-      type=int,
-      default=8,
-      help="number of agents per team to use for training (default: 8)",
-  )
-  parser.add_argument(
-      "--env.num_npcs",
-      dest="num_npcs",
-      type=int,
-      default=0,
-      help="number of NPCs to use for training (default: 256)",
-  )
-  parser.add_argument(
-      "--env.max_episode_length",
-      dest="max_episode_length",
-      type=int,
-      default=1024,
-      help="number of steps per episode (default: 1024)",
-  )
-  parser.add_argument(
-      "--env.death_fog_tick",
-      dest="death_fog_tick",
-      type=int,
-      default=None,
-      help="number of ticks before death fog starts (default: None)",
-  )
-  parser.add_argument(
-      "--env.combat_enabled",
-      dest="combat_enabled",
-      action="store_true",
-      default=False,
-      help="only allow moves (default: False)",
-  )
-  parser.add_argument(
-      "--env.num_maps",
-      dest="num_maps",
-      type=int,
-      default=128,
-      help="number of maps to use for training (default: 1)",
-  )
-  parser.add_argument(
-      "--env.maps_path",
-      dest="maps_path",
-      type=str,
-      default="maps/train/",
-      help="path to maps to use for training (default: None)",
-  )
-  parser.add_argument(
-      "--env.map_size",
-      dest="map_size",
-      type=int,
-      default=128,
-      help="size of maps to use for training (default: 128)",
-  )
+  parser.add_argument("--rollout.num_cores", dest="num_cores", type=int, default=None,
+                      help="number of cores to use for training (default: num_envs)")
+  parser.add_argument("--rollout.num_envs", dest="num_envs", type=int, default=4,
+                      help="number of environments to use for training (default: 1)")
+  parser.add_argument("--rollout.num_buffers", dest="num_buffers", type=int,
+                      default=4, help="number of buffers to use for training (default: 4)")
+  parser.add_argument("--rollout.batch_size", dest="rollout_batch_size", type=int,
+                      default=2**14, help="number of steps to rollout (default: 2**14)")
+  parser.add_argument("--train.num_steps", dest="train_num_steps", type=int,
+                      default=10_000_000, help="number of steps to train (default: 10_000_000)")
+  parser.add_argument("--train.max_epochs", dest="train_max_epochs", type=int,
+                      default=10_000_000, help="number of epochs to train (default: 10_000_000)")
+  parser.add_argument("--train.checkpoint_interval", dest="checkpoint_interval",
+                      type=int, default=10, help="interval to save models (default: 10)")
+  parser.add_argument("--train.run_name", dest="run_name",
+                      type=str, default=None, help="run name (default: None)")
+  parser.add_argument("--train.runs_dir", dest="runs_dir", type=str,
+                      default=None, help="runs_dir directory (default: runs)")
+  parser.add_argument("--train.policy_store_dir", dest="policy_store_dir",
+                      type=str, default=None, help="policy_store directory (default: runs)")
+  parser.add_argument("--train.use_serial_vecenv", dest="use_serial_vecenv",
+                      action="store_true", help="use serial vecenv impl (default: False)")
+  parser.add_argument("--train.learner_weight", dest="learner_weight",
+                      type=float, default=1.0, help="weight of learner policy (default: 1.0)")
+  parser.add_argument("--train.max_opponent_policies", dest="max_opponent_policies", type=int,
+                      default=2, help="maximum number of opponent policies to train against (default: 2)")
+  parser.add_argument("--wandb.project", dest="wandb_project", type=str,
+                      default=None, help="wandb project name (default: None)")
+  parser.add_argument("--wandb.entity", dest="wandb_entity", type=str,
+                      default=None, help="wandb entity name (default: None)")
 
-  parser.add_argument(
-      "--rollout.num_cores",
-      dest="num_cores",
-      type=int,
-      default=None,
-      help="number of cores to use for training (default: num_envs)",
-  )
-  parser.add_argument(
-      "--rollout.num_envs",
-      dest="num_envs",
-      type=int,
-      default=4,
-      help="number of environments to use for training (default: 1)",
-  )
-  parser.add_argument(
-      "--rollout.num_buffers",
-      dest="num_buffers",
-      type=int,
-      default=4,
-      help="number of buffers to use for training (default: 4)",
-  )
-  parser.add_argument(
-      "--rollout.batch_size",
-      dest="rollout_batch_size",
-      type=int,
-      default=2**14,
-      help="number of steps to rollout (default: 2**14)",
-  )
+  parser.add_argument("--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=8,
+                      help="train on bptt_horizon steps of a rollout at a time. " "use this to reduce GPU memory (default: 16)")
 
-  parser.add_argument(
-      "--train.num_steps",
-      dest="train_num_steps",
-      type=int,
-      default=10_000_000,
-      help="number of steps to train (default: 10_000_000)",
-  )
-  parser.add_argument(
-      "--train.max_epochs",
-      dest="train_max_epochs",
-      type=int,
-      default=10_000_000,
-      help="number of epochs to train (default: 10_000_000)",
-  )
-  parser.add_argument(
-      "--train.checkpoint_interval",
-      dest="checkpoint_interval",
-      type=int,
-      default=10,
-      help="interval to save models (default: 10)",
-  )
-  parser.add_argument(
-      "--train.run_name",
-      dest="run_name",
-      type=str,
-      default=None,
-      help="run name (default: None)",
-  )
-  parser.add_argument(
-      "--train.runs_dir",
-      dest="runs_dir",
-      type=str,
-      default=None,
-      help="runs_dir directory (default: runs)",
-  )
-  parser.add_argument(
-      "--train.policy_store_dir",
-      dest="policy_store_dir",
-      type=str,
-      default=None,
-      help="policy_store directory (default: runs)",
-  )
-  parser.add_argument(
-      "--train.use_serial_vecenv",
-      dest="use_serial_vecenv",
-      action="store_true",
-      help="use serial vecenv impl (default: False)",
-  )
-
-  parser.add_argument(
-      "--train.learner_weight",
-      dest="learner_weight",
-      type=float,
-      default=1.0,
-      help="weight of learner policy (default: 1.0)",
-  )
-
-  parser.add_argument(
-      "--train.max_opponent_policies",
-      dest="max_opponent_policies",
-      type=int,
-      default=2,
-      help="maximum number of opponent policies to train against (default: 2)",
-  )
-
-  parser.add_argument(
-      "--wandb.project",
-      dest="wandb_project",
-      type=str,
-      default=None,
-      help="wandb project name (default: None)",
-  )
-  parser.add_argument(
-      "--wandb.entity",
-      dest="wandb_entity",
-      type=str,
-      default=None,
-      help="wandb entity name (default: None)",
-  )
-
-  parser.add_argument(
-      "--ppo.bptt_horizon",
-      dest="bptt_horizon",
-      type=int,
-      default=8,
-      help="train on bptt_horizon steps of a rollout at a time. "
-      "use this to reduce GPU memory (default: 16)",
-  )
-
-  parser.add_argument(
-      "--ppo.training_batch_size",
-      dest="ppo_training_batch_size",
-      type=int,
-      default=32,
-      help="number of rows in a training batch (default: 32)",
-  )
-  parser.add_argument(
-      "--ppo.update_epochs",
-      dest="ppo_update_epochs",
-      type=int,
-      default=4,
-      help="number of update epochs to use for training (default: 4)",
-  )
-  parser.add_argument(
-      "--ppo.learning_rate",
-      dest="ppo_learning_rate",
-      type=float,
-      default=0.0001,
-      help="learning rate (default: 0.0001)",
-  )
+  parser.add_argument("--ppo.training_batch_size", dest="ppo_training_batch_size",
+                      type=int, default=32, help="number of rows in a training batch (default: 32)")
+  parser.add_argument("--ppo.update_epochs", dest="ppo_update_epochs", type=int,
+                      default=4, help="number of update epochs to use for training (default: 4)")
+  parser.add_argument("--ppo.learning_rate", dest="ppo_learning_rate",
+                      type=float, default=0.0001, help="learning rate (default: 0.0001)")
 
   args = parser.parse_args()
 

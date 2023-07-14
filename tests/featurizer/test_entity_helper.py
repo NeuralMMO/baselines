@@ -34,7 +34,8 @@ class TestEntityHelper(unittest.TestCase):
     self.num_team = ModelArchitecture.NUM_TEAMS
     self.team_size = ModelArchitecture.NUM_PLAYERS_PER_TEAM
     teams = {
-        tid: list(range(1 + tid * self.team_size, 1 + (tid + 1) * self.team_size))
+        tid: list(range(1 + tid * self.team_size,
+                  1 + (tid + 1) * self.team_size))
         for tid in range(self.num_team)
     }
 
