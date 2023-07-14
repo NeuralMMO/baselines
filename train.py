@@ -167,8 +167,7 @@ if __name__ == "__main__":
       num_cores=args.num_cores or args.num_envs,
       num_buffers=args.num_buffers,
       batch_size=args.rollout_batch_size,
-      learning_rate=args.ppo_learning_rate,
-      actions_hack=args.model_type == "realikun",
+      learning_rate=args.ppo_learning_rate
   )
 
   training_run.resume_training(trainer)
