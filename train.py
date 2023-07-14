@@ -323,8 +323,10 @@ if __name__ == "__main__":
   ranker = PersistentObject(
       os.path.join(training_run.data_dir(), "openskill.pickle"),
       OpenSkillRanker,
-      "learner",
+      "anchor"
   )
+  if "learner" not in ranker.ratings():
+    ranker.add_policy("learner")
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
