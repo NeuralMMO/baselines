@@ -355,7 +355,9 @@ if __name__ == "__main__":
           "skillrank/opponent/score": mean([
             mean(v) for n, v in policy_pool.scores.items()
             if n != "learner"
-          ])
+          ]),
+          "agent_steps": trainer.global_step,
+          "global_step": trainer.global_step,
         })
 
 
