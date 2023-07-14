@@ -1,31 +1,35 @@
 import inspect
-import random
-import numpy as np
-import ast
-from tqdm import tqdm
 import json
-
-from transformers import AutoModelForCausalLM, AutoTokenizer, CodeGenModel
+import random
 
 import nmmo.task
+import numpy as np
 from static_src_dict import src_mapping
+from tqdm import tqdm
+from transformers import AutoTokenizer, CodeGenModel
+
 
 ######################################################################
 # to be provided by Joseph
-#from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
+# from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
 class DummyAgent:
   pass
 
-dummy_stat = {'stat': np.nan}
+
+dummy_stat = {"stat": np.nan}
+
 
 def train_on_tasks(agent_model, task_spec_with_embedding):
   return DummyAgent(), dummy_stat
 
+
 def evaluate_on_tasks(agent_model, task_spec_with_embedding):
   return dummy_stat
 
+
 def load_agent_model(model_path):
   return DummyAgent()
+
 
 ######################################################################
 # assuming something like this
@@ -34,7 +38,7 @@ def load_agent_model(model_path):
 # TODO: when given multiple tasks, can agents prioritize and/or multi-task?
 #   It seems to be a research questions.
 class TaskEmbeddingGenerator:
-  def __init__(self, checkpoint): # OpenELM default
+  def __init__(self, checkpoint):  # OpenELM default
     # https://huggingface.co/docs/transformers/model_doc/codegen#how-to-use
     # self.model = AutoModelForCausalLM.from_pretrained(checkpoint)
     self.model = CodeGenModel.from_pretrained(checkpoint)
@@ -51,7 +55,8 @@ class TaskEmbeddingGenerator:
   def _construct_prompt(self, reward_to, eval_fn, eval_fn_kwargs):
     eval_src = inspect.getsource(eval_fn)
     called_functions = get_called_functions(eval_src)
-    aux_src = "\n\n".join([src_mapping.get(call, '') for call in called_functions])
+    aux_src = "\n\n".join([src_mapping.get(call, "")
+                          for call in called_functions])
 
     eval_fn_kwargs = str(eval_fn_kwargs)
     # plug in these args to the prompt template, which will be fed into the model
@@ -74,7 +79,7 @@ class TaskEmbeddingGenerator:
       Explain step by step, and as accurately as possible,
 
       The agent's goal is"""
-    
+
     return task_specific_prompt
 
   def get_task_embedding(self, task_spec, to_file=False):
@@ -88,25 +93,25 @@ class TaskEmbeddingGenerator:
         task_kwargs = {}
       elif len(single_spec) == 4:
         reward_to, eval_fn, eval_kwargs, task_kwargs = single_spec
-        assert isinstance(task_kwargs, dict), 'task_kwargs must be a dict'
+        assert isinstance(task_kwargs, dict), "task_kwargs must be a dict"
       else:
-        raise ValueError('len(single_spec) must be either 3 or 4')    
+        raise ValueError("len(single_spec) must be either 3 or 4")
 
       # TODO: make the below lines run
       prompt = self._construct_prompt(reward_to, eval_fn, eval_kwargs)
-      tokens =  self.tokenizer(prompt, return_tensors="pt", truncation=True)
+      tokens = self.tokenizer(prompt, return_tensors="pt", truncation=True)
       embedding = self.model(**tokens)[0].mean(dim=1)
-      task_kwargs['embedding'] = embedding
+      task_kwargs["embedding"] = embedding
       # task_spec_with_embedding.append((reward_to, eval_fn, eval_kwargs, task_kwargs))
 
       if to_file:
         line_data = {
-                'reward_to': reward_to,
-                'eval_fn': eval_fn.__name__,
-                'eval_kwargs': str(eval_kwargs),
-                'embedding': embedding[0].tolist()
-            }
-        output_file.write(json.dumps(line_data) + '\n')
+            "reward_to": reward_to,
+            "eval_fn": eval_fn.__name__,
+            "eval_kwargs": str(eval_kwargs),
+            "embedding": embedding[0].tolist(),
+        }
+        output_file.write(json.dumps(line_data) + "\n")
 
     if to_file:
       output_file.close()
@@ -127,7 +132,7 @@ class SimpleTaskGenerator:
     # go through the task_spec and include the code of new functions
     for _, eval_fn, _ in self.task_spec:
       if not hasattr(nmmo.task.base_predicates, eval_fn.__name__):
-        code += '\n' + inspect.getsource(eval_fn)
+        code += "\n" + inspect.getsource(eval_fn)
     return code
 
   def generate_tasks(self, num_tasks):
@@ -135,6 +140,7 @@ class SimpleTaskGenerator:
     # CHECK ME: do we need to provide a random task generator?
     #   providing a manually curated task could do
     return random.choices(self.task_spec, k=num_tasks)
+
 
 # how to load functions from str and get the src of fn subset
 """
@@ -163,7 +169,6 @@ for name in function_names:
 """
 
 
-
 ######################################################################
 # Ryan's syllabus task sampler, assuming something like this
 class SyllabusTaskSampler:
@@ -172,7 +177,7 @@ class SyllabusTaskSampler:
     # something like this? to indicate which tasks to focus on currently
     self.sample_weights = None
     self._dummy_update_weight()
-    print('Number of tasks:', len(self.task_spec_with_embedding))
+    print("Number of tasks:", len(self.task_spec_with_embedding))
 
   def _dummy_update_weight(self):
     num_task = len(self.task_spec_with_embedding)
@@ -183,7 +188,7 @@ class SyllabusTaskSampler:
   def add_new_tasks(self, task_spec_with_embedding):
     # TODO: deduplication, the embeddings must be different
     self.task_spec_with_embedding += task_spec_with_embedding
-    print('Number of tasks:', len(self.task_spec_with_embedding))
+    print("Number of tasks:", len(self.task_spec_with_embedding))
 
   def sample_tasks(self, num_tasks):
     # TODO: return meaningful task specs

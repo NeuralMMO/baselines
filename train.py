@@ -1,5 +1,4 @@
 import argparse
-import copy
 import logging
 import os
 import time
@@ -323,7 +322,7 @@ if __name__ == "__main__":
   ranker = PersistentObject(
       os.path.join(training_run.data_dir(), "openskill.pickle"),
       OpenSkillRanker,
-      "anchor"
+      "anchor",
   )
   if "learner" not in ranker.ratings():
     ranker.add_policy("learner")

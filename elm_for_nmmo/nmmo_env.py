@@ -1,33 +1,38 @@
-from typing import Optional, Union
-from dataclasses import dataclass, field
-
 import re
-import numpy as np
+from dataclasses import dataclass, field
+from typing import Optional, Union
 
+import numpy as np
 from openelm.configs import EnvConfig
 from openelm.environments import BaseEnvironment, Genotype
 from openelm.mutation_model import DiffModel
 
-from .elm_helper import calculate_length, PREBUILT_TASK_FN
-from .elm_helper import generate_task_spec, extract_task_fn, is_task_spec_valid
+from .elm_helper import (
+    PREBUILT_TASK_FN,
+    calculate_length,
+    extract_task_fn,
+    generate_task_spec,
+    is_task_spec_valid,
+)
 
 
 @dataclass
 class NMMOConfig(EnvConfig):
   """Config for the NMMO environment."""
-  env_name:str = "NMMO"
+
+  env_name: str = "NMMO"
 
   # Important for specifying the diversity of a task.
   # Well defined the behaviour space, better quality/diversity from OpenELM
   behavior_space: list[list[float]] = field(
-    default_factory=lambda: [
-      # Baseline config considers the number of unique predicates,
-      # length of the task/normalized
-      # number of lines in the task / normalized
-      [0, 10],
-      [0, 10],
-      [0, 10],
-    ]
+      default_factory=lambda: [
+          # Baseline config considers the number of unique predicates,
+          # length of the task/normalized
+          # number of lines in the task / normalized
+          [0, 10],
+          [0, 10],
+          [0, 10],
+      ]
   )
 
   init_prompt: str = ""
@@ -45,8 +50,11 @@ class NMMOConfig(EnvConfig):
 
 
 Phenotype = Optional[np.ndarray]
+
+
 class NMMOTaskFn(Genotype):
   """A task in the NMMO environment."""
+
   def __init__(self, program_str: str, fn_name: str):
     self._fitness = -np.inf
     self._fn_name = fn_name
@@ -55,7 +63,7 @@ class NMMOTaskFn(Genotype):
     self.morphology = {}
 
     if self.valid:
-      code_only = re.sub(r" +#.*\n", "", self.program_str) # remove comments
+      code_only = re.sub(r" +#.*\n", "", self.program_str)  # remove comments
       # TODO: add more metrics here
       self.morphology["predicates"] = self._count_predicates(code_only)
       self.morphology["length"] = calculate_length(code_only)
@@ -68,13 +76,13 @@ class NMMOTaskFn(Genotype):
 
     # TODO: could include like penalizing for hallucinated predicates.
     # low values if the task is either to easy or too hard
-    self._fitness = len(self.program_str)/10
+    self._fitness = len(self.program_str) / 10
     return self._fitness
 
   def is_valid_nmmo_fn(self, eval_fn_str: str):
     # if program_str has more than 2048 tokens the tasks is not valid
     # Important function to quickly check if the generated task is valid.
-    tokens = len(eval_fn_str)/5
+    tokens = len(eval_fn_str) / 5
     if tokens >= 2048:
       return False
 
@@ -88,7 +96,9 @@ class NMMOTaskFn(Genotype):
     if not self.valid:
       return []
     task_spec = []
-    for single_spec in generate_task_spec(self.program_str, self._fn_name, num_sample):
+    for single_spec in generate_task_spec(
+        self.program_str, self._fn_name, num_sample
+    ):
       if is_task_spec_valid([single_spec]):
         task_spec.append(single_spec)
     return task_spec
@@ -108,11 +118,11 @@ class NMMOTaskFn(Genotype):
     # this is a dummy version based on string length of the task, unique predicates,
     # if self.valid:
     return np.array(
-      [
-        self.morphology["predicates"],
-        self.morphology["length"],
-        self.morphology["lines"]
-      ]
+        [
+            self.morphology["predicates"],
+            self.morphology["length"],
+            self.morphology["lines"],
+        ]
     )
     # else:
     #   return None
@@ -125,9 +135,12 @@ class NMMOTaskFn(Genotype):
 # TODO: make the prompts, etc easy to edit
 class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
   """The NMMO environment."""
-  def __init__(self,
-               config: NMMOConfig,
-               mutation_model: DiffModel,) -> None:
+
+  def __init__(
+      self,
+      config: NMMOConfig,
+      mutation_model: DiffModel,
+  ) -> None:
     # pylint: disable=super-init-not-called
     self.config: NMMOConfig = config
     self.batch_size = self.config.batch_size
@@ -139,35 +152,39 @@ class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
     self.gen_fn_name = config.gen_fn_name
     self.num_sample_spec = config.num_sample_spec
 
-  def construct_prompt(self,
-                       code_batch: Optional[Union[list[str], str]] = None
-                       ) -> dict[str, str]:
+  def construct_prompt(
+      self, code_batch: Optional[Union[list[str], str]] = None
+  ) -> dict[str, str]:
     import_s = self.impr
     prompt_str = import_s
 
     if self.config.mutate and code_batch is not None:
       # add prev task to the prompt if mutate is true
       if isinstance(code_batch, list):
-        prompt_str += "\n"+code_batch[0]
+        prompt_str += "\n" + code_batch[0]
       elif isinstance(code_batch, str):
-        prompt_str += "\n"+code_batch
+        prompt_str += "\n" + code_batch
     else:
-      prompt_str += "\n"+self.init_prompt
+      prompt_str += "\n" + self.init_prompt
 
     # this inst seems critical in determining what function the elm writes
     # TODO: use heuristics or LLM to generate a diverse goal statement here
     task_idea = "explore the map, eat food, and drink water"
 
     # instruction added to the prompt
-    inst = "\n# use the predicates listed in the imports and " +\
-           "complete the task using diverse predicates than before\n\n" +\
-           "# normalized float progress to a value between 0 and 1\n" +\
-           "def norm(progress):\n" + \
-           "  return max(min(progress, 1.0), 0.0)\n\n" + \
-           "# training_task evaluates progress towards " + task_idea + "\n" +\
-           "# and must return a float between 0-1 using norm()\n" +\
-           "# the lines of code should be less than 30\n" +\
-           f"def {self.gen_fn_name}(gs: GameState, subject: Group, "
+    inst = (
+        "\n# use the predicates listed in the imports and "
+        + "complete the task using diverse predicates than before\n\n"
+        + "# normalized float progress to a value between 0 and 1\n"
+        + "def norm(progress):\n"
+        + "  return max(min(progress, 1.0), 0.0)\n\n"
+        + "# training_task evaluates progress towards "
+        + task_idea
+        + "\n"
+        + "# and must return a float between 0-1 using norm()\n"
+        + "# the lines of code should be less than 30\n"
+        + f"def {self.gen_fn_name}(gs: GameState, subject: Group, "
+    )
     import_s += inst
     prompt_str += inst
     return {"prompt": prompt_str, "template": import_s}
@@ -175,9 +192,7 @@ class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
   # returns a string that contains the generated eval fn
   def _generate_task_fn(self, code_batch: list[dict[str, str]]) -> str:
     local_scope_exec: bool = False
-    return self.mutation_model.generate_programs(
-      code_batch, local_scope_exec
-    )
+    return self.mutation_model.generate_programs(code_batch, local_scope_exec)
 
   def generate_programs(self, code_batch: list[dict[str, str]]) -> list[NMMOTaskFn]:
     eval_fn_batch = self._generate_task_fn(code_batch)

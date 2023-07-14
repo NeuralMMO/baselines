@@ -2,10 +2,14 @@ import unittest
 
 from openelm import ELM
 
-from submission import custom_curriculum as cc
 from elm_for_nmmo.elm_curriculum_gen import OpenELMTaskGenerator
-from elm_for_nmmo.elm_helper import generate_task_spec, is_task_spec_valid, task_spec_to_str
+from elm_for_nmmo.elm_helper import (
+    generate_task_spec,
+    is_task_spec_valid,
+    task_spec_to_str,
+)
 from elm_for_nmmo.nmmo_env import NMMOTaskFn
+from submission import custom_curriculum as cc
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 NUM_TRAIN_TASKS = 5
@@ -25,7 +29,7 @@ class TestElmForNmmo(unittest.TestCase):
     eval_task_spec = task_generator.generate_tasks(NUM_TEST_TASKS)
 
     # this may take a while, so test the individual functions below
-    #new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS)
+    # new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS)
 
   def test_gnereate_task_spec(self):
     # see also elm_helper.sample_parameter
@@ -92,12 +96,12 @@ def training_task(gs, subject):
     elm_config.env.init_prompt = task_spec_to_str(train_task_spec)
     elm = ELM(elm_config)
     nmmo_elm_env = elm.qd_algorithm.env
-    code_batch = [nmmo_elm_env.construct_prompt()] # batch of 1
+    code_batch = [nmmo_elm_env.construct_prompt()]  # batch of 1
 
     # generate!
     elm_results = nmmo_elm_env._generate_task_fn(code_batch)
     print(elm_results[0])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()
