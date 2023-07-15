@@ -4,7 +4,6 @@ import pufferlib
 import pufferlib.emulation
 
 # pylint: disable=import-error
-from feature_extractor.feature_extractor import FeatureExtractor
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):

@@ -8,6 +8,7 @@ import nmmo
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
+import torch
 from numpy import mean
 from pufferlib.policy_pool import PolicyPool
 from pufferlib.policy_ranker import OpenSkillRanker
@@ -15,7 +16,7 @@ from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
 from pufferlib.utils import PersistentObject
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
-import torch
+
 import nmmo_config
 import wandb
 from env.postprocessor import Postprocessor
@@ -171,7 +172,7 @@ if __name__ == "__main__":
   training_run.enable_wandb(args.wandb_project, args.wandb_entity)
 
   binding = pufferlib.emulation.Binding(
-      env_cls = nmmo.Env,
+      env_cls=nmmo.Env,
       default_args=[nmmo_config.NmmoConfig(args)],
       env_name="Neural MMO",
       suppress_env_prints=False,
@@ -194,10 +195,9 @@ if __name__ == "__main__":
     learner_policy = pr.policy(NmmoPolicy.create_policy)
   else:
     logging.info("No policy checkpoint found. Creating new policy.")
-    learner_policy = NmmoPolicy.create_policy({
-      "policy_type": "nmmo",
-      "num_lstm_layers": 0
-    })(binding)
+    learner_policy = NmmoPolicy.create_policy(
+        {"policy_type": "nmmo", "num_lstm_layers": 0}
+    )(binding)
 
   policy_pool = PolicyPool(
       learner_policy,
@@ -233,8 +233,9 @@ if __name__ == "__main__":
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
-    policy_pool.update_policies({
-      p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp})
+    policy_pool.update_policies(
+        {p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp}
+    )
     trainer.evaluate()
 
     if policy_pool.scores:
