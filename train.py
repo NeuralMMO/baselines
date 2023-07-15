@@ -15,90 +15,17 @@ from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
 from pufferlib.utils import PersistentObject
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
-
-import model
+import torch
+import nmmo_config
 import wandb
-from env.nmmo_config import nmmo_config
 from env.postprocessor import Postprocessor
-from lib.team.team_helper import TeamHelper
 from lib.training_run import TrainingRun
+from model.nmmo_policy import NmmoPolicy
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
   parser = argparse.ArgumentParser()
-
-  parser.add_argument(
-      "--model.type",
-      dest="model_type",
-      type=str,
-      default="realikun",
-      help="model type (default: realikun)",
-  )
-
-  parser.add_argument(
-      "--env.num_teams",
-      dest="num_teams",
-      type=int,
-      default=16,
-      help="number of teams to use for training (default: 16)",
-  )
-  parser.add_argument(
-      "--env.team_size",
-      dest="team_size",
-      type=int,
-      default=8,
-      help="number of agents per team to use for training (default: 8)",
-  )
-  parser.add_argument(
-      "--env.num_npcs",
-      dest="num_npcs",
-      type=int,
-      default=0,
-      help="number of NPCs to use for training (default: 256)",
-  )
-  parser.add_argument(
-      "--env.max_episode_length",
-      dest="max_episode_length",
-      type=int,
-      default=1024,
-      help="number of steps per episode (default: 1024)",
-  )
-  parser.add_argument(
-      "--env.death_fog_tick",
-      dest="death_fog_tick",
-      type=int,
-      default=None,
-      help="number of ticks before death fog starts (default: None)",
-  )
-  parser.add_argument(
-      "--env.combat_enabled",
-      dest="combat_enabled",
-      action="store_true",
-      default=False,
-      help="only allow moves (default: False)",
-  )
-  parser.add_argument(
-      "--env.num_maps",
-      dest="num_maps",
-      type=int,
-      default=128,
-      help="number of maps to use for training (default: 1)",
-  )
-  parser.add_argument(
-      "--env.maps_path",
-      dest="maps_path",
-      type=str,
-      default="maps/train/",
-      help="path to maps to use for training (default: None)",
-  )
-  parser.add_argument(
-      "--env.map_size",
-      dest="map_size",
-      type=int,
-      default=128,
-      help="size of maps to use for training (default: 128)",
-  )
 
   parser.add_argument(
       "--rollout.num_cores",
@@ -235,7 +162,7 @@ if __name__ == "__main__":
       default=0.0001,
       help="learning rate (default: 0.0001)",
   )
-
+  nmmo_config.add_args(parser)
   args = parser.parse_args()
 
   if args.run_name is None:
@@ -243,41 +170,16 @@ if __name__ == "__main__":
   training_run = TrainingRun(args.run_name, args.runs_dir, args)
   training_run.enable_wandb(args.wandb_project, args.wandb_entity)
 
-  # Set up the teams
-  team_helper = TeamHelper(
-      {
-          i: [i * args.team_size + j + 1 for j in range(args.team_size)]
-          for i in range(args.num_teams)
-      }
-  )
-
-  # Set up the environment
-  config = nmmo_config(
-      team_helper,
-      {
-          "num_maps": args.num_maps,
-          "maps_path": f"{args.maps_path}/{args.map_size}/",
-          "map_size": args.map_size,
-          "max_episode_length": args.max_episode_length,
-          "death_fog_tick": args.death_fog_tick,
-          "combat_enabled": args.combat_enabled,
-          "num_npcs": args.num_npcs,
-      },
-  )
-  config.CURRICULUM_FILE_PATH = "tasks.pkl"
-
   binding = pufferlib.emulation.Binding(
-      env_creator=lambda: nmmo.Env(config),
+      env_cls = nmmo.Env,
+      default_args=[nmmo_config.NmmoConfig(args)],
       env_name="Neural MMO",
       suppress_env_prints=False,
-      teams=team_helper.teams,
       emulate_const_horizon=args.max_episode_length,
       postprocessor_cls=Postprocessor,
       postprocessor_args=[],
   )
-
-  def make_policy(mc):
-    return model.create_policy(mc.metadata()["policy_type"], binding)
+  device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
   if args.policy_store_dir is None:
     args.policy_store_dir = training_run.data_dir()
@@ -289,12 +191,13 @@ if __name__ == "__main__":
         "Train: resuming training from %s", training_run.latest_policy_name()
     )
     pr = policy_store.get_policy(training_run.latest_policy_name())
-    policy_type = pr.metadata()["policy_type"]
-    learner_policy = pr.policy(make_policy)
+    learner_policy = pr.policy(NmmoPolicy.create_policy)
   else:
     logging.info("No policy checkpoint found. Creating new policy.")
-    policy_type = args.model_type
-    learner_policy = model.create_policy(policy_type, binding)
+    learner_policy = NmmoPolicy.create_policy({
+      "policy_type": "nmmo",
+      "num_lstm_layers": 0
+    })(binding)
 
   policy_pool = PolicyPool(
       learner_policy,
@@ -330,7 +233,8 @@ if __name__ == "__main__":
 
   while not trainer.done_training():
     sp = policy_store.select_policies(ps)
-    policy_pool.update_policies({p.name: p.policy(make_policy) for p in sp})
+    policy_pool.update_policies({
+      p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp})
     trainer.evaluate()
 
     if policy_pool.scores:
@@ -392,7 +296,7 @@ if __name__ == "__main__":
       policy_store.add_policy(
           training_run.latest_policy_name(),
           learner_policy,
-          {"policy_type": policy_type},
+          learner_policy.metadata(),
       )
       ranker.add_policy_copy(training_run.latest_policy_name(), "learner")
 

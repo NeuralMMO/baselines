@@ -63,15 +63,15 @@ class TaskEmbeddingGenerator:
 
     task_specific_prompt = f"""Your goal is to explain what an agent must accomplish in the neural nmmo,
       which is expressed as a python function.
-      Neural MMO is a computationally accessible, open-source research platform that 
+      Neural MMO is a computationally accessible, open-source research platform that
       simulates populations of agents in virtual worlds. We challenge you to train a
       team of agents to complete tasks they have never seen before against opponents
         they have never seen before on maps they have never seen before.
-    
+
       The reward from this function goes to {reward_to}.
-      
+
       The function name is {eval_fn.__name__}. These are the arguments that the function takes {eval_fn_kwargs}.
-    
+
       The function source code is {eval_src}.
 
       This function calls these other functions {aux_src}.

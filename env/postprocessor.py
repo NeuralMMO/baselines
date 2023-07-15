@@ -10,11 +10,11 @@ from feature_extractor.feature_extractor import FeatureExtractor
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id):
     super().__init__(env, teams, team_id)
-    self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
+    # self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
 
   def reset(self, team_obs):
     super().reset(team_obs)
-    self._feature_extractor.reset(team_obs)
+    # self._feature_extractor.reset(team_obs)
 
   def rewards(self, team_rewards, team_dones, team_infos, step):
     agents = list(set(team_rewards.keys()).union(set(team_dones.keys())))

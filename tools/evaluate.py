@@ -14,7 +14,7 @@ import pufferlib.policy_pool
 import pufferlib.registry.nmmo
 
 import model
-from env.nmmo_config import nmmo_config
+from env.nmmo import nmmo
 from env.postprocessor import Postprocessor
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
@@ -171,7 +171,7 @@ if __name__ == "__main__":
       }
   )
 
-  config = nmmo_config(
+  config = nmmo(
       team_helper,
       dict(
           num_maps=args.num_maps,
