@@ -1,13 +1,11 @@
-
-from curses import meta
 from typing import Dict
+
 import pufferlib
 import pufferlib.emulation
 import pufferlib.models
 import torch
 import torch.nn.functional as F
 from nmmo.entity.entity import EntityState
-from pufferlib.policy_store import PolicyRecord
 
 NUM_ATTRS = 26
 EntityId = EntityState.State.attr_name_to_col["id"]
@@ -127,5 +125,5 @@ class NmmoPolicy(pufferlib.models.Policy):
     return pufferlib.frameworks.cleanrl.make_policy(
         NmmoPolicy,
         recurrent_args=[input_size, hidden_size] if num_lstm_layers else [],
-        recurrent_kwargs={"num_layers": num_lstm_layers}
+        recurrent_kwargs={"num_layers": num_lstm_layers},
     )(binding, metadata)

@@ -1,8 +1,7 @@
-
 from argparse import ArgumentParser, Namespace
-import nmmo
 from collections import defaultdict
 
+import nmmo
 import pufferlib
 import pufferlib.emulation
 
@@ -75,7 +74,7 @@ class Config(
     nmmo.config.Item,
     nmmo.config.Exchange,
     nmmo.config.Combat,
-    nmmo.config.NPC
+    nmmo.config.NPC,
 ):
   def __init__(self, args: Namespace):
     super().__init__()
@@ -95,11 +94,11 @@ class Config(
 class Postprocessor(pufferlib.emulation.Postprocessor):
   # def __init__(self, env, teams, team_id):
   #   super().__init__(env, teams, team_id)
-    # self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
+  # self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
 
   # def reset(self, team_obs):
   #   super().reset(team_obs)
-    # self._feature_extractor.reset(team_obs)
+  # self._feature_extractor.reset(team_obs)
 
   def rewards(self, team_rewards, team_dones, team_infos, step):
     agents = list(set(team_rewards.keys()).union(set(team_dones.keys())))
