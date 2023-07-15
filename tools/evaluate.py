@@ -12,10 +12,10 @@ import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.policy_pool
 import pufferlib.registry.nmmo
-
-import model
 from env.nmmo import nmmo
 from env.postprocessor import Postprocessor
+
+import model
 from lib.team.team_helper import TeamHelper
 from lib.team.team_replay_helper import TeamReplayHelper
 

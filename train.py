@@ -4,12 +4,7 @@ import os
 import time
 
 import clean_pufferl
-import nmmo
-import pufferlib.emulation
-import pufferlib.frameworks.cleanrl
-import pufferlib.registry.nmmo
 import torch
-from numpy import mean
 from pufferlib.policy_pool import PolicyPool
 from pufferlib.policy_ranker import OpenSkillRanker
 from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
@@ -18,7 +13,6 @@ from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import nmmo_env
-import wandb
 from lib.training_run import TrainingRun
 from nmmo_policy import NmmoPolicy
 
@@ -188,7 +182,8 @@ if __name__ == "__main__":
   else:
     logging.info("No policy checkpoint found. Creating new policy.")
     learner_policy = NmmoPolicy.create_policy(
-        {"policy_type": "nmmo", "num_lstm_layers": 0}, binding)
+        {"policy_type": "nmmo", "num_lstm_layers": 0}, binding
+    )
 
   policy_pool = PolicyPool(
       learner_policy,
