@@ -17,11 +17,10 @@ from pufferlib.utils import PersistentObject
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
-import nmmo_config
+import nmmo_env
 import wandb
-from env.postprocessor import Postprocessor
 from lib.training_run import TrainingRun
-from model.nmmo_policy import NmmoPolicy
+from nmmo_policy import NmmoPolicy
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -163,23 +162,16 @@ if __name__ == "__main__":
       default=0.0001,
       help="learning rate (default: 0.0001)",
   )
-  nmmo_config.add_args(parser)
+  nmmo_env.add_args(parser)
   args = parser.parse_args()
 
   if args.run_name is None:
     args.run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
+
   training_run = TrainingRun(args.run_name, args.runs_dir, args)
   training_run.enable_wandb(args.wandb_project, args.wandb_entity)
 
-  binding = pufferlib.emulation.Binding(
-      env_cls=nmmo.Env,
-      default_args=[nmmo_config.NmmoConfig(args)],
-      env_name="Neural MMO",
-      suppress_env_prints=False,
-      emulate_const_horizon=args.max_episode_length,
-      postprocessor_cls=Postprocessor,
-      postprocessor_args=[],
-  )
+  binding = nmmo_env.create_binding(args)
   device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
   if args.policy_store_dir is None:
@@ -192,20 +184,26 @@ if __name__ == "__main__":
         "Train: resuming training from %s", training_run.latest_policy_name()
     )
     pr = policy_store.get_policy(training_run.latest_policy_name())
-    learner_policy = pr.policy(NmmoPolicy.create_policy)
+    learner_policy = pr.policy(NmmoPolicy.create_policy, binding)
   else:
     logging.info("No policy checkpoint found. Creating new policy.")
     learner_policy = NmmoPolicy.create_policy(
-        {"policy_type": "nmmo", "num_lstm_layers": 0}
-    )(binding)
+        {"policy_type": "nmmo", "num_lstm_layers": 0}, binding)
 
   policy_pool = PolicyPool(
       learner_policy,
       "learner",
       num_envs=args.num_envs,
-      num_agents=args.num_teams * args.team_size,
+      num_agents=args.num_agents,
       num_policies=args.max_opponent_policies + 1,
       learner_weight=args.learner_weight,
+  )
+
+  ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
+  ranker = PersistentObject(
+      os.path.join(training_run.data_dir(), "openskill.pickle"),
+      OpenSkillRanker,
+      "anchor",
   )
 
   trainer = clean_pufferl.CleanPuffeRL(
@@ -219,15 +217,10 @@ if __name__ == "__main__":
       num_buffers=args.num_buffers,
       batch_size=args.rollout_batch_size,
       learning_rate=args.ppo_learning_rate,
+      policy_ranker=ranker,
   )
 
   training_run.resume_training(trainer)
-  ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
-  ranker = PersistentObject(
-      os.path.join(training_run.data_dir(), "openskill.pickle"),
-      OpenSkillRanker,
-      "anchor",
-  )
   if "learner" not in ranker.ratings():
     ranker.add_policy("learner")
 
@@ -237,54 +230,6 @@ if __name__ == "__main__":
         {p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp}
     )
     trainer.evaluate()
-
-    if policy_pool.scores:
-      logging.info(
-          "Ranker Ratings (Pre-Update): %s",
-          {n: ranker.ratings().get(n) for n in policy_pool.scores},
-      )
-      logging.info(
-          "Policy Scores: %s", {n: mean(v)
-                                for n, v in policy_pool.scores.items()}
-      )
-      ranker.update_ranks(policy_pool.scores)
-      logging.info(
-          "Ranker Ratings (Post Update): %s",
-          {n: ranker.ratings()[n].mu for n in policy_pool.scores},
-      )
-      if trainer.wandb_initialized:
-        wandb.log(
-            {
-                "skillrank/learner/mu": ranker.ratings()["learner"].mu,
-                "skillrank/learner/sigma": ranker.ratings()["learner"].sigma,
-                "skillrank/learner/score": mean(policy_pool.scores["learner"]),
-                "skillrank/opponent/mu": mean(
-                    [
-                        ranker.ratings()[n].mu
-                        for n in policy_pool.scores
-                        if n != "learner"
-                    ]
-                ),
-                "skillrank/opponent/sigma": mean(
-                    [
-                        ranker.ratings()[n].sigma
-                        for n in policy_pool.scores
-                        if n != "learner"
-                    ]
-                ),
-                "skillrank/opponent/score": mean(
-                    [
-                        mean(v)
-                        for n, v in policy_pool.scores.items()
-                        if n != "learner"
-                    ]
-                ),
-                "agent_steps": trainer.global_step,
-                "global_step": trainer.global_step,
-            }
-        )
-
-    policy_pool.scores = {}
 
     trainer.train(
         update_epochs=args.ppo_update_epochs,
