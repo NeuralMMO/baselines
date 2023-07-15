@@ -204,6 +204,7 @@ if __name__ == "__main__":
   trainer = clean_pufferl.CleanPuffeRL(
       binding,
       learner_policy,
+      exp_name=args.run_name,
       policy_pool=policy_pool,
       vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
       total_timesteps=args.train_num_steps,
@@ -213,6 +214,8 @@ if __name__ == "__main__":
       batch_size=args.rollout_batch_size,
       learning_rate=args.ppo_learning_rate,
       policy_ranker=ranker,
+      policy_store=policy_store,
+      checkpoint_interval=args.checkpoint_interval,
   )
 
   training_run.resume_training(trainer)
@@ -231,15 +234,8 @@ if __name__ == "__main__":
         bptt_horizon=args.bptt_horizon,
         batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
     )
-
     if trainer.update % args.checkpoint_interval == 1:
       training_run.save_checkpoint(trainer)
-      policy_store.add_policy(
-          training_run.latest_policy_name(),
-          learner_policy,
-          learner_policy.metadata(),
-      )
-      ranker.add_policy_copy(training_run.latest_policy_name(), "learner")
 
   trainer.close()
 
