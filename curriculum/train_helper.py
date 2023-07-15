@@ -6,11 +6,13 @@ import nmmo
 
 ######################################################################
 # to be provided by Joseph
-#from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
+# from cleanrl_ppo_lstm import train_on_tasks, evaluate_on_tasks
 class DummyAgent:
   pass
 
-dummy_stat = {'stat': np.nan}
+
+dummy_stat = {"stat": np.nan}
+
 
 def train_on_tasks(agent_model, curriculm_file_path):
   # env.__init__() checks whether the curriculum file is present

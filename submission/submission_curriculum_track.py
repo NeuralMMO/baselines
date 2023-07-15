@@ -1,7 +1,10 @@
 # pylint: disable=protected-access,bad-builtin,unused-variable,unused-import,ungrouped-imports
 
-'''Manual test for running a training epoch with curriculum'''
-#import wandb
+"""Manual test for running a training epoch with curriculum"""
+# import wandb
+
+# if you want more task specs, use
+from curriculum import manual_curriculum as mc  # and use mc.task_spec
 
 # train_helper provides the dummy functions/classes to make this run
 # TODO: replace these with the actual functions/classes
@@ -24,7 +27,7 @@ from curriculum import manual_curriculum as mc # and use mc.task_spec
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 
 # Joseph's comment: this will likely have to work off of a pretrained model
-AGENT_MODEL_PATH = ''
+AGENT_MODEL_PATH = ""
 
 NUM_TRAIN_TASKS = 30
 NUM_TEST_TASKS = 5
@@ -84,5 +87,5 @@ def train_with_curriculum(use_elm=True):
 
     #wandb.log(train_stats, eval_stats)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   train_with_curriculum()

@@ -1,14 +1,15 @@
 class BaseLevel:
-    """Base class for a training level."""
-    def __init__(self, id: str) -> None:
-        self.id = id
+  """Base class for a training level."""
 
-    def __str__(self) -> str:
-        return str(self.id)
+  def __init__(self, id: str) -> None:
+    self.id = id
 
-    def __repr__(self) -> str:
-        return self.__str__()
+  def __str__(self) -> str:
+    return str(self.id)
+
+  def __repr__(self) -> str:
+    return self.__str__()
+
 
 class Level(BaseLevel):
-    """A training level."""
-    pass
+  """A training level."""

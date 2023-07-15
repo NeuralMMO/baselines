@@ -7,7 +7,7 @@ import nmmo.task
 from nmmo.task import task_spec as ts
 
 from openelm import ELM
-from openelm.configs import ELMConfig, PromptModelConfig, MAPElitesConfig
+from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
 from openelm.environments import ENVS_DICT
 
 from elm_for_nmmo.elm_helper import task_spec_to_str, import_str
@@ -39,14 +39,18 @@ class SimpleTaskGenerator:
 
 class OpenELMTaskGenerator(SimpleTaskGenerator):
   """Container class to include all the configs and generate tasks"""
-  def __init__(self, task_spec: List[ts.TaskSpec],
-               checkpoint,
-               temperature=1.1,
-               batch_size=1,
-               gen_fn_name="training_task"):
+
+  def __init__(
+      self,
+      task_spec: List[ts.TaskSpec],
+      checkpoint,
+      temperature=1.1,
+      batch_size=1,
+      gen_fn_name="training_task",
+  ):
     pattern = r"Salesforce/codegen-(350M|2B|6B)-mono"
     assert re.match(pattern, checkpoint), "Provided model not supported"
-    assert 0.9<=temperature<=1.4, "temperature should be between 0.9 and 1.4"
+    assert 0.9 <= temperature <= 1.4, "temperature should be between 0.9 and 1.4"
     super().__init__(task_spec)
 
     self.config = ELMConfig()
@@ -72,7 +76,7 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
   def evolve_tasks(self, task_spec: List[ts.TaskSpec],
                    num_tasks, steps=10, debug=False):
     """Evolve the given task specs for the given number of steps
-          and return the num_tasks task specs
+    and return the num_tasks task specs
     """
     if debug: # just to check if the end-to-end works
       return self.generate_tasks(num_tasks)
@@ -83,7 +87,7 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
 
     best_task = None
     while best_task is None:
-      elm.run(init_steps = 2, total_steps = steps)
+      elm.run(init_steps=2, total_steps=steps)
       # for now, just use the maximum fitness genome
       # TODO: we may want to sample best ones
       best_task = elm.qd_algorithm.current_max_genome

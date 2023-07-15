@@ -1,13 +1,40 @@
-'''Manual test for creating learning curriculum manually'''
+"""Manual test for creating learning curriculum manually"""
 # pylint: disable=invalid-name,redefined-outer-name,bad-builtin
 # pylint: disable=wildcard-import,unused-wildcard-import
 from typing import List
 
 import nmmo
 import nmmo.lib.material as m
-from nmmo.task.base_predicates import *
-from nmmo.task import constraint as c
+from nmmo.task.base_predicates import (
+    AllDead,
+    AllMembersWithinRange,
+    AttainSkill,
+    BuyItem,
+    CanSeeAgent,
+    CanSeeGroup,
+    CanSeeTile,
+    ConsumeItem,
+    CountEvent,
+    DefeatEntity,
+    DistanceTraveled,
+    EarnGold,
+    EquipItem,
+    FullyArmed,
+    HarvestItem,
+    HoardGold,
+    InventorySpaceGE,
+    ListItem,
+    MakeProfit,
+    OccupyTile,
+    OwnItem,
+    ScoreHit,
+    SpendGold,
+    StayAlive,
+    TickGE,
+)
 from nmmo.task.task_spec import TaskSpec, make_task_from_spec
+from nmmo.task import constraint as c
+
 
 EVENT_NUMBER_GOAL = [3, 4, 5, 7, 9, 12, 15, 20, 30, 50]
 INFREQUENT_GOAL = list(range(1, 10))
@@ -25,8 +52,14 @@ task_spec: List[TaskSpec] = []
 
 # explore, eat, drink, attack any agent, harvest any item, level up any skill
 #   which can happen frequently
-essential_skills = ['GO_FARTHEST', 'EAT_FOOD', 'DRINK_WATER',
-                    'SCORE_HIT', 'HARVEST_ITEM', 'LEVEL_UP']
+essential_skills = [
+    "GO_FARTHEST",
+    "EAT_FOOD",
+    "DRINK_WATER",
+    "SCORE_HIT",
+    "HARVEST_ITEM",
+    "LEVEL_UP",
+]
 for event_code in essential_skills:
   for cnt in EVENT_NUMBER_GOAL:
     task_spec.append(TaskSpec(eval_fn=CountEvent,
@@ -34,8 +67,16 @@ for event_code in essential_skills:
                               sampling_weight=30))
 
 # item/market skills, which happen less frequently or should not do too much
-item_skills = ['CONSUME_ITEM', 'GIVE_ITEM', 'DESTROY_ITEM', 'EQUIP_ITEM',
-               'GIVE_GOLD', 'LIST_ITEM', 'EARN_GOLD', 'BUY_ITEM']
+item_skills = [
+    "CONSUME_ITEM",
+    "GIVE_ITEM",
+    "DESTROY_ITEM",
+    "EQUIP_ITEM",
+    "GIVE_GOLD",
+    "LIST_ITEM",
+    "EARN_GOLD",
+    "BUY_ITEM",
+]
 for event_code in item_skills:
   task_spec += [TaskSpec(eval_fn=CountEvent, eval_fn_kwargs={'event': event_code, 'N': cnt})
                 for cnt in INFREQUENT_GOAL] # less than 10
@@ -104,6 +145,8 @@ for amount in EVENT_NUMBER_GOAL:
 # managing inventory space
 def PracticeInventoryManagement(gs, subject, space, num_tick):
   return InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick)
+
+
 for space in [2, 4, 8]:
   task_spec += [TaskSpec(eval_fn=PracticeInventoryManagement,
                          eval_fn_kwargs={'space': space, 'num_tick': num_tick})
@@ -173,11 +216,11 @@ for item in ALL_ITEM:
                                   sampling_weight=4-level if level < 4 else 1))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   # pylint: disable=bare-except
   import psutil
-  from contextlib import contextmanager
   import multiprocessing as mp
+  from contextlib import contextmanager
   import numpy as np
   import dill
 
@@ -189,7 +232,7 @@ if __name__ == '__main__':
     pool.join()
 
   def check_task_spec(spec_list):
-    teams = {0:[1,2,3], 1:[4,5], 2:[6,7], 3:[8,9], 4:[10,11]}
+    teams = {0: [1, 2, 3], 1: [4, 5], 2: [6, 7], 3: [8, 9], 4: [10, 11]}
     config = nmmo.config.Default()
     env = nmmo.Env(config)
     for idx, single_spec in enumerate(spec_list):
@@ -200,10 +243,10 @@ if __name__ == '__main__':
         for _ in range(3):
           env.step({})
       except:
-        print('invalid task spec:', single_spec)
+        print("invalid task spec:", single_spec)
 
       if idx > 0 and idx % 50 == 0:
-        print(idx, 'task specs checked.')
+        print(idx, "task specs checked.")
 
   # 1535 task specs: divide the specs into chunks
   num_cores = psutil.cpu_count(logical=False)

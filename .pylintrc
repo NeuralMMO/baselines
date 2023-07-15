@@ -1,13 +1,14 @@
 [MESSAGES CONTROL]
 
-disable=W0511, # TODO/FIXME
-        W0105, # string is used as a statement
+disable=C0103, # invalid name
         C0114, # missing module docstring
         C0115, # missing class docstring
         C0116, # missing function docstring
-        W0221, # arguments differ from overridden method
+        C0301, # line too long
+        C0411, # wrong import order
         C0415, # import outside toplevel
         E0611, # no name in module
+        R0401, # cyclic import
         R0901, # too many ancestors
         R0902, # too many instance attributes
         R0903, # too few public methods
@@ -17,7 +18,10 @@ disable=W0511, # TODO/FIXME
         R0914, # too many local variables
         R0914, # too many local variables
         R0915, # too many statements
-        R0401, # cyclic import
+        W0105, # string is used as a statement
+        W1203, # use logging instead of print
+        W0221, # arguments differ from overridden method
+        W0511, # TODO/FIXME
 
 [INDENTATION]
 indent-string='  '

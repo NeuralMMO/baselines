@@ -1,7 +1,7 @@
 import unittest
-import numpy as np
 
 import nmmo
+import numpy as np
 
 # pylint: disable=import-error
 from feature_extractor.game_state import GameState
@@ -12,7 +12,9 @@ class TestGameState(unittest.TestCase):
   def setUp(self):
     self.config = nmmo.config.Config()
     self.config.HORIZON = 1000
-    self.team_size = 5
+    self.team_size = (
+        1  # this should equal to ModelArchitecture.NUM_PLAYERS_PER_TEAM
+    )
     self.game_state = GameState(self.config, self.team_size)
 
   def test_init(self):
@@ -53,8 +55,8 @@ class TestGameState(unittest.TestCase):
     self.assertEqual(game_features[1], expected_n_alive / self.team_size)
 
     # check the feature dim
-    expected_feat_n = 1 + 1 + ModelArchitecture.PROGRESS_NUM_FEATURES + self.team_size
-    self.assertEqual(expected_feat_n, len(game_features))
+    self.assertEqual(ModelArchitecture.GAME_NUM_FEATURES, len(game_features))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
   unittest.main()
