@@ -1,19 +1,26 @@
-import inspect
-import math
-import multiprocessing as mp
+from typing import List
+from types import ModuleType
 import re
 import sys
+import math
 import time
+import inspect
+import multiprocessing as mp
 from collections import Counter
 
 import nmmo
 import numpy as np
 from nmmo.lib.material import Harvestable
+import nmmo.task
 from nmmo.task import constraint as c
+from nmmo.task import task_spec as ts
 
 # required to run check_task_spec
 # pylint: disable=wildcard-import,unused-import,unused-wildcard-import
-from nmmo.task.task_api import make_team_tasks
+from nmmo.task.group import Group
+from nmmo.task.game_state import GameState
+from nmmo.task.base_predicates import *
+
 
 ######################################################################
 # some sample phenotypes:
@@ -38,7 +45,7 @@ def calculate_length(task):
   """Scaling metrics between two values. It is very important for the selected phenotypes
   to be able to have values and easily move across the defined behaviour space.
   in this case 0-10  scale # of characters in task (100-9000) to behaviour space 0-10
-  """
+"""
   min_val = 100
   max_val = 9000
   new_min = 0
@@ -54,19 +61,6 @@ def calculate_length(task):
 
 ######################################################################
 # nmmo task-related helper functions
-
-
-def is_camel_case(input_string):
-  if input_string == input_string.lower():  # all lower case
-    return False
-  # Check if the string matches the camel case pattern
-  pattern = r"^(?:[A-Z]{2}|[A-Z][a-z0-9]+|[a-z][a-z0-9]*)+$"
-  return re.match(pattern, input_string) is not None
-
-
-PREBUILT_TASK_FN = [fn for fn in dir(
-    nmmo.task.base_predicates) if is_camel_case(fn)]
-
 
 # extract training task function from the ELM result
 def extract_task_fn(result_str, fn_name):
@@ -129,8 +123,7 @@ def sample_parameter(key, type_hint):
 
 TIME_OUT = 15  # sec
 
-
-def is_task_spec_valid(spec_list):
+def is_task_spec_valid(spec_list: List[ts.TaskSpec]):
   # pylint: disable=bad-builtin,bare-except,inconsistent-return-statements
   teams = {0: [1, 2, 3], 1: [4, 5], 2: [6, 7], 3: [8, 9], 4: [10, 11]}
   config = nmmo.config.Default()
@@ -138,7 +131,7 @@ def is_task_spec_valid(spec_list):
   num_success = 0
   for single_spec in spec_list:
     # pylint: disable=cell-var-from-loop
-    test_task = make_team_tasks(teams, [single_spec])
+    test_task = ts.make_task_from_spec(teams, [single_spec])
     env.reset(make_task_fn=lambda: test_task)
 
     def run_env():
@@ -188,27 +181,103 @@ def generate_task_spec(result_str, fn_name, num_sample=3):
 
   included_kwargs = set()
   for _ in range(num_sample):
-    eval_kwargs = {}
+    task_fn_kwargs = {}
     for key, param in fn_params.items():
       if key in ["gs", "subject"]:
         continue
       type_hint = param.annotation.__name__
-      eval_kwargs[key] = sample_parameter(key, type_hint)
-    args_vals = tuple(eval_kwargs.values())
+      task_fn_kwargs[key] = sample_parameter(key, type_hint)
+    args_vals = tuple(task_fn_kwargs.values())
     if args_vals not in included_kwargs:
-      task_spec.append(("agent", task_fn, eval_kwargs))
+      task_spec.append(ts.TaskSpec(eval_fn=task_fn,
+                                   eval_fn_kwargs=task_fn_kwargs))
       included_kwargs.add(args_vals)
 
   return task_spec
 
-
-def task_spec_to_str(task_specs):
+def task_spec_to_str(task_spec: List[ts.TaskSpec]):
   # extract task_fn source code from task_spec
   extracted_fn_list = set()
   task_fn_src = []
-  for task_spec in task_specs:
-    fn_name = task_spec[1].__name__
+  for single_spec in task_spec:
+    fn_name = single_spec.eval_fn.__name__
     if fn_name not in extracted_fn_list:
-      task_fn_src.append(inspect.getsource(task_spec[1]))
+      task_fn_src.append(inspect.getsource(single_spec.eval_fn))
       extracted_fn_list.add(fn_name)
   return "\n".join(task_fn_src)
+
+# get the list of pre-built task functions
+def is_function_type(obj):
+  return inspect.isfunction(obj) and not inspect.isbuiltin(obj)
+
+def extract_module_fn(module: ModuleType):
+  fn_dict = {}
+  for name, fn in module.__dict__.items():
+    if is_function_type(fn) and not name.startswith('_'):
+      fn_dict[name] = fn
+  return fn_dict
+
+PREBUILT_TASK_FN = extract_module_fn(nmmo.task.base_predicates)
+
+# used in OpenELMTaskGenerator: see self.config.env.impr = import_str["short_import"]
+import_str = {"short_import": """from predicates import TickGE,StayAlive,AllDead,EatFood,DrinkWater,CanSeeTile,CanSeeAgent,OccupyTile
+from predicates import DistanceTraveled,AllMembersWithinRange,ScoreHit,ScoreKill,AttainSkill,InventorySpaceGE,OwnItem
+from predicates import EquipItem,FullyArmed,ConsumeItem,GiveItem,DestroyItem,HarvestItem,HoardGold,GiveGold,ListItem,EarnGold,BuyItem,SpendGold,MakeProfit
+# Armour
+item.Hat, item.Top, item.Bottom, 
+# Weapon
+item.Sword, item.Bow, item.Wand
+# Tool
+item.Rod, item.Gloves, item.Pickaxe, item.Chisel, item.Arcane
+# Ammunition
+item.Scrap, item.Shaving, item.Shard, 
+# Consumable
+item.Ration, item.Poultice
+# Materials
+tile_type.Lava, tile_type.Water,tile_type.Grass, tile_type.Scrub, 
+tile_type.Forest, tile_type.Stone, tile_type.Slag,  tile_type.Ore
+tile_type.Stump, tile_type.Tree, tile_type.Fragment, tile_type.Crystal,
+tile_type.Weeds, tile_type.Ocean, tile_type.Fish""",
+
+"long_import":"""
+Base Predicates to use in tasks:
+TickGE(gs, num_tick):True if the current tick is greater than or equal to the specified num_tick.Is progress counter.
+CanSeeTile(gs, subject,tile_type):True if any agent in subject can see a tile of tile_type
+StayAlive(gs,subject): True if all subjects are alive.
+AllDead(gs, subject):True if all subjects are dead.
+OccupyTile(gs,subject,row, col):True if any subject agent is on the desginated tile.
+AllMembersWithinRange(gs,subject,dist):True if the max l-inf distance of teammates is less than or equal to dist
+CanSeeAgent(gs,subject,target): True if obj_agent is present in the subjects' entities obs.
+CanSeeGroup(gs,subject,target): Returns True if subject can see any of target
+DistanceTraveled(gs, subject, dist): True if the summed l-inf distance between each agent's current pos and spawn pos is greater than or equal to the specified _dist.
+AttainSkill(gs,subject,skill,level,num_agent):True if the number of agents having skill level GE level is greather than or equal to num_agent
+CountEvent(gs,subject,event,N): True if the number of events occured in subject corresponding to event >= N
+ScoreHit(gs, subject, combat_style, N):True if the number of hits scored in style combat_style >= count
+HoardGold(gs, subject, amount): True iff the summed gold of all teammate is greater than or equal to amount.
+EarnGold(gs, subject, amount): True if the total amount of gold earned is greater than or equal to amount.
+SpendGold(gs, subject, amount): True if the total amount of gold spent is greater than or equal to amount.
+MakeProfit(gs, subject, amount) True if the total amount of gold earned-spent is greater than or equal to amount.
+InventorySpaceGE(gs, subject, space): True if the inventory space of every subjects is greater than or equal to the space. Otherwise false.
+OwnItem(gs, subject, item, level, quantity): True if the number of items owned (_item, >= level) is greater than or equal to quantity.
+EquipItem(gs, subject, item, level, num_agent): True if the number of agents that equip the item (_item_type, >=_level) is greater than or equal to _num_agent.
+FullyArmed(GameState, subject, combat_style, level, num_agent): True if the number of fully equipped agents is greater than or equal to _num_agent Otherwise false. To determine fully equipped, we look at hat, top, bottom, weapon, ammo, respectively, these are equipped and has level greater than or equal to _level.
+ConsumeItem(GameState, subject, item, level, quantity): True if total quantity consumed of item type above level is >= quantity
+HarvestItem(GameState, Group, Item, int, int): True if total quantity harvested of item type above level is >= quantity
+ListItem(GameState,subject,item,level, quantity): True if total quantity listed of item type above level is >= quantity
+BuyItem(GameState, subject, item, level, quantity) :  True if total quantity purchased of item type above level is >= quantity
+# Armour
+item.Hat, item.Top, item.Bottom, 
+# Weapon
+item.Sword, item.Bow, item.Wand
+# Tool
+item.Rod, item.Gloves, item.Pickaxe, item.Chisel, item.Arcane
+# Ammunition
+item.Scrap, item.Shaving, item.Shard, 
+# Consumable
+item.Ration, item.Poultice
+# Materials
+tile_type.Lava, tile_type.Water,tile_type.Grass, tile_type.Scrub, 
+tile_type.Forest, tile_type.Stone, tile_type.Slag,  tile_type.Ore
+tile_type.Stump, tile_type.Tree, tile_type.Fragment, tile_type.Crystal,
+tile_type.Weeds, tile_type.Ocean, tile_type.Fish
+"""}

@@ -1,13 +1,40 @@
+from typing import List
 import re
+import random
+import inspect
+
+import nmmo.task
+from nmmo.task import task_spec as ts
 
 from openelm import ELM
 from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
 from openelm.environments import ENVS_DICT
 
-from curriculum.train_helper import SimpleTaskGenerator
-from elm_for_nmmo.elm_helper import task_spec_to_str
+from elm_for_nmmo.elm_helper import task_spec_to_str, import_str
 from elm_for_nmmo.nmmo_env import NMMOConfig, NMMOEnvironment
-from elm_for_nmmo.sample_tasks import import_str
+
+
+######################################################################
+# NOTE: this is actually a random task sampler, which sample task specs with replacement
+class SimpleTaskGenerator:
+  def __init__(self, task_spec: List[ts.TaskSpec]):
+    self.task_spec = task_spec
+    self.eval_fn_code = self._get_eval_fn_code()
+
+  def _get_eval_fn_code(self):
+    # get the whole pre-built eval functions
+    code = inspect.getsource(nmmo.task.base_predicates)
+    # go through the task_spec and include the code of new functions
+    for spec in self.task_spec:
+      if not hasattr(nmmo.task.base_predicates, spec.eval_fn.__name__):
+        code += '\n' + inspect.getsource(spec.eval_fn)
+    return code
+
+  def generate_tasks(self, num_tasks):
+    # returning the task spec, which is sampled with replacement
+    # CHECK ME: do we need to provide a random task generator?
+    #   providing a manually curated task could do
+    return random.choices(self.task_spec, k=num_tasks)
 
 
 class OpenELMTaskGenerator(SimpleTaskGenerator):
@@ -15,7 +42,7 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
 
   def __init__(
       self,
-      task_spec,
+      task_spec: List[ts.TaskSpec],
       checkpoint,
       temperature=1.1,
       batch_size=1,
@@ -46,10 +73,14 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
 
     ENVS_DICT["NMMO"] = NMMOEnvironment
 
-  def evolve_tasks(self, task_spec, num_tasks, steps=10):
+  def evolve_tasks(self, task_spec: List[ts.TaskSpec],
+                   num_tasks, steps=10, debug=False):
     """Evolve the given task specs for the given number of steps
     and return the num_tasks task specs
     """
+    if debug: # just to check if the end-to-end works
+      return self.generate_tasks(num_tasks)
+
     # NOTE: evolve task to generate a function, then generate parameters to deliver num_tasks
     self.config.env.init_prompt = task_spec_to_str(task_spec)
     elm = ELM(self.config)
