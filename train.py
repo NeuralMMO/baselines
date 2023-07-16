@@ -153,7 +153,6 @@ if __name__ == "__main__":
   )
   nmmo_env.add_args(parser)
   nmmo_policy.add_args(parser)
-
   args = parser.parse_args()
 
   if args.run_name is None:
@@ -169,7 +168,8 @@ if __name__ == "__main__":
     logging.info("Using policy store from %s", args.policy_store_dir)
     policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
-  learner_policy = nmmo_policy.create_policy(binding, args)
+  # TODO: only pass the policy_args
+  learner_policy = nmmo_policy.NmmoPolicy.create_policy(binding, args.__dict__)
 
   trainer = clean_pufferl.CleanPuffeRL(
       binding=binding,

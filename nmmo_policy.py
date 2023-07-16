@@ -19,18 +19,6 @@ def add_args(parser: ArgumentParser):
   )
 
 
-def create_policy(binding: pufferlib.emulation.Binding, args: Namespace):
-  args.input_size = 128
-  args.hidden_size = 256 if args.num_lstm_layers else 128
-
-  return pufferlib.frameworks.cleanrl.make_policy(
-      NmmoPolicy,
-      recurrent_args=[args.input_size, args.hidden_size]
-      if args.num_lstm_layers
-      else [],
-      recurrent_kwargs={"num_layers": args.num_lstm_layers},
-  )(binding, args.__dict__)
-
 
 NUM_ATTRS = 26
 EntityId = EntityState.State.attr_name_to_col["id"]
@@ -41,11 +29,11 @@ agent_offset = torch.tensor([i * 256 for i in range(3, 26)])
 class NmmoPolicy(pufferlib.models.Policy):
   def __init__(self, binding, policy_args: Dict):
     super().__init__(binding)
-    self._metadata = policy_args
+    self._policy_args = policy_args
 
     input_size = policy_args.get("input_size", 256)
     hidden_size = policy_args.get("hidden_size", 256)
-    # output_size = metadata.get("output_size", 128)
+    # output_size = policy_args.get("output_size", 128)
 
     self.raw_single_observation_space = binding.raw_single_observation_space
 
@@ -138,5 +126,19 @@ class NmmoPolicy(pufferlib.models.Policy):
       return torch.cat(actions, dim=-1)
     return actions
 
-  def metadata(self):
-    return self._metadata
+  def policy_args(self):
+    return self._policy_args
+
+  @staticmethod
+  def create_policy(binding: pufferlib.emulation.Binding, args: Dict):
+    args["input_size"] = 128
+    args["hidden_size"] = 256 if args["num_lstm_layers"] else 128
+
+    return pufferlib.frameworks.cleanrl.make_policy(
+        NmmoPolicy,
+        recurrent_args=[args["input_size"], args["hidden_size"]]
+        if args["num_lstm_layers"]
+        else [],
+        recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
+    )(binding, args)
+
