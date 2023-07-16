@@ -18,20 +18,25 @@ def add_args(parser: ArgumentParser):
       help="number of LSTM layers to use (default: 0)",
   )
 
+
 def create_policy(binding: pufferlib.emulation.Binding, args: Namespace):
   args.input_size = 128
   args.hidden_size = 256 if args.num_lstm_layers else 128
 
   return pufferlib.frameworks.cleanrl.make_policy(
       NmmoPolicy,
-      recurrent_args=[args.input_size, args.hidden_size] if args.num_lstm_layers else [],
+      recurrent_args=[args.input_size, args.hidden_size]
+      if args.num_lstm_layers
+      else [],
       recurrent_kwargs={"num_layers": args.num_lstm_layers},
   )(binding, args.__dict__)
+
 
 NUM_ATTRS = 26
 EntityId = EntityState.State.attr_name_to_col["id"]
 tile_offset = torch.tensor([i * 256 for i in range(3)])
 agent_offset = torch.tensor([i * 256 for i in range(3, 26)])
+
 
 class NmmoPolicy(pufferlib.models.Policy):
   def __init__(self, binding, policy_args: Dict):
