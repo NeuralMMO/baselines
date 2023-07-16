@@ -2,18 +2,16 @@ import argparse
 import logging
 import os
 import time
+from tkinter import N
 
 import clean_pufferl
 import torch
 from pufferlib.policy_pool import PolicyPool
-from pufferlib.policy_ranker import OpenSkillRanker
 from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
-from pufferlib.utils import PersistentObject
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import nmmo_env
-from lib.training_run import TrainingRun
 from nmmo_policy import NmmoPolicy
 
 if __name__ == "__main__":
@@ -162,50 +160,36 @@ if __name__ == "__main__":
   if args.run_name is None:
     args.run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
 
-  training_run = TrainingRun(args.run_name, args.runs_dir, args)
-  training_run.enable_wandb(args.wandb_project, args.wandb_entity)
+  run_dir = os.path.join(args.runs_dir, args.run_name)
+  os.makedirs(run_dir, exist_ok=True)
 
   binding = nmmo_env.create_binding(args)
-  device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 
-  if args.policy_store_dir is None:
-    args.policy_store_dir = training_run.data_dir()
-  logging.info("Using policy store from %s", args.policy_store_dir)
-  policy_store = DirectoryPolicyStore(args.policy_store_dir)
+  policy_store = None
+  if args.policy_store_dir is not None:
+    logging.info("Using policy store from %s", args.policy_store_dir)
+    policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
-  if training_run.has_policy_checkpoint():
-    logging.info(
-        "Train: resuming training from %s", training_run.latest_policy_name()
-    )
-    pr = policy_store.get_policy(training_run.latest_policy_name())
-    learner_policy = pr.policy(NmmoPolicy.create_policy, binding)
-  else:
-    logging.info("No policy checkpoint found. Creating new policy.")
-    learner_policy = NmmoPolicy.create_policy(
-        {"policy_type": "nmmo", "num_lstm_layers": 0}, binding
-    )
-
-  policy_pool = PolicyPool(
-      learner_policy,
-      "learner",
-      num_envs=args.num_envs,
-      num_agents=args.num_agents,
-      num_policies=args.max_opponent_policies + 1,
-      learner_weight=args.learner_weight,
+  learner_policy = NmmoPolicy.create_policy(
+      {"policy_type": "nmmo", "num_lstm_layers": 0}, binding
   )
 
-  ps = PolicySelector(args.max_opponent_policies, exclude_names="learner")
-  ranker = PersistentObject(
-      os.path.join(training_run.data_dir(), "openskill.pickle"),
-      OpenSkillRanker,
-      "anchor",
-  )
 
   trainer = clean_pufferl.CleanPuffeRL(
-      binding,
-      learner_policy,
+      binding=binding,
+      agent=learner_policy,
+
+      data_dir=run_dir,
       exp_name=args.run_name,
-      policy_pool=policy_pool,
+
+      policy_store=policy_store,
+
+      wandb_entity=args.wandb_entity,
+      wandb_project=args.wandb_project,
+      wandb_extra_data=args,
+
+      checkpoint_interval=args.checkpoint_interval,
+
       vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
       total_timesteps=args.train_num_steps,
       num_envs=args.num_envs,
@@ -213,20 +197,18 @@ if __name__ == "__main__":
       num_buffers=args.num_buffers,
       batch_size=args.rollout_batch_size,
       learning_rate=args.ppo_learning_rate,
-      policy_ranker=ranker,
-      policy_store=policy_store,
-      checkpoint_interval=args.checkpoint_interval,
+
+      selfplay_learner_weight=args.learner_weight,
+      selfplay_num_policies=args.max_opponent_policies + 1,
   )
 
-  training_run.resume_training(trainer)
-  if "learner" not in ranker.ratings():
-    ranker.add_policy("learner")
+
 
   while not trainer.done_training():
-    sp = policy_store.select_policies(ps)
-    policy_pool.update_policies(
-        {p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp}
-    )
+    # sp = policy_store.select_policies(ps)
+    # policy_pool.update_policies(
+    #     {p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp}
+    # )
     trainer.evaluate()
 
     trainer.train(
@@ -234,8 +216,6 @@ if __name__ == "__main__":
         bptt_horizon=args.bptt_horizon,
         batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
     )
-    if trainer.update % args.checkpoint_interval == 1:
-      training_run.save_checkpoint(trainer)
 
   trainer.close()
 

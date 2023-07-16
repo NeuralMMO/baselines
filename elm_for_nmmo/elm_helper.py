@@ -1,26 +1,21 @@
-from typing import List
-from types import ModuleType
+import inspect
+import math
+import multiprocessing as mp
 import re
 import sys
-import math
 import time
-import inspect
-import multiprocessing as mp
 from collections import Counter
+from types import ModuleType
+from typing import List
 
 import nmmo
+import nmmo.task
 import numpy as np
 from nmmo.lib.material import Harvestable
-import nmmo.task
-from nmmo.task import constraint as c
-from nmmo.task import task_spec as ts
+from nmmo.task import constraint as c, task_spec as ts
 
 # required to run check_task_spec
 # pylint: disable=wildcard-import,unused-import,unused-wildcard-import
-from nmmo.task.group import Group
-from nmmo.task.game_state import GameState
-from nmmo.task.base_predicates import *
-
 
 ######################################################################
 # some sample phenotypes:
@@ -45,7 +40,7 @@ def calculate_length(task):
   """Scaling metrics between two values. It is very important for the selected phenotypes
   to be able to have values and easily move across the defined behaviour space.
   in this case 0-10  scale # of characters in task (100-9000) to behaviour space 0-10
-"""
+  """
   min_val = 100
   max_val = 9000
   new_min = 0
@@ -61,6 +56,7 @@ def calculate_length(task):
 
 ######################################################################
 # nmmo task-related helper functions
+
 
 # extract training task function from the ELM result
 def extract_task_fn(result_str, fn_name):
@@ -122,6 +118,7 @@ def sample_parameter(key, type_hint):
 
 
 TIME_OUT = 15  # sec
+
 
 def is_task_spec_valid(spec_list: List[ts.TaskSpec]):
   # pylint: disable=bad-builtin,bare-except,inconsistent-return-statements
@@ -189,11 +186,13 @@ def generate_task_spec(result_str, fn_name, num_sample=3):
       task_fn_kwargs[key] = sample_parameter(key, type_hint)
     args_vals = tuple(task_fn_kwargs.values())
     if args_vals not in included_kwargs:
-      task_spec.append(ts.TaskSpec(eval_fn=task_fn,
-                                   eval_fn_kwargs=task_fn_kwargs))
+      task_spec.append(
+          ts.TaskSpec(eval_fn=task_fn, eval_fn_kwargs=task_fn_kwargs)
+      )
       included_kwargs.add(args_vals)
 
   return task_spec
+
 
 def task_spec_to_str(task_spec: List[ts.TaskSpec]):
   # extract task_fn source code from task_spec
@@ -206,21 +205,25 @@ def task_spec_to_str(task_spec: List[ts.TaskSpec]):
       extracted_fn_list.add(fn_name)
   return "\n".join(task_fn_src)
 
+
 # get the list of pre-built task functions
 def is_function_type(obj):
   return inspect.isfunction(obj) and not inspect.isbuiltin(obj)
 
+
 def extract_module_fn(module: ModuleType):
   fn_dict = {}
   for name, fn in module.__dict__.items():
-    if is_function_type(fn) and not name.startswith('_'):
+    if is_function_type(fn) and not name.startswith("_"):
       fn_dict[name] = fn
   return fn_dict
+
 
 PREBUILT_TASK_FN = extract_module_fn(nmmo.task.base_predicates)
 
 # used in OpenELMTaskGenerator: see self.config.env.impr = import_str["short_import"]
-import_str = {"short_import": """from predicates import TickGE,StayAlive,AllDead,EatFood,DrinkWater,CanSeeTile,CanSeeAgent,OccupyTile
+import_str = {
+    "short_import": """from predicates import TickGE,StayAlive,AllDead,EatFood,DrinkWater,CanSeeTile,CanSeeAgent,OccupyTile
 from predicates import DistanceTraveled,AllMembersWithinRange,ScoreHit,ScoreKill,AttainSkill,InventorySpaceGE,OwnItem
 from predicates import EquipItem,FullyArmed,ConsumeItem,GiveItem,DestroyItem,HarvestItem,HoardGold,GiveGold,ListItem,EarnGold,BuyItem,SpendGold,MakeProfit
 # Armour
@@ -238,8 +241,7 @@ tile_type.Lava, tile_type.Water,tile_type.Grass, tile_type.Scrub,
 tile_type.Forest, tile_type.Stone, tile_type.Slag,  tile_type.Ore
 tile_type.Stump, tile_type.Tree, tile_type.Fragment, tile_type.Crystal,
 tile_type.Weeds, tile_type.Ocean, tile_type.Fish""",
-
-"long_import":"""
+    "long_import": """
 Base Predicates to use in tasks:
 TickGE(gs, num_tick):True if the current tick is greater than or equal to the specified num_tick.Is progress counter.
 CanSeeTile(gs, subject,tile_type):True if any agent in subject can see a tile of tile_type
@@ -280,4 +282,5 @@ tile_type.Lava, tile_type.Water,tile_type.Grass, tile_type.Scrub,
 tile_type.Forest, tile_type.Stone, tile_type.Slag,  tile_type.Ore
 tile_type.Stump, tile_type.Tree, tile_type.Fragment, tile_type.Crystal,
 tile_type.Weeds, tile_type.Ocean, tile_type.Fish
-"""}
+""",
+}

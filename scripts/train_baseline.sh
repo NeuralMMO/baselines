@@ -8,7 +8,6 @@ python -u -O -m train \
 --env.num_maps=100 \
 --rollout.num_buffers=2 \
 --rollout.num_envs=12 \
---env.team_size=1 \
 --env.num_npcs=266 \
 --ppo.training_batch_size=128 \
 --rollout.batch_size=131072 \

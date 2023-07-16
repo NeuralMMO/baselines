@@ -118,6 +118,7 @@ class NmmoPolicy(pufferlib.models.Policy):
 
   @staticmethod
   def create_policy(metadata: Dict, binding: pufferlib.emulation.Binding):
+    device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
     num_lstm_layers = metadata.get("num_lstm_layers", 0)
     input_size = metadata.get("input_size", 128)
     hidden_size = metadata.get("hidden_size", 256 if num_lstm_layers else 128)
@@ -126,4 +127,4 @@ class NmmoPolicy(pufferlib.models.Policy):
         NmmoPolicy,
         recurrent_args=[input_size, hidden_size] if num_lstm_layers else [],
         recurrent_kwargs={"num_layers": num_lstm_layers},
-    )(binding, metadata)
+    )(binding, metadata).to(device)

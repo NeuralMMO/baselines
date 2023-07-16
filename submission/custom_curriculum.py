@@ -1,17 +1,19 @@
 # pylint: disable=wildcard-import,invalid-name,unused-wildcard-import,unused-argument
 
 # allow custom functions to use pre-built eval functions without prefix
-from nmmo.task.base_predicates import *
+from nmmo.task.base_predicates import CountEvent, InventorySpaceGE, TickGE, norm
 from nmmo.task.task_spec import TaskSpec
 
 ##############################################################################
 # define custom evaluation functions
 # pylint: disable=redefined-outer-name
 
+
 # NOTE: norm is a helper function to normalize the value to [0, 1]
 #    imported from nmmo.task.base_predicates
 def PracticeInventoryManagement(gs, subject, space, num_tick):
   return norm(InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick))
+
 
 def PracticeEating(gs, subject):
   """The progress, the max of which is 1, should
@@ -24,7 +26,7 @@ def PracticeEating(gs, subject):
   if num_eat >= 1:
     progress += 0.1
   if num_eat >= 3:
-    progress += .3
+    progress += 0.3
   return norm(progress)
 
 
@@ -48,13 +50,23 @@ essential_skills = [
     "LEVEL_UP",
 ]
 for event_code in essential_skills:
-  task_spec += [TaskSpec(eval_fn=CountEvent, eval_fn_kwargs={'event': event_code, 'N': cnt},
-                         sampling_weight=3) for cnt in EVENT_NUMBER_GOAL]
+  task_spec += [
+      TaskSpec(
+          eval_fn=CountEvent,
+          eval_fn_kwargs={"event": event_code, "N": cnt},
+          sampling_weight=3,
+      )
+      for cnt in EVENT_NUMBER_GOAL
+  ]
 
 for space in [2, 4, 8]:
-  task_spec += [TaskSpec(eval_fn=PracticeInventoryManagement,
-                         eval_fn_kwargs={'space': space, 'num_tick': num_tick})
-                for num_tick in STAY_ALIVE_GOAL]
+  task_spec += [
+      TaskSpec(
+          eval_fn=PracticeInventoryManagement,
+          eval_fn_kwargs={"space": space, "num_tick": num_tick},
+      )
+      for num_tick in STAY_ALIVE_GOAL
+  ]
 
-task_spec.append(TaskSpec(eval_fn=PracticeEating, eval_fn_kwargs={},
-                          sampling_weight=5))
+task_spec.append(TaskSpec(eval_fn=PracticeEating,
+                 eval_fn_kwargs={}, sampling_weight=5))

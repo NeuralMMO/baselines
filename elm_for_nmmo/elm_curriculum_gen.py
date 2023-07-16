@@ -1,16 +1,15 @@
-from typing import List
-import re
-import random
 import inspect
+import random
+import re
+from typing import List
 
 import nmmo.task
 from nmmo.task import task_spec as ts
-
 from openelm import ELM
 from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
 from openelm.environments import ENVS_DICT
 
-from elm_for_nmmo.elm_helper import task_spec_to_str, import_str
+from elm_for_nmmo.elm_helper import import_str, task_spec_to_str
 from elm_for_nmmo.nmmo_env import NMMOConfig, NMMOEnvironment
 
 
@@ -27,7 +26,7 @@ class SimpleTaskGenerator:
     # go through the task_spec and include the code of new functions
     for spec in self.task_spec:
       if not hasattr(nmmo.task.base_predicates, spec.eval_fn.__name__):
-        code += '\n' + inspect.getsource(spec.eval_fn)
+        code += "\n" + inspect.getsource(spec.eval_fn)
     return code
 
   def generate_tasks(self, num_tasks):
@@ -73,12 +72,13 @@ class OpenELMTaskGenerator(SimpleTaskGenerator):
 
     ENVS_DICT["NMMO"] = NMMOEnvironment
 
-  def evolve_tasks(self, task_spec: List[ts.TaskSpec],
-                   num_tasks, steps=10, debug=False):
+  def evolve_tasks(
+      self, task_spec: List[ts.TaskSpec], num_tasks, steps=10, debug=False
+  ):
     """Evolve the given task specs for the given number of steps
     and return the num_tasks task specs
     """
-    if debug: # just to check if the end-to-end works
+    if debug:  # just to check if the end-to-end works
       return self.generate_tasks(num_tasks)
 
     # NOTE: evolve task to generate a function, then generate parameters to deliver num_tasks

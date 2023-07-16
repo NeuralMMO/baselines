@@ -1,8 +1,9 @@
 """this is a place holder for dummy functions"""
 # pylint: disable=all
 
-import numpy as np
 import nmmo
+import numpy as np
+
 
 ######################################################################
 # to be provided by Joseph
@@ -25,14 +26,16 @@ def train_on_tasks(agent_model, curriculm_file_path):
 
   # check the tasks have embedding
   for task in env.tasks:
-    assert np.sum(task.embedding) != 0, 'task embedding is not set'
+    assert np.sum(task.embedding) != 0, "task embedding is not set"
 
-  print('train_on_tasks(): using the curriculum file with the embedding')
+  print("train_on_tasks(): using the curriculum file with the embedding")
 
   return DummyAgent(), dummy_stat
 
+
 def evaluate_on_tasks(agent_model, curriculm_file_path):
   return dummy_stat
+
 
 def load_agent_model(model_path):
   return DummyAgent()

@@ -263,7 +263,7 @@ if __name__ == "__main__":
 
     eval_state = evaluator.allocate_storage()
     if args.wandb_project is not None:
-      evaluator.init_wandb(
+      evaluator._init_wandb(
           args.wandb_project, args.wandb_entity, extra_data=vars(args)
       )
 
