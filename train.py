@@ -193,10 +193,6 @@ if __name__ == "__main__":
   )
 
   while not trainer.done_training():
-    # sp = policy_store.select_policies(ps)
-    # policy_pool.update_policies(
-    #     {p.name: p.policy(NmmoPolicy.create_policy, binding) for p in sp}
-    # )
     trainer.evaluate()
 
     trainer.train(
