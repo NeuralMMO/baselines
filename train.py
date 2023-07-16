@@ -9,7 +9,7 @@ from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import nmmo_env
-from nmmo_policy import NmmoPolicy
+import nmmo_policy
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -152,6 +152,8 @@ if __name__ == "__main__":
       help="learning rate (default: 0.0001)",
   )
   nmmo_env.add_args(parser)
+  nmmo_policy.add_args(parser)
+
   args = parser.parse_args()
 
   if args.run_name is None:
@@ -167,9 +169,7 @@ if __name__ == "__main__":
     logging.info("Using policy store from %s", args.policy_store_dir)
     policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
-  learner_policy = NmmoPolicy.create_policy(
-      {"policy_type": "nmmo", "num_lstm_layers": 0}, binding
-  )
+  learner_policy = nmmo_policy.create_policy(binding, args)
 
   trainer = clean_pufferl.CleanPuffeRL(
       binding=binding,

@@ -1,3 +1,4 @@
+from argparse import ArgumentParser, Namespace
 from typing import Dict
 
 import pufferlib
@@ -7,24 +8,43 @@ import torch
 import torch.nn.functional as F
 from nmmo.entity.entity import EntityState
 
+
+def add_args(parser: ArgumentParser):
+  parser.add_argument(
+      "--policy.num_lstm_layers",
+      dest="num_lstm_layers",
+      type=int,
+      default=0,
+      help="number of LSTM layers to use (default: 0)",
+  )
+
+def create_policy(binding: pufferlib.emulation.Binding, args: Namespace):
+  args.input_size = 128
+  args.hidden_size = 256 if args.num_lstm_layers else 128
+
+  return pufferlib.frameworks.cleanrl.make_policy(
+      NmmoPolicy,
+      recurrent_args=[args.input_size, args.hidden_size] if args.num_lstm_layers else [],
+      recurrent_kwargs={"num_layers": args.num_lstm_layers},
+  )(binding, args.__dict__)
+
 NUM_ATTRS = 26
 EntityId = EntityState.State.attr_name_to_col["id"]
 tile_offset = torch.tensor([i * 256 for i in range(3)])
 agent_offset = torch.tensor([i * 256 for i in range(3, 26)])
 
-
 class NmmoPolicy(pufferlib.models.Policy):
-  def __init__(self, binding, metadata: Dict):
+  def __init__(self, binding, policy_args: Dict):
     super().__init__(binding)
-    self._metadata = metadata
+    self._metadata = policy_args
 
-    input_size = metadata.get("input_size", 256)
-    hidden_size = metadata.get("hidden_size", 256)
-    output_size = metadata.get("output_size", 128)
+    input_size = policy_args.get("input_size", 256)
+    hidden_size = policy_args.get("hidden_size", 256)
+    # output_size = metadata.get("output_size", 128)
 
     self.raw_single_observation_space = binding.raw_single_observation_space
 
-    observation_size = binding.raw_single_observation_space["Entity"].shape[1]
+    # observation_size = binding.raw_single_observation_space["Entity"].shape[1]
 
     self.embedding = torch.nn.Embedding(NUM_ATTRS * 256, 32)
     self.tile_conv_1 = torch.nn.Conv2d(96, 32, 3)
@@ -115,16 +135,3 @@ class NmmoPolicy(pufferlib.models.Policy):
 
   def metadata(self):
     return self._metadata
-
-  @staticmethod
-  def create_policy(metadata: Dict, binding: pufferlib.emulation.Binding):
-    device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
-    num_lstm_layers = metadata.get("num_lstm_layers", 0)
-    input_size = metadata.get("input_size", 128)
-    hidden_size = metadata.get("hidden_size", 256 if num_lstm_layers else 128)
-
-    return pufferlib.frameworks.cleanrl.make_policy(
-        NmmoPolicy,
-        recurrent_args=[input_size, hidden_size] if num_lstm_layers else [],
-        recurrent_kwargs={"num_layers": num_lstm_layers},
-    )(binding, metadata).to(device)
