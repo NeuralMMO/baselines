@@ -8,7 +8,7 @@ wandb
 torchtyping
 pandas
 
-# for OpenElm
+# for TaskEncoder and OpenELMTaskGenerator
 transformers
 accelerate
 openelm

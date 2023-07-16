@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
+import ast
+import re
 import numpy as np
 from openelm.configs import EnvConfig
 from openelm.environments import BaseEnvironment, Genotype
@@ -107,11 +109,12 @@ class NMMOTaskFn(Genotype):
     return self.program_str
 
   def _count_predicates(self, task_str):
-    predicates = set()
-    for i in PREBUILT_TASK_FN:
-      if i in task_str:
-        predicates.add(i)
-    return len(predicates)
+    # NOTE: PREBULIT_TASK_FN contains norm and other trivial fns
+    called_fns = [node.func.id for node in ast.walk(ast.parse(task_str))
+                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
+    used_pred_fn = {fn_name for fn_name in called_fns
+                    if fn_name in PREBUILT_TASK_FN}
+    return len(used_pred_fn)
 
   def to_phenotype(self) -> Optional[Phenotype]:
     # phenotypes of the task?
