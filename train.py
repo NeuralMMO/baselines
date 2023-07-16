@@ -2,12 +2,9 @@ import argparse
 import logging
 import os
 import time
-from tkinter import N
 
 import clean_pufferl
-import torch
-from pufferlib.policy_pool import PolicyPool
-from pufferlib.policy_store import DirectoryPolicyStore, PolicySelector
+from pufferlib.policy_store import DirectoryPolicyStore
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
@@ -174,22 +171,16 @@ if __name__ == "__main__":
       {"policy_type": "nmmo", "num_lstm_layers": 0}, binding
   )
 
-
   trainer = clean_pufferl.CleanPuffeRL(
       binding=binding,
       agent=learner_policy,
-
       data_dir=run_dir,
       exp_name=args.run_name,
-
       policy_store=policy_store,
-
       wandb_entity=args.wandb_entity,
       wandb_project=args.wandb_project,
       wandb_extra_data=args,
-
       checkpoint_interval=args.checkpoint_interval,
-
       vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
       total_timesteps=args.train_num_steps,
       num_envs=args.num_envs,
@@ -197,12 +188,9 @@ if __name__ == "__main__":
       num_buffers=args.num_buffers,
       batch_size=args.rollout_batch_size,
       learning_rate=args.ppo_learning_rate,
-
       selfplay_learner_weight=args.learner_weight,
       selfplay_num_policies=args.max_opponent_policies + 1,
   )
-
-
 
   while not trainer.done_training():
     # sp = policy_store.select_policies(ps)
