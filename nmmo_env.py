@@ -36,13 +36,6 @@ def add_args(parser: ArgumentParser):
       help="number of ticks before death fog starts (default: None)",
   )
   parser.add_argument(
-      "--env.combat_enabled",
-      dest="combat_enabled",
-      action="store_true",
-      default=False,
-      help="only allow moves (default: False)",
-  )
-  parser.add_argument(
       "--env.num_maps",
       dest="num_maps",
       type=int,

@@ -11,5 +11,4 @@ python -u -O -m train \
 --env.num_npcs=266 \
 --ppo.training_batch_size=128 \
 --rollout.batch_size=131072 \
---env.combat_enabled \
 "${@}"
