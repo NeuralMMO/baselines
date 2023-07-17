@@ -9,7 +9,7 @@ for job_id in $running_jobs; do
   log_file=$(find sbatch/ -name "${job_id}.log")
 
   # Grep the experiment directory
-  experiment_dir=$(grep -m 1 "TrainingRun" "$log_file" | awk '{print $2}')
+  experiment_dir=$(grep -m 1 "Training run" "$log_file" | awk '{print $3}')
 
   # Print job_id and experiment_dir
   echo "$job_id, $experiment_dir"
