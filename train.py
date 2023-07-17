@@ -161,6 +161,8 @@ if __name__ == "__main__":
   run_dir = os.path.join(args.runs_dir, args.run_name)
   os.makedirs(run_dir, exist_ok=True)
 
+  logging.info("Training run: %s (%s)", args.run_name, run_dir)
+  logging.info("Training args: %s", args)
   binding = nmmo_env.create_binding(args)
 
   policy_store = None
