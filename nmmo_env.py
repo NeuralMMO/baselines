@@ -81,7 +81,7 @@ class Config(
     self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
     self.MAP_CENTER = args.map_size
     self.NPC_N = args.num_npcs
-    self.CURRICULUM_FILE_PATH = "tasks.pkl"
+    self.CURRICULUM_FILE_PATH = "pickled_task_with_embs.pkl"
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):

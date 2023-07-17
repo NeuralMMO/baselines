@@ -20,9 +20,7 @@ def train_on_tasks(agent_model, curriculm_file_path):
   config = nmmo.config.Default()
   config.CURRICULUM_FILE_PATH = curriculm_file_path
   env = nmmo.Env(config)
-
-  # sampling training tasks is done via env.reset(sample_training_tasks=True)
-  env.reset(sample_training_tasks=True)
+  env.reset()
 
   # check the tasks have embedding
   for task in env.tasks:
