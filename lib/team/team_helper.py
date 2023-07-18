@@ -1,7 +1,7 @@
 from typing import Dict, List
 
 
-class TeamHelper():
+class TeamHelper:
   def __init__(self, teams: Dict[int, List[int]]):
     self.teams = teams
     self.num_teams = len(teams)
@@ -21,5 +21,5 @@ class TeamHelper():
   def agent_id(self, team_id: int, position: int) -> int:
     return self.agent_for_team_and_position[team_id, position]
 
-  def is_agent_in_team(self, agent_id:int , team_id: int) -> bool:
+  def is_agent_in_team(self, agent_id: int, team_id: int) -> bool:
     return agent_id in self.teams[team_id]

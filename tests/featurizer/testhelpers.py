@@ -1,22 +1,40 @@
 import unittest
 
 import nmmo
-from nmmo.systems import item as Item
 from nmmo.core.realm import Realm
-
+from nmmo.systems import item as Item
 from scripted import baselines
 
 from lib.team.team_helper import TeamHelper
 
+
+# TODO: make all work with 16 teams x 8 agents
 class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
   SPECIALIZE = True
   # config.Medium's PLAYER_N = 128
   # make 16 teams, so that there are 8 agents per team
   PLAYERS = [
-    baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver,
-    baselines.Alchemist, baselines.Melee, baselines.Range, baselines.Mage,
-    baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver,
-    baselines.Alchemist, baselines.Melee, baselines.Range, baselines.Mage]
+      baselines.Fisher,
+      baselines.Herbalist,
+      baselines.Prospector,
+      baselines.Carver,
+      baselines.Alchemist,
+      baselines.Melee,
+      baselines.Range,
+      baselines.Mage,
+      baselines.Fisher,
+      baselines.Herbalist,
+      baselines.Prospector,
+      baselines.Carver,
+      baselines.Alchemist,
+      baselines.Melee,
+      baselines.Range,
+      baselines.Mage,
+  ]
+
+  # NOTE: for now, just making the featurizer run for 16 teams, with 1 agent
+  # per team
+  PLAYER_N = len(PLAYERS)  # each team has 1 player
 
 
 class FeaturizerTestTemplate(unittest.TestCase):
@@ -25,8 +43,6 @@ class FeaturizerTestTemplate(unittest.TestCase):
     cls.config = FeatureTestConfig()
 
     # pylint: disable=invalid-name
-    # CHECK ME: this provides action targets, at the cost of performance
-    #   We may want to revisit this
     cls.config.PROVIDE_ACTION_TARGETS = True
 
     # default: 16 teams x 8 players
@@ -34,8 +50,10 @@ class FeaturizerTestTemplate(unittest.TestCase):
     cls.team_size = int(cls.config.PLAYER_N / cls.num_team)
 
     # match the team definition to the default nmmo
-    teams = {team_id: [cls.num_team*j+team_id+1 for j in range(cls.team_size)]
-              for team_id in range(cls.num_team)}
+    teams = {
+        team_id: [cls.num_team * j + team_id + 1 for j in range(cls.team_size)]
+        for team_id in range(cls.num_team)
+    }
     cls.team_helper = TeamHelper(teams)
 
   def _filter_obs(self, obs, team_id):
@@ -47,10 +65,9 @@ class FeaturizerTestTemplate(unittest.TestCase):
     return flt_obs
 
 
-def provide_item(realm: Realm, ent_id: int,
-                 item: Item, level: int,
-                 quantity: int=1,
-                 list_price=0):
+def provide_item(
+    realm: Realm, ent_id: int, item: Item, level: int, quantity: int = 1, list_price=0
+):
   for _ in range(quantity):
     item_inst = item(realm, level=level)
     realm.players[ent_id].inventory.receive(item_inst)

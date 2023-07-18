@@ -8,3 +8,8 @@ wandb
 torchtyping
 pandas
 traitlets
+
+# for TaskEncoder and OpenELMTaskGenerator
+transformers
+accelerate
+openelm

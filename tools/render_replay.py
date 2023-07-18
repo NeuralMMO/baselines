@@ -1,15 +1,19 @@
-import time
 import argparse
+import time
 
 from nmmo.render.render_client import WebsocketRenderer
 from nmmo.render.replay_helper import ReplayFileHelper
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   parser = argparse.ArgumentParser()
 
   parser.add_argument(
-    "--file", dest="file_name", type=str,
-    help="path to the replay file to render", required=True)
+      "--file",
+      dest="file_name",
+      type=str,
+      help="path to the replay file to render",
+      required=True,
+  )
 
   args = parser.parse_args()
 
