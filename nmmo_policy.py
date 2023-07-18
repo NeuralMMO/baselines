@@ -47,19 +47,6 @@ def add_args(parser: ArgumentParser):
   )
 
 
-def make_binding():
-  """Neural MMO binding creation function"""
-  try:
-    import nmmo
-  except:
-    raise pufferlib.utils.SetupError("Neural MMO (nmmo)")
-  else:
-    return pufferlib.emulation.Binding(
-        env_cls=nmmo.Env,
-        env_name="Neural MMO",
-    )
-
-
 class TileEncoder(torch.nn.Module):
   def __init__(self, input_size):
     super().__init__()
