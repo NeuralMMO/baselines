@@ -286,8 +286,8 @@ class NmmoPolicy(pufferlib.models.Policy):
   def critic(self, hidden):
     return self.value_head(hidden)
 
-  def encode_observations(self, env_outputs):
-    env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+  def encode_observations(self, flat_observations):
+    env_outputs = self.binding.unpack_batched_obs(flat_observations)[0]
     tile = self.tile_encoder(env_outputs["Tile"])
     player_embeddings, my_agent = self.player_encoder(env_outputs["Entity"], env_outputs["AgentId"][:, 0])
 
@@ -305,8 +305,8 @@ class NmmoPolicy(pufferlib.models.Policy):
 
     return self.proj_fc(obs), (player_embeddings, inventory_embeddings, market_embeddings, env_outputs['ActionTargets'])
 
-  def decode_actions(self, hidden, lookup, concat=True):
-    return self.action_decoder(hidden, lookup, concat)
+  def decode_actions(self, flat_hidden, lookup, concat=True):
+    return self.action_decoder(flat_hidden, lookup, concat)
 
   def policy_args(self):
     return self._policy_args
