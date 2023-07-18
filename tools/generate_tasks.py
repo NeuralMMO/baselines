@@ -1,7 +1,8 @@
+import argparse
+
+from curriculum.task_encoder import TaskEncoder
 from elm_for_nmmo.elm_curriculum_gen import SimpleTaskGenerator
 from submission import custom_curriculum as cc
-import argparse
-from curriculum.task_encoder import TaskEncoder
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 
@@ -16,11 +17,12 @@ if __name__ == "__main__":
       help="number of tasks to generate (default: None)",
   )
   parser.add_argument(
-    "--path",
-    dest="path",
-    type=str,
-    default="tasks.pkl",
-    help="path to save the tasks (default: tasks.pkl)")
+      "--path",
+      dest="path",
+      type=str,
+      default="tasks.pkl",
+      help="path to save the tasks (default: tasks.pkl)",
+  )
 
   args = parser.parse_args()
 

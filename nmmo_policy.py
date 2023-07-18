@@ -1,4 +1,4 @@
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from typing import Dict
 
 import pufferlib
@@ -17,7 +17,6 @@ def add_args(parser: ArgumentParser):
       default=0,
       help="number of LSTM layers to use (default: 0)",
   )
-
 
 
 NUM_ATTRS = 26
@@ -141,4 +140,3 @@ class NmmoPolicy(pufferlib.models.Policy):
         else [],
         recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
     )(binding, args)
-

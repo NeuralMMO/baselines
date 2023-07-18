@@ -57,11 +57,11 @@ def add_args(parser: ArgumentParser):
       help="size of maps to use for training (default: 128)",
   )
   parser.add_argument(
-    "--env.tasks_path",
-    dest="tasks_path",
-    type=str,
-    default=None,
-    help="path to tasks to use for training (default: tasks.pkl)",
+      "--env.tasks_path",
+      dest="tasks_path",
+      type=str,
+      default=None,
+      help="path to tasks to use for training (default: tasks.pkl)",
   )
 
 
