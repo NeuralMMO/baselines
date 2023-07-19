@@ -1,6 +1,4 @@
-from pdb import set_trace as T
 import argparse
-from argparse import ArgumentParser, Namespace
 from typing import Dict
 
 import pufferlib
@@ -16,14 +14,13 @@ import nmmo
 EntityId = EntityState.State.attr_name_to_col["id"]
 
 def str_to_bool(s):
-    if s.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif s.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+  if s.lower() in ('yes', 'true', 't', 'y', '1'):
+    return True
+  if s.lower() in ('no', 'false', 'f', 'n', '0'):
+    return False
+  raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def add_args(parser: ArgumentParser):
+def add_args(parser: argparse.ArgumentParser):
   parser.add_argument(
       "--policy.num_lstm_layers",
       dest="num_lstm_layers",
@@ -31,7 +28,7 @@ def add_args(parser: ArgumentParser):
       default=0,
       help="number of LSTM layers to use (default: 0)",
   )
- 
+
   parser.add_argument(
      "--policy.task_size",
       dest="task_size",
@@ -71,19 +68,6 @@ def add_args(parser: ArgumentParser):
       default=False,
       help="use inventory and market encoders (default: True)",
   )
-
-
-def make_binding():
-  """Neural MMO binding creation function"""
-  try:
-    import nmmo
-  except:
-    raise pufferlib.utils.SetupError("Neural MMO (nmmo)")
-  else:
-    return pufferlib.emulation.Binding(
-        env_cls=nmmo.Env,
-        env_name="Neural MMO",
-    )
 
 
 class TileEncoder(torch.nn.Module):
@@ -168,7 +152,7 @@ class ItemEncoder(torch.nn.Module):
     self.discrete_offset = torch.Tensor([2, 0])
     self.continuous_idxs = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15]
     self.continuous_scale = torch.Tensor([1/10, 1/10, 1/10, 1/100, 1/100, 1/100, 1/40, 1/40, 1/40, 1/100, 1/100, 1/100])
- 
+
   def forward(self, items):
     if self.discrete_offset.device != items.device:
       self.discrete_offset = self.discrete_offset.to(items.device)
@@ -233,7 +217,7 @@ class ActionDecoder(torch.nn.Module):
         'inventory_price': torch.nn.Linear(hidden_size, 99),
         'inventory_use': torch.nn.Linear(hidden_size, hidden_size),
     })
-    
+
   def apply_layer(self, layer, embeddings, mask, hidden):
     hidden = layer(hidden)
     if hidden.dim() == 2 and embeddings is not None:
@@ -284,7 +268,7 @@ class ActionDecoder(torch.nn.Module):
 
     return actions
 
-  
+
 class NmmoPolicy(pufferlib.models.Policy):
   def __init__(self, binding, policy_args: Dict):
     super().__init__(binding)
@@ -304,7 +288,7 @@ class NmmoPolicy(pufferlib.models.Policy):
     self.attentional_decode = policy_args.get("attentional_decode", True)
     self.extra_encoders = policy_args.get("extra_encoders", True)
     self._policy_args = policy_args
- 
+
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
 
@@ -331,8 +315,8 @@ class NmmoPolicy(pufferlib.models.Policy):
   def critic(self, hidden):
     return self.value_head(hidden)
 
-  def encode_observations(self, env_outputs):
-    env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
+  def encode_observations(self, flat_observations):
+    env_outputs = self.binding.unpack_batched_obs(flat_observations)[0]
     tile = self.tile_encoder(env_outputs["Tile"])
     player_embeddings, my_agent = self.player_encoder(env_outputs["Entity"], env_outputs["AgentId"][:, 0])
 
