@@ -56,6 +56,13 @@ def add_args(parser: ArgumentParser):
       default=128,
       help="size of maps to use for training (default: 128)",
   )
+  parser.add_argument(
+      "--env.tasks_path",
+      dest="tasks_path",
+      type=str,
+      default=None,
+      help="path to tasks to use for training (default: tasks.pkl)",
+  )
 
 
 class Config(
@@ -81,7 +88,7 @@ class Config(
     self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
     self.MAP_CENTER = args.map_size
     self.NPC_N = args.num_npcs
-    self.CURRICULUM_FILE_PATH = "tasks.pkl"
+    self.CURRICULUM_FILE_PATH = args.tasks_path
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
@@ -106,6 +113,14 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
       if agent is None:
         continue
+
+      if agent_id in team_dones and team_dones[agent_id] is True:
+        if agent.damage.val > 0:
+          team_info["stats"]["cod/attacked"] += 1
+        elif agent.food.val == 0:
+          team_info["stats"]["cod/starved"] += 1
+        elif agent.water.val == 0:
+          team_info["stats"]["cod/dehydrated"] += 1
 
     return team_reward, team_info
 
