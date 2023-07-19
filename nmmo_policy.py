@@ -1,4 +1,5 @@
 from pdb import set_trace as T
+import argparse
 from argparse import ArgumentParser, Namespace
 from typing import Dict
 
@@ -14,12 +15,20 @@ import nmmo
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
+def str_to_bool(s):
+    if s.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif s.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def add_args(parser: ArgumentParser):
   parser.add_argument(
       "--policy.num_lstm_layers",
       dest="num_lstm_layers",
       type=int,
-      default=1,
+      default=0,
       help="number of LSTM layers to use (default: 0)",
   )
  
@@ -34,17 +43,33 @@ def add_args(parser: ArgumentParser):
   parser.add_argument(
       "--policy.mask_actions",
       dest="mask_actions",
-      type=bool,
-      default=True,
+      type=str_to_bool,
+      default=False,
       help="mask actions (default: True)",
   )
 
   parser.add_argument(
       "--policy.encode_task",
       dest="encode_task",
-      type=bool,
-      default=True,
+      type=str_to_bool,
+      default=False,
       help="encode task (default: True)",
+  )
+
+  parser.add_argument(
+      "--policy.attentional_decode",
+      dest="attentional_decode",
+      type=str_to_bool,
+      default=False,
+      help="use attentional action decoder (default: True)",
+  )
+
+  parser.add_argument(
+      "--policy.extra_encoders",
+      dest="extra_encoders",
+      type=str_to_bool,
+      default=False,
+      help="use inventory and market encoders (default: True)",
   )
 
 
@@ -220,7 +245,7 @@ class ActionDecoder(torch.nn.Module):
 
     return hidden
 
-  def forward(self, hidden, lookup, concat):
+  def forward(self, hidden, lookup):
     player_embeddings, inventory_embeddings, market_embeddings, action_targets = lookup
 
     embeddings = {
@@ -257,9 +282,6 @@ class ActionDecoder(torch.nn.Module):
       action = self.apply_layer(layer, embeddings.get(key), mask, hidden)
       actions.append(action)
 
-    if concat:
-      return torch.cat(actions, dim=-1)
-
     return actions
 
   
@@ -279,21 +301,30 @@ class NmmoPolicy(pufferlib.models.Policy):
     task_size = policy_args.get("task_size", 1024)
     mask_actions = policy_args.get("mask_actions", True)
     self.encode_task = policy_args.get("encode_task", True)
+    self.attentional_decode = policy_args.get("attentional_decode", True)
+    self.extra_encoders = policy_args.get("extra_encoders", True)
     self._policy_args = policy_args
  
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
-    self.item_encoder = ItemEncoder(input_size, hidden_size)
-    self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
-    self.market_encoder = MarketEncoder(input_size, hidden_size)
+
+    if self.extra_encoders:
+      self.item_encoder = ItemEncoder(input_size, hidden_size)
+      self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
+      self.market_encoder = MarketEncoder(input_size, hidden_size)
 
     if self.encode_task:
       self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
       self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
-    else:
+    elif self.extra_encoders:
       self.proj_fc = torch.nn.Linear(4 * input_size, input_size)
+    else:
+      self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
 
-    self.action_decoder = ActionDecoder(input_size, hidden_size, mask_actions)
+    if self.attentional_decode:
+      self.action_decoder = ActionDecoder(input_size, hidden_size, mask_actions)
+    else:
+      self.action_decoder = torch.nn.ModuleList([torch.nn.Linear(hidden_size, n) for n in binding.single_action_space.nvec])
 
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
@@ -305,22 +336,32 @@ class NmmoPolicy(pufferlib.models.Policy):
     tile = self.tile_encoder(env_outputs["Tile"])
     player_embeddings, my_agent = self.player_encoder(env_outputs["Entity"], env_outputs["AgentId"][:, 0])
 
-    inventory_embeddings = self.item_encoder(env_outputs["Inventory"])
-    market_embeddings = self.item_encoder(env_outputs["Market"])
+    if self.extra_encoders:
+      inventory_embeddings = self.item_encoder(env_outputs["Inventory"])
+      market_embeddings = self.item_encoder(env_outputs["Market"])
 
-    inventory = self.inventory_encoder(inventory_embeddings)
-    market = self.market_encoder(market_embeddings)
+      inventory = self.inventory_encoder(inventory_embeddings)
+      market = self.market_encoder(market_embeddings)
 
     if self.encode_task:
       task = self.task_encoder(env_outputs["Task"])
       obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
-    else:
+    elif self.extra_encoders:
       obs = torch.cat([tile, my_agent, inventory, market], dim=-1)
+    else:
+      return self.proj_fc(torch.cat([tile, my_agent], dim=-1)), None
 
     return self.proj_fc(obs), (player_embeddings, inventory_embeddings, market_embeddings, env_outputs['ActionTargets'])
 
   def decode_actions(self, hidden, lookup, concat=True):
-    return self.action_decoder(hidden, lookup, concat)
+    if self.attentional_decode:
+      actions = self.action_decoder(hidden, lookup)
+    else:
+      actions = [decoder(hidden) for decoder in self.action_decoder]
+
+    if concat:
+      return torch.cat(actions, dim=-1)
+    return actions
 
   def policy_args(self):
     return self._policy_args
@@ -337,4 +378,3 @@ class NmmoPolicy(pufferlib.models.Policy):
         else [],
         recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
     )(binding, args)
-
