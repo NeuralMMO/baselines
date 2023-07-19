@@ -240,8 +240,7 @@ class ActionDecoder(torch.nn.Module):
       hidden = torch.matmul(embeddings, hidden.unsqueeze(-1)).squeeze(-1)
 
     if mask is not None:
-      mask[~mask.any(dim=1)] = True
-      hidden = hidden.masked_fill(~mask.bool(), -1e9)
+      hidden = hidden.masked_fill(mask==0, -1e9)
 
     return hidden
 
