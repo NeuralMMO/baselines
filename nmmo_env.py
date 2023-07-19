@@ -106,6 +106,12 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     team_reward = sum(team_rewards.values())
     team_info = {"stats": defaultdict(float)}
 
+    # initialize the cause of death stats
+    #   if all agents are alive, then the CoD stats are 0
+    team_info["stats"]["cod/attacked"] = 0
+    team_info["stats"]["cod/starved"] = 0
+    team_info["stats"]["cod/dehydrated"] = 0
+
     for agent_id in agents:
       agent = self.env.realm.players.dead_this_tick.get(
           agent_id, self.env.realm.players.get(agent_id)
@@ -116,11 +122,11 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
       if agent_id in team_dones and team_dones[agent_id] is True:
         if agent.damage.val > 0:
-          team_info["stats"]["cod/attacked"] += 1
+          team_info["stats"]["cod/attacked"] += 1. / self.team_size
         elif agent.food.val == 0:
-          team_info["stats"]["cod/starved"] += 1
+          team_info["stats"]["cod/starved"] += 1. / self.team_size
         elif agent.water.val == 0:
-          team_info["stats"]["cod/dehydrated"] += 1
+          team_info["stats"]["cod/dehydrated"] += 1. / self.team_size
 
     return team_reward, team_info
 
