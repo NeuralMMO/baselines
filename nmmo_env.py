@@ -114,6 +114,14 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       if agent is None:
         continue
 
+      if agent_id in team_dones and team_dones[agent_id] is True:
+        if agent.damage.val > 0:
+          team_info["stats"]["cod/attacked"] += 1
+        elif agent.food.val == 0:
+          team_info["stats"]["cod/starved"] += 1
+        elif agent.water.val == 0:
+          team_info["stats"]["cod/dehydrated"] += 1
+
     return team_reward, team_info
 
   # def features(self, obs, step):
