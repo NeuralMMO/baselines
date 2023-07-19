@@ -11,7 +11,6 @@ tile_offset = torch.tensor([i * 256 for i in range(3)])
 agent_offset = torch.tensor([i * 256 for i in range(3, 26)])
 
 
-
 def make_binding():
   """Neural MMO binding creation function"""
   try:
@@ -127,17 +126,9 @@ class Policy(pufferlib.models.Policy):
       return torch.cat(actions, dim=-1)
     return actions
 
-from pdb import set_trace as T
-from typing import Any
-
-import pufferlib
-import pufferlib.emulation
-import pufferlib.models
-import torch
-import torch.nn.functional as F
-from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
+
 
 def make_binding():
   """Neural MMO binding creation function"""
@@ -165,8 +156,9 @@ class TileEncoder(torch.nn.Module):
   def forward(self, tile):
     tile[:, :, :2] -= tile[:, 112:113, :2].clone()
     tile[:, :, :2] += 7
-    tile = self.embedding(tile.long().clip(
-        0, 255) + self.tile_offset.to(tile.device))
+    tile = self.embedding(
+        tile.long().clip(0, 255) + self.tile_offset.to(tile.device)
+    )
 
     agents, tiles, features, embed = tile.shape
     tile = (
@@ -222,19 +214,35 @@ class PlayerEncoder(torch.nn.Module):
 
     return agent_embeddings, my_agent_embeddings
 
+
 class ItemEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
     self.item_offset = torch.tensor([i * 256 for i in range(16)])
     self.embedding = torch.nn.Embedding(32, 32)
 
-    self.fc = torch.nn.Linear(2*32+12, hidden_size)
+    self.fc = torch.nn.Linear(2 * 32 + 12, hidden_size)
 
     self.discrete_idxs = [1, 14]
     self.discrete_offset = torch.Tensor([2, 0])
     self.continuous_idxs = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15]
-    self.continuous_scale = torch.Tensor([1/10, 1/10, 1/10, 1/100, 1/100, 1/100, 1/40, 1/40, 1/40, 1/100, 1/100, 1/100])
- 
+    self.continuous_scale = torch.Tensor(
+        [
+            1 / 10,
+            1 / 10,
+            1 / 10,
+            1 / 100,
+            1 / 100,
+            1 / 100,
+            1 / 40,
+            1 / 40,
+            1 / 40,
+            1 / 100,
+            1 / 100,
+            1 / 100,
+        ]
+    )
+
   def forward(self, items):
     if self.discrete_offset.device != items.device:
       self.discrete_offset = self.discrete_offset.to(items.device)
@@ -256,7 +264,7 @@ class ItemEncoder(torch.nn.Module):
 class InventoryEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.fc = torch.nn.Linear(12*256, hidden_size)
+    self.fc = torch.nn.Linear(12 * 256, hidden_size)
 
   def forward(self, inventory):
     agents, items, hidden = inventory.shape
@@ -275,20 +283,22 @@ class MarketEncoder(torch.nn.Module):
 class ActionDecoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.layers = torch.nn.ModuleDict({
-        'attack_style': torch.nn.Linear(hidden_size, 3),
-        'attack_target': torch.nn.Linear(hidden_size, hidden_size),
-        'market_buy': torch.nn.Linear(hidden_size, hidden_size),
-        'inventory_destroy': torch.nn.Linear(hidden_size, hidden_size),
-        'inventory_give_item': torch.nn.Linear(hidden_size, hidden_size),
-        'inventory_give_player': torch.nn.Linear(hidden_size, hidden_size),
-        'gold_quantity': torch.nn.Linear(hidden_size, 99),
-        'gold_target': torch.nn.Linear(hidden_size, hidden_size),
-        'move': torch.nn.Linear(hidden_size, 5),
-        'inventory_sell': torch.nn.Linear(hidden_size, hidden_size),
-        'inventory_price': torch.nn.Linear(hidden_size, 99),
-        'inventory_use': torch.nn.Linear(hidden_size, hidden_size),
-    })
+    self.layers = torch.nn.ModuleDict(
+        {
+            "attack_style": torch.nn.Linear(hidden_size, 3),
+            "attack_target": torch.nn.Linear(hidden_size, hidden_size),
+            "market_buy": torch.nn.Linear(hidden_size, hidden_size),
+            "inventory_destroy": torch.nn.Linear(hidden_size, hidden_size),
+            "inventory_give_item": torch.nn.Linear(hidden_size, hidden_size),
+            "inventory_give_player": torch.nn.Linear(hidden_size, hidden_size),
+            "gold_quantity": torch.nn.Linear(hidden_size, 99),
+            "gold_target": torch.nn.Linear(hidden_size, hidden_size),
+            "move": torch.nn.Linear(hidden_size, 5),
+            "inventory_sell": torch.nn.Linear(hidden_size, hidden_size),
+            "inventory_price": torch.nn.Linear(hidden_size, 99),
+            "inventory_use": torch.nn.Linear(hidden_size, hidden_size),
+        }
+    )
 
   def apply_layer(self, layer, embeddings, hidden):
     key = layer(hidden)
@@ -299,16 +309,16 @@ class ActionDecoder(torch.nn.Module):
   def forward(self, hidden, lookup, concat):
     player_embeddings, inventory_embeddings, market_embeddings = lookup
     embeddings = {
-        'attack_target': player_embeddings,
-        'market_buy': market_embeddings,
-        'inventory_destroy': inventory_embeddings,
-        'inventory_give_item': inventory_embeddings,
-        'inventory_give_player': player_embeddings,
-        'gold_target': player_embeddings,
-        'inventory_sell': inventory_embeddings,
-        'inventory_use': inventory_embeddings,
+        "attack_target": player_embeddings,
+        "market_buy": market_embeddings,
+        "inventory_destroy": inventory_embeddings,
+        "inventory_give_item": inventory_embeddings,
+        "inventory_give_player": player_embeddings,
+        "gold_target": player_embeddings,
+        "inventory_sell": inventory_embeddings,
+        "inventory_use": inventory_embeddings,
     }
-    
+
     actions = []
     for key, layer in self.layers.items():
       action = self.apply_layer(layer, embeddings.get(key), hidden)
@@ -319,7 +329,7 @@ class ActionDecoder(torch.nn.Module):
 
     return actions
 
-  
+
 class Policy(pufferlib.models.Policy):
   def __init__(self, binding, input_size=256, hidden_size=256, output_size=256):
     """Simple custom PyTorch policy subclassing the pufferlib BasePolicy
@@ -347,7 +357,9 @@ class Policy(pufferlib.models.Policy):
   def encode_observations(self, env_outputs):
     env_outputs = self.binding.unpack_batched_obs(env_outputs)[0]
     tile = self.tile_encoder(env_outputs["Tile"])
-    player_embeddings, my_agent = self.player_encoder(env_outputs["Entity"], env_outputs["AgentId"][:, 0])
+    player_embeddings, my_agent = self.player_encoder(
+        env_outputs["Entity"], env_outputs["AgentId"][:, 0]
+    )
 
     inventory_embeddings = self.item_encoder(env_outputs["Inventory"])
     market_embeddings = self.item_encoder(env_outputs["Market"])
@@ -355,13 +367,15 @@ class Policy(pufferlib.models.Policy):
     inventory = self.inventory_encoder(inventory_embeddings)
     market = self.market_encoder(market_embeddings)
 
-    
     obs = torch.cat([tile, my_agent, inventory, market], dim=-1)
-    return self.proj_fc(obs), (player_embeddings, inventory_embeddings, market_embeddings)
+    return self.proj_fc(obs), (
+        player_embeddings,
+        inventory_embeddings,
+        market_embeddings,
+    )
 
   def decode_actions(self, hidden, lookup, concat=True):
     return self.action_decoder(hidden, lookup, concat)
-
 
   @staticmethod
   def create_policy(num_lstm_layers=1):
@@ -379,4 +393,3 @@ class Policy(pufferlib.models.Policy):
           recurrent_kwargs={"num_layers": num_lstm_layers},
       )
     return policy
-
