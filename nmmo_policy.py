@@ -18,7 +18,7 @@ def add_args(parser: ArgumentParser):
       "--policy.num_lstm_layers",
       dest="num_lstm_layers",
       type=int,
-      default=1,
+      default=0,
       help="number of LSTM layers to use (default: 0)",
   )
 
