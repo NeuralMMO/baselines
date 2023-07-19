@@ -92,9 +92,13 @@ class Config(
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
-  # def __init__(self, env, teams, team_id):
-  #   super().__init__(env, teams, team_id)
-  # self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
+  def __init__(self, env, teams, team_id):
+    super().__init__(env, teams, team_id)
+
+    # stat vars
+    self._cod_attacked = 0
+    self._cod_starved = 0
+    self._cod_dehydrated = 0
 
   # def reset(self, team_obs):
   #   super().reset(team_obs)
@@ -108,9 +112,6 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
     # initialize the cause of death stats
     #   if all agents are alive, then the CoD stats are 0
-    team_info["stats"]["cod/attacked"] = 0
-    team_info["stats"]["cod/starved"] = 0
-    team_info["stats"]["cod/dehydrated"] = 0
 
     for agent_id in agents:
       agent = self.env.realm.players.dead_this_tick.get(
@@ -122,11 +123,15 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
       if agent_id in team_dones and team_dones[agent_id] is True:
         if agent.damage.val > 0:
-          team_info["stats"]["cod/attacked"] += 1. / self.team_size
+          self._cod_attacked += 1. / self.team_size
         elif agent.food.val == 0:
-          team_info["stats"]["cod/starved"] += 1. / self.team_size
+          self._cod_starved += 1. / self.team_size
         elif agent.water.val == 0:
-          team_info["stats"]["cod/dehydrated"] += 1. / self.team_size
+          self._cod_dehydrated += 1. / self.team_size
+
+        team_info["stats"]["cod/attacked"] = self._cod_attacked
+        team_info["stats"]["cod/starved"] = self._cod_starved
+        team_info["stats"]["cod/dehydrated"] = self._cod_dehydrated
 
     return team_reward, team_info
 
