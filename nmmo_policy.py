@@ -1,16 +1,73 @@
 import argparse
-from typing import Dict
+import numpy as np
+from typing import Dict, Optional, Tuple
+import torch
+from torch import Tensor, nn
+import torch.nn.functional as F
 
 import nmmo
 import pufferlib
 import pufferlib.emulation
 import pufferlib.models
-import torch
-import torch.nn.functional as F
 from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
+
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, dim: int):
+        super(ScaledDotProductAttention, self).__init__()
+        self.sqrt_dim = np.sqrt(dim)
+
+    def forward(self, query: Tensor, key: Tensor, value: Tensor, mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+        score = torch.bmm(query, key.transpose(1, 2)) / self.sqrt_dim
+
+        if mask is not None:
+            score.masked_fill_(mask.view(score.size()), -float('Inf'))
+
+        attn = F.softmax(score, -1)
+        context = torch.bmm(attn, value)
+        return context, attn
+    
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model: int = 512, num_heads: int = 8):
+        super(MultiHeadAttention, self).__init__()
+
+        assert d_model % num_heads == 0, "d_model % num_heads should be zero."
+
+        self.d_head = int(d_model / num_heads)
+        self.num_heads = num_heads
+        self.scaled_dot_attn = ScaledDotProductAttention(self.d_head)
+        self.query_proj = nn.Linear(d_model, self.d_head * num_heads)
+        self.key_proj = nn.Linear(d_model, self.d_head * num_heads)
+        self.value_proj = nn.Linear(d_model, self.d_head * num_heads)
+
+    def forward(
+            self,
+            query: Tensor,
+            key: Tensor,
+            value: Tensor,
+            mask: Optional[Tensor] = None
+    ) -> Tuple[Tensor, Tensor]:
+        batch_size = value.size(0)
+
+        query = self.query_proj(query).view(batch_size, -1, self.num_heads, self.d_head)  # BxQ_LENxNxD
+        key = self.key_proj(key).view(batch_size, -1, self.num_heads, self.d_head)      # BxK_LENxNxD
+        value = self.value_proj(value).view(batch_size, -1, self.num_heads, self.d_head)  # BxV_LENxNxD
+
+        query = query.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)  # BNxQ_LENxD
+        key = key.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)      # BNxK_LENxD
+        value = value.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)  # BNxV_LENxD
+
+        if mask is not None:
+            mask = mask.unsqueeze(1).repeat(1, self.num_heads, 1, 1)  # BxNxQ_LENxK_LEN
+
+        context, attn = self.scaled_dot_attn(query, key, value, mask)
+
+        context = context.view(self.num_heads, batch_size, -1, self.d_head)
+        context = context.permute(1, 2, 0, 3).contiguous().view(batch_size, -1, self.num_heads * self.d_head)  # BxTxND
+
+        return context, attn
 
 def str_to_bool(s):
   if s.lower() in ("yes", "true", "t", "y", "1"):
@@ -50,7 +107,15 @@ def add_args(parser: argparse.ArgumentParser):
       dest="encode_task",
       type=str_to_bool,
       default=False,
-      help="encode task (default: True)",
+      help="encode task (default: False)",
+  )
+
+  parser.add_argument(
+      "--policy.attend_task",
+      dest="attend_task",
+      type=str,
+      default='none',
+      help="attend task - pytorch or nikhil (default: none)",
   )
 
   parser.add_argument(
@@ -58,7 +123,7 @@ def add_args(parser: argparse.ArgumentParser):
       dest="attentional_decode",
       type=str_to_bool,
       default=False,
-      help="use attentional action decoder (default: True)",
+      help="use attentional action decoder (default: False)",
   )
 
   parser.add_argument(
@@ -66,7 +131,7 @@ def add_args(parser: argparse.ArgumentParser):
       dest="extra_encoders",
       type=str_to_bool,
       default=False,
-      help="use inventory and market encoders (default: True)",
+      help="use inventory and market encoders (default: False)",
   )
 
 
@@ -321,6 +386,7 @@ class NmmoPolicy(pufferlib.models.Policy):
     task_size = policy_args.get("task_size", 1024)
     mask_actions = policy_args.get("mask_actions", True)
     self.encode_task = policy_args.get("encode_task", True)
+    self.attend_task = policy_args.get("attend_task", 'none')
     self.attentional_decode = policy_args.get("attentional_decode", True)
     self.extra_encoders = policy_args.get("extra_encoders", True)
     self._policy_args = policy_args
@@ -333,13 +399,19 @@ class NmmoPolicy(pufferlib.models.Policy):
       self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
       self.market_encoder = MarketEncoder(input_size, hidden_size)
 
+    num_encode = 2
     if self.encode_task:
       self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
-      self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
-    elif self.extra_encoders:
-      self.proj_fc = torch.nn.Linear(4 * input_size, input_size)
-    else:
-      self.proj_fc = torch.nn.Linear(2 * input_size, input_size)
+      if self.attend_task == 'nikhil':
+        self.task_attention = MultiHeadAttention(input_size, input_size)
+      elif self.attend_task == 'pytorch':
+        pass
+      else:
+        num_encode += 1
+    if self.extra_encoders:
+      num_encode += 2
+
+    self.proj_fc = torch.nn.Linear(num_encode * input_size, input_size)
 
     if self.attentional_decode:
       self.action_decoder = ActionDecoder(
@@ -371,15 +443,30 @@ class NmmoPolicy(pufferlib.models.Policy):
       inventory = self.inventory_encoder(inventory_embeddings)
       market = self.market_encoder(market_embeddings)
 
+    obs = [tile, my_agent]
+    lookup = []
+
+    if self.extra_encoders:
+      obs.extend([inventory, market])
+      lookup.extend([player_embeddings, inventory_embeddings, market_embeddings])
+
     if self.encode_task:
       task = self.task_encoder(env_outputs["Task"])
-      obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
-    elif self.extra_encoders:
-      obs = torch.cat([tile, my_agent, inventory, market], dim=-1)
-    else:
-      return self.proj_fc(torch.cat([tile, my_agent], dim=-1)), None
+      if self.attend_task == 'none':
+        obs.append(task)
+      lookup.append(task)
 
-    return self.proj_fc(obs), (
+    obs = torch.cat(obs, dim=-1)
+    obs = self.proj_fc(obs)
+
+    if self.attend_task == 'nikhil': 
+      obs, _ = self.task_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+      obs = obs.squeeze(0)
+    elif self.attend_task == 'pytorch':
+      obs = torch.nn.functional.scaled_dot_product_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+      obs = obs.squeeze(0)
+
+    return obs, (
         player_embeddings,
         inventory_embeddings,
         market_embeddings,
