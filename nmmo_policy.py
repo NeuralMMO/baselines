@@ -49,7 +49,7 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.encode_task",
       dest="encode_task",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="encode task (default: True)",
   )
 
@@ -57,7 +57,7 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.attentional_decode",
       dest="attentional_decode",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="use attentional action decoder (default: True)",
   )
 
@@ -65,7 +65,7 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.extra_encoders",
       dest="extra_encoders",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="use inventory and market encoders (default: True)",
   )
 
