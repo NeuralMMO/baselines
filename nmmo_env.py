@@ -102,7 +102,6 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     self._cod_starved = 0
     self._cod_dehydrated = 0
     self._task_completed = 0
-    self._unique_events = []
 
   def reset(self, team_obs):
     super().reset(team_obs)
@@ -110,11 +109,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     self._cod_starved = 0
     self._cod_dehydrated = 0
     self._task_completed = 0
-    self._unique_events = []
 
   def rewards(self, team_rewards, team_dones, team_infos, step):
-    agents = list(set(team_rewards.keys()).union(set(team_dones.keys())))
-
     team_reward = sum(team_rewards.values())
     team_info = {"stats": defaultdict(float)}
 
@@ -133,13 +129,12 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
           self._task_completed += 1. / self.team_size
         
         # log the cause of death for each dead agent
-        if agent_id in team_dones and team_dones[agent_id] is True:
-          if agent.damage.val > 0:
-            self._cod_attacked += 1. / self.team_size
-          elif agent.food.val == 0:
-            self._cod_starved += 1. / self.team_size
-          elif agent.water.val == 0:
-            self._cod_dehydrated += 1. / self.team_size
+        if agent.damage.val > 0:
+          self._cod_attacked += 1. / self.team_size
+        elif agent.food.val == 0:
+          self._cod_starved += 1. / self.team_size
+        elif agent.water.val == 0:
+          self._cod_dehydrated += 1. / self.team_size
 
     return team_reward, team_info
 
