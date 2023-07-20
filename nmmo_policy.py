@@ -40,9 +40,9 @@ def add_args(parser: argparse.ArgumentParser):
   parser.add_argument(
       "--policy.mask_actions",
       dest="mask_actions",
-      type=str_to_bool,
-      default=False,
-      help="mask actions (default: True)",
+      type=str,
+      default='none',
+      help="mask actions - none, move, all, or exclude-attack (default: none)",
   )
 
   parser.add_argument(
@@ -293,7 +293,11 @@ class ActionDecoder(torch.nn.Module):
     actions = []
     for key, layer in self.layers.items():
       mask = None
-      if self.mask_actions:
+      if self.mask_actions == 'all':
+        mask = action_targets[key]
+      elif self.mask_actions == 'move' and key == 'move':
+        mask = action_targets[key]
+      elif self.mask_actions == 'exclude-attack' and key != 'attack_target':
         mask = action_targets[key]
       action = self.apply_layer(layer, embeddings.get(key), mask, hidden)
       actions.append(action)
