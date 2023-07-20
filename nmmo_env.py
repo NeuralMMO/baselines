@@ -96,15 +96,13 @@ class Config(
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id):
     super().__init__(env, teams, team_id)
-
-    # stat vars
-    self._cod_attacked = 0
-    self._cod_starved = 0
-    self._cod_dehydrated = 0
-    self._task_completed = 0
+    self._reset_episode_stats()
 
   def reset(self, team_obs):
     super().reset(team_obs)
+    self._reset_episode_stats()
+
+  def _reset_episode_stats(self):
     self._cod_attacked = 0
     self._cod_starved = 0
     self._cod_dehydrated = 0
@@ -127,7 +125,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         if task.completed:
           # NOTE: The default StayAlive task returns True after the first tick
           self._task_completed += 1. / self.team_size
-        
+
         # log the cause of death for each dead agent
         if agent.damage.val > 0:
           self._cod_attacked += 1. / self.team_size
@@ -148,12 +146,10 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
       team_infos["stats"]["task/completed"] = self._task_completed
 
-      achieved, performed, event_cnt = \
+      achieved, performed, _ = \
         process_event_log(self.env.realm, self.teams[self.team_id])
       for key, val in list(achieved.items()) + list(performed.items()):
         team_infos["stats"][key] = float(val)
-
-      print()
 
     return team_infos
 
@@ -267,7 +263,7 @@ def score_unique_events(realm, log, score_diff=True):
   if score_diff:
     unique_prev = np.unique(log[~curr_idx,attr_to_col["event"]:], axis=0)
     score -= len(unique_prev)
-    
+
     # reward hack to make agents learn to eat and drink
     basic_idx = np.in1d(log[curr_idx,attr_to_col["event"]],
                         [EventCode.EAT_FOOD, EventCode.DRINK_WATER])
@@ -278,4 +274,3 @@ def score_unique_events(realm, log, score_diff=True):
     return min(2, score) # clip max score to 2
 
   return score
-
