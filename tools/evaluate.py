@@ -2,114 +2,41 @@
 import argparse
 import logging
 import os
-from typing import Any, Dict
-from venv import logger
-
-import clean_pufferl
-import nmmo
 import pandas as pd
-import pufferlib.emulation
-import pufferlib.frameworks.cleanrl
-import pufferlib.policy_pool
-import pufferlib.registry.nmmo
-from env.nmmo import nmmo
-from env.postprocessor import Postprocessor
 
-import model
-from lib.team.team_helper import TeamHelper
-from lib.team.team_replay_helper import TeamReplayHelper
+from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
+from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+import time
+import clean_pufferl
+import nmmo_env
+import nmmo_policy
+from pufferlib.policy_store import DirectoryPolicyStore
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
 
   parser = argparse.ArgumentParser()
-
   parser.add_argument(
-      "--model.checkpoints",
-      dest="model_checkpoints",
+      "--eval.run_name",
+      dest="run_name",
+      type=str,
+      default=f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}",
+      help="run name (default: None)",
+  )
+  parser.add_argument(
+      "--eval.runs_dir",
+      dest="runs_dir",
+      type=str,
+      default="/tmp/nmmo_eval",
+      help="runs_dir directory (default: runs)",
+  )
+  parser.add_argument(
+      "--eval.policy_store_dir",
+      dest="policy_store_dir",
       type=str,
       default=None,
-      help="comma seperated list of paths to model checkpoints to load",
+      help="policy_store directory (default: runs)",
   )
-  parser.add_argument(
-      "--model.policy_pool",
-      dest="policy_pool",
-      type=str,
-      default=None,
-      help="path to policy pool to use for evaluation (default: None)",
-  )
-
-  parser.add_argument(
-      "--env.seed",
-      dest="seed",
-      type=int,
-      default=1,
-      help="random seed to initialize the env (default: 1)",
-  )
-  parser.add_argument(
-      "--env.num_teams",
-      dest="num_teams",
-      type=int,
-      default=128,
-      help="number of teams to use for replay (default: 16)",
-  )
-  parser.add_argument(
-      "--env.team_size",
-      dest="team_size",
-      type=int,
-      default=1,
-      help="number of agents per team to use for replay (default: 8)",
-  )
-  parser.add_argument(
-      "--env.num_npcs",
-      dest="num_npcs",
-      type=int,
-      default=0,
-      help="number of NPCs to use for replay (default: 0)",
-  )
-  parser.add_argument(
-      "--env.max_episode_length",
-      dest="max_episode_length",
-      type=int,
-      default=1024,
-      help="number of steps per episode (default: 1024)",
-  )
-  parser.add_argument(
-      "--env.death_fog_tick",
-      dest="death_fog_tick",
-      type=int,
-      default=None,
-      help="number of ticks before death fog starts (default: None)",
-  )
-  parser.add_argument(
-      "--env.num_maps",
-      dest="num_maps",
-      type=int,
-      default=128,
-      help="number of maps to use for evaluation (default: 128)",
-  )
-  parser.add_argument(
-      "--env.maps_path",
-      dest="maps_path",
-      type=str,
-      default="maps/eval/medium",
-      help="path to maps to use for evaluation (default: None)",
-  )
-  parser.add_argument(
-      "--env.map_size",
-      dest="map_size",
-      type=int,
-      default=128,
-      help="size of maps to use for training (default: 128)",
-  )
-  parser.add_argument(
-      "--env.combat_enabled",
-      dest="combat_enabled",
-      action="store_true",
-      default=False,
-      help="only allow moves (default: False)",
-  )
-
   parser.add_argument(
       "--eval.num_rounds",
       dest="num_rounds",
@@ -118,11 +45,11 @@ if __name__ == "__main__":
       help="number of rounds to use for evaluation (default: 1)",
   )
   parser.add_argument(
-      "--eval.num_envs",
+      "--rollout.num_envs",
       dest="num_envs",
       type=int,
-      default=1,
-      help="number of environments to use for evaluation (default: 1)",
+      default=4,
+      help="number of environments to use for training (default: 1)",
   )
   parser.add_argument(
       "--eval.use_serial_vecenv",
@@ -130,15 +57,13 @@ if __name__ == "__main__":
       action="store_true",
       help="use serial vecenv impl (default: False)",
   )
-
   parser.add_argument(
       "--eval.num_policies",
       dest="num_policies",
       type=int,
       default=2,
-      help="number of policies to use for evaluation (default: 2)",
+      help="number of policies to use for evaluation (default: 1)",
   )
-
   parser.add_argument(
       "--replay.save_dir",
       dest="replay_save_dir",
@@ -146,7 +71,6 @@ if __name__ == "__main__":
       default=None,
       help="path to save replay files (default: auto-generated)",
   )
-
   parser.add_argument(
       "--wandb.project",
       dest="wandb_project",
@@ -161,122 +85,65 @@ if __name__ == "__main__":
       default=None,
       help="wandb entity name (default: None)",
   )
+  nmmo_env.add_args(parser)
+  nmmo_policy.add_args(parser)
+  args = parser.parse_args()
 
   args = parser.parse_args()
 
-  team_helper = TeamHelper(
+  run_dir = os.path.join(args.runs_dir, args.run_name)
+  os.makedirs(run_dir, exist_ok=True)
+
+  logging.info("Evaluation run: %s (%s)", args.run_name, run_dir)
+  logging.info("Training args: %s", args)
+  binding = nmmo_env.create_binding(args)
+
+  if args.policy_store_dir is not None:
+    logging.info("Using policy store from %s", args.policy_store_dir)
+    policy_store = DirectoryPolicyStore(args.policy_store_dir)
+
+  # TODO: only pass the policy_args
+  learner_policy = nmmo_policy.NmmoPolicy.create_policy(binding, args.__dict__)
+
+  evaluator = clean_pufferl.CleanPuffeRL(
+      binding=binding,
+      agent=learner_policy,
+      data_dir=run_dir,
+      exp_name=args.run_name,
+      policy_store=policy_store,
+      wandb_entity=args.wandb_entity,
+      wandb_project=args.wandb_project,
+      wandb_extra_data=args,
+      vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+      num_envs=args.num_envs,
+      num_cores=args.num_envs,
+      selfplay_learner_weight=0,
+      selfplay_num_policies=args.num_policies + 1,
+      batch_size=1024,
+  )
+
+  while True:
+    evaluator.evaluate()
+    ratings = evaluator.policy_ranker.ratings()
+    dataframe = pd.DataFrame(
       {
-          i: [i * args.team_size + j + 1 for j in range(args.team_size)]
-          for i in range(args.num_teams)
-      }
-  )
+          ('Rating'): [ratings.get(n).mu for n in ratings],
+          ('Policy'): ratings.keys(),
+      })
 
-  config = nmmo(
-      team_helper,
-      dict(
-          num_maps=args.num_maps,
-          maps_path=f"{args.maps_path}/{args.map_size}/",
-          map_size=args.map_size,
-          max_episode_length=args.max_episode_length,
-          death_fog_tick=args.death_fog_tick,
-          combat_enabled=args.combat_enabled,
-          num_npcs=args.num_npcs,
-      ),
-  )
+    print("\n\n" + dataframe.round(2)\
+      .sort_values(by=['Rating'], ascending=False)\
+      .to_string(index=False) + "\n\n")
 
-  puffer_teams = None
-  if args.team_size != 1:
-    puffer_teams = team_helper.teams
 
-  if args.replay_save_dir is not None:
-    os.makedirs(args.replay_save_dir, exist_ok=True)
 
-  class ReplayEnv(nmmo.Env):
-    num_replays_saved = 0
+  evaluator.close()
 
-    def __init__(self, config):
-      super().__init__(config)
-      self._replay_helper = None
-      if args.replay_save_dir is not None:
-        self._replay_helper = TeamReplayHelper(team_helper)
-        self.realm.record_replay(self._replay_helper)
-
-    def step(self, actions: Dict[int, Dict[str, Dict[str, Any]]]):
-      return super().step(actions)
-
-    def reset(self, **kwargs):
-      if self.realm.tick and self._replay_helper is not None:
-        ReplayEnv.num_replays_saved += 1
-        self._replay_helper.save(
-            f"{args.replay_save_dir}/{ReplayEnv.num_replays_saved}",
-            compress=False,
-        )
-      return super().reset()
-
-  def make_env():
-    return ReplayEnv(config)
-
-  binding = pufferlib.emulation.Binding(
-      env_creator=make_env,
-      env_name="Neural MMO",
-      suppress_env_prints=False,
-      emulate_const_horizon=args.max_episode_length,
-      teams=puffer_teams,
-      postprocessor_cls=Postprocessor,
-      postprocessor_args=[],
-  )
-
-  policies = []
-  if args.model_checkpoints is not None:
-    for policy_path in args.model_checkpoints.split(","):
-      logging.info(f"Loading model from {policy_path}...")
-      policy = model.load_policy(policy_path, binding)
-      policies.append(policy)
-
-  policy_pool = pufferlib.policy_pool.PolicyPool(
-      evaluation_batch_size=args.num_teams * args.team_size * args.num_envs,
-      sample_weights=[1] * len(policies),
-      active_policies=len(policies),
-      path="pool",
-  )
-
-  vec_env_cls = pufferlib.vectorization.multiprocessing.VecEnv
-  if args.use_serial_vecenv:
-    vec_env_cls = pufferlib.vectorization.serial.VecEnv
-
-  for ri in range(args.num_rounds):
-    evaluator = clean_pufferl.CleanPuffeRL(
-        binding,
-        policies[0],
-        policy_pool=policy_pool,
-        vec_backend=vec_env_cls,
-        total_timesteps=10000000,
-        num_envs=args.num_envs,
-        num_cores=args.num_envs,
-        num_buffers=1,
-        batch_size=args.num_envs
-        * args.num_teams
-        * args.team_size
-        * args.max_episode_length,
-        seed=args.seed + ri,
-    )
-
-    eval_state = evaluator.allocate_storage()
-    if args.wandb_project is not None:
-      evaluator._init_wandb(
-          args.wandb_project, args.wandb_entity, extra_data=vars(args)
-      )
-
-    # logger.info(f"Evaluating models: {models} with seed {args.seed+ri}")
-    evaluator.evaluate(policies[0], eval_state, show_progress=True)
-
-    logger.info(f"Model rewards: {sum(eval_state.rewards)}")
-
-    stats = policy_pool.tournament.stats
-
-    table = pd.DataFrame(stats.keys(), columns=["Model"])
-    table["New Rank"] = [stats.get(model, 1000) for model in table["Model"]]
-    # table["Delta"] = [new_ranks[model]-old_ranks.get(model, 1000) for model in table["Model"]]
-
-    # table = table.sort_values(by='Reward')
-    logger.info("\n" + table.to_string(index=False))
+# lr: 0.0001 -> 0.00001
+# ratio_clip: 0.2
+# dual_clip_c: 3.
+# pi_loss_weight: 1.0
+# v_loss_weight: 0.5
+# entropy_loss_weight: 0.03 -> 0.001
+# grad_clip: 1.0
+# bptt_trunc_len: 16

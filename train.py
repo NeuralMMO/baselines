@@ -69,14 +69,14 @@ if __name__ == "__main__":
       "--train.run_name",
       dest="run_name",
       type=str,
-      default=None,
+      default=f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}",
       help="run name (default: None)",
   )
   parser.add_argument(
       "--train.runs_dir",
       dest="runs_dir",
       type=str,
-      default=None,
+      default="/tmp/nmmo_train",
       help="runs_dir directory (default: runs)",
   )
   parser.add_argument(
@@ -154,9 +154,6 @@ if __name__ == "__main__":
   nmmo_env.add_args(parser)
   nmmo_policy.add_args(parser)
   args = parser.parse_args()
-
-  if args.run_name is None:
-    args.run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
 
   run_dir = os.path.join(args.runs_dir, args.run_name)
   os.makedirs(run_dir, exist_ok=True)
