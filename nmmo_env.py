@@ -4,6 +4,8 @@ from collections import defaultdict
 import nmmo
 import pufferlib
 import pufferlib.emulation
+from nmmo.render.replay_helper import FileReplayHelper
+from typing import Any, Dict
 
 
 def add_args(parser: ArgumentParser):
@@ -92,13 +94,21 @@ class Config(
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
-  # def __init__(self, env, teams, team_id):
-  #   super().__init__(env, teams, team_id)
-  # self._feature_extractor = FeatureExtractor(teams, team_id, env.config)
+  def __init__(self, env, teams, team_id, replay_save_dir=None):
+    super().__init__(env, teams, team_id)
+    self._replay_save_dir = replay_save_dir
+    if self._replay_save_dir is not None:
+      self._replay_helper = FileReplayHelper()
+      env.realm.record_replay(self._replay_helper)
 
   # def reset(self, team_obs):
+  #   if self.realm.tick and self._replay_helper is not None:
+  #     ReplayEnv.num_replays_saved += 1
+  #     self._replay_helper.save(
+  #         f"{self._replay_save_dir}/{ReplayEnv.num_replays_saved}",
+  #         compress=False,
+  #     )
   #   super().reset(team_obs)
-  # self._feature_extractor.reset(team_obs)
 
   def rewards(self, team_rewards, team_dones, team_infos, step):
     agents = list(set(team_rewards.keys()).union(set(team_dones.keys())))
@@ -121,8 +131,12 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
           team_info["stats"]["cod/starved"] += 1
         elif agent.water.val == 0:
           team_info["stats"]["cod/dehydrated"] += 1
-
     return team_reward, team_info
+
+  def infos(self, team_reward, env_done, team_done, team_infos, step):
+    team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)
+
+    return team_infos
 
   # def features(self, obs, step):
   #   # for ob in obs.values():
