@@ -28,7 +28,7 @@ class ScaledDotProductAttention(nn.Module):
         attn = F.softmax(score, -1)
         context = torch.bmm(attn, value)
         return context, attn
-    
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model: int = 512, num_heads: int = 8):
         super(MultiHeadAttention, self).__init__()
@@ -309,7 +309,7 @@ class ActionDecoder(torch.nn.Module):
       hidden = torch.matmul(embeddings, hidden.unsqueeze(-1)).squeeze(-1)
 
     if mask is not None:
-      hidden = hidden.masked_fill(mask==0, -1e9)
+      hidden = hidden.masked_fill(mask==1, -1e9)
 
     return hidden
 
@@ -459,7 +459,7 @@ class NmmoPolicy(pufferlib.models.Policy):
     obs = torch.cat(obs, dim=-1)
     obs = self.proj_fc(obs)
 
-    if self.attend_task == 'nikhil': 
+    if self.attend_task == 'nikhil':
       obs, _ = self.task_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
       obs = obs.squeeze(0)
     elif self.attend_task == 'pytorch':
