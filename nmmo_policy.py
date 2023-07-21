@@ -1,73 +1,96 @@
 import argparse
-import numpy as np
 from typing import Dict, Optional, Tuple
-import torch
-from torch import Tensor, nn
-import torch.nn.functional as F
 
 import nmmo
+import numpy as np
 import pufferlib
 import pufferlib.emulation
 import pufferlib.models
+import torch
+import torch.nn.functional as F
 from nmmo.entity.entity import EntityState
+from torch import Tensor, nn
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
 
 class ScaledDotProductAttention(nn.Module):
-    def __init__(self, dim: int):
-        super(ScaledDotProductAttention, self).__init__()
-        self.sqrt_dim = np.sqrt(dim)
+  def __init__(self, dim: int):
+    super().__init__()
+    self.sqrt_dim = np.sqrt(dim)
 
-    def forward(self, query: Tensor, key: Tensor, value: Tensor, mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
-        score = torch.bmm(query, key.transpose(1, 2)) / self.sqrt_dim
+  def forward(
+      self, query: Tensor, key: Tensor, value: Tensor, mask: Optional[Tensor] = None
+  ) -> Tuple[Tensor, Tensor]:
+    score = torch.bmm(query, key.transpose(1, 2)) / self.sqrt_dim
 
-        if mask is not None:
-            score.masked_fill_(mask.view(score.size()), -float('Inf'))
+    if mask is not None:
+      score.masked_fill_(mask.view(score.size()), -float("Inf"))
 
-        attn = F.softmax(score, -1)
-        context = torch.bmm(attn, value)
-        return context, attn
+    attn = F.softmax(score, -1)
+    context = torch.bmm(attn, value)
+    return context, attn
+
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model: int = 512, num_heads: int = 8):
-        super(MultiHeadAttention, self).__init__()
+  def __init__(self, d_model: int = 512, num_heads: int = 8):
+    super().__init__()
 
-        assert d_model % num_heads == 0, "d_model % num_heads should be zero."
+    assert d_model % num_heads == 0, "d_model % num_heads should be zero."
 
-        self.d_head = int(d_model / num_heads)
-        self.num_heads = num_heads
-        self.scaled_dot_attn = ScaledDotProductAttention(self.d_head)
-        self.query_proj = nn.Linear(d_model, self.d_head * num_heads)
-        self.key_proj = nn.Linear(d_model, self.d_head * num_heads)
-        self.value_proj = nn.Linear(d_model, self.d_head * num_heads)
+    self.d_head = int(d_model / num_heads)
+    self.num_heads = num_heads
+    self.scaled_dot_attn = ScaledDotProductAttention(self.d_head)
+    self.query_proj = nn.Linear(d_model, self.d_head * num_heads)
+    self.key_proj = nn.Linear(d_model, self.d_head * num_heads)
+    self.value_proj = nn.Linear(d_model, self.d_head * num_heads)
 
-    def forward(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            mask: Optional[Tensor] = None
-    ) -> Tuple[Tensor, Tensor]:
-        batch_size = value.size(0)
+  def forward(
+      self, query: Tensor, key: Tensor, value: Tensor, mask: Optional[Tensor] = None
+  ) -> Tuple[Tensor, Tensor]:
+    batch_size = value.size(0)
 
-        query = self.query_proj(query).view(batch_size, -1, self.num_heads, self.d_head)  # BxQ_LENxNxD
-        key = self.key_proj(key).view(batch_size, -1, self.num_heads, self.d_head)      # BxK_LENxNxD
-        value = self.value_proj(value).view(batch_size, -1, self.num_heads, self.d_head)  # BxV_LENxNxD
+    query = self.query_proj(query).view(
+        batch_size, -1, self.num_heads, self.d_head
+    )  # BxQ_LENxNxD
+    key = self.key_proj(key).view(
+        batch_size, -1, self.num_heads, self.d_head
+    )  # BxK_LENxNxD
+    value = self.value_proj(value).view(
+        batch_size, -1, self.num_heads, self.d_head
+    )  # BxV_LENxNxD
 
-        query = query.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)  # BNxQ_LENxD
-        key = key.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)      # BNxK_LENxD
-        value = value.permute(2, 0, 1, 3).contiguous().view(batch_size * self.num_heads, -1, self.d_head)  # BNxV_LENxD
+    query = (
+        query.permute(2, 0, 1, 3)
+        .contiguous()
+        .view(batch_size * self.num_heads, -1, self.d_head)
+    )  # BNxQ_LENxD
+    key = (
+        key.permute(2, 0, 1, 3)
+        .contiguous()
+        .view(batch_size * self.num_heads, -1, self.d_head)
+    )  # BNxK_LENxD
+    value = (
+        value.permute(2, 0, 1, 3)
+        .contiguous()
+        .view(batch_size * self.num_heads, -1, self.d_head)
+    )  # BNxV_LENxD
 
-        if mask is not None:
-            mask = mask.unsqueeze(1).repeat(1, self.num_heads, 1, 1)  # BxNxQ_LENxK_LEN
+    if mask is not None:
+      mask = mask.unsqueeze(1).repeat(
+          1, self.num_heads, 1, 1)  # BxNxQ_LENxK_LEN
 
-        context, attn = self.scaled_dot_attn(query, key, value, mask)
+    context, attn = self.scaled_dot_attn(query, key, value, mask)
 
-        context = context.view(self.num_heads, batch_size, -1, self.d_head)
-        context = context.permute(1, 2, 0, 3).contiguous().view(batch_size, -1, self.num_heads * self.d_head)  # BxTxND
+    context = context.view(self.num_heads, batch_size, -1, self.d_head)
+    context = (
+        context.permute(1, 2, 0, 3)
+        .contiguous()
+        .view(batch_size, -1, self.num_heads * self.d_head)
+    )  # BxTxND
 
-        return context, attn
+    return context, attn
+
 
 def str_to_bool(s):
   if s.lower() in ("yes", "true", "t", "y", "1"):
@@ -98,8 +121,8 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.mask_actions",
       dest="mask_actions",
       type=str,
-      default='none',
-      choices=['none', 'move', 'all', 'exclude-attack'],
+      default="none",
+      choices=["none", "move", "all", "exclude-attack"],
       help="mask actions - none, move, all, or exclude-attack (default: none)",
   )
 
@@ -115,8 +138,8 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.attend_task",
       dest="attend_task",
       type=str,
-      default='none',
-      choices=['none', 'pytorch', 'nikhil'],
+      default="none",
+      choices=["none", "pytorch", "nikhil"],
       help="attend task - none, pytorch, or nikhil (default: none)",
   )
 
@@ -311,7 +334,7 @@ class ActionDecoder(torch.nn.Module):
       hidden = torch.matmul(embeddings, hidden.unsqueeze(-1)).squeeze(-1)
 
     if mask is not None:
-      hidden = hidden.masked_fill(mask==0, -1e9)
+      hidden = hidden.masked_fill(mask == 0, -1e9)
 
     return hidden
 
@@ -360,11 +383,11 @@ class ActionDecoder(torch.nn.Module):
     actions = []
     for key, layer in self.layers.items():
       mask = None
-      if self.mask_actions == 'all':
+      if self.mask_actions == "all":
         mask = action_targets[key]
-      elif self.mask_actions == 'move' and key == 'move':
+      elif self.mask_actions == "move" and key == "move":
         mask = action_targets[key]
-      elif self.mask_actions == 'exclude-attack' and key != 'attack_target':
+      elif self.mask_actions == "exclude-attack" and key != "attack_target":
         mask = action_targets[key]
       action = self.apply_layer(layer, embeddings.get(key), mask, hidden)
       actions.append(action)
@@ -388,7 +411,7 @@ class NmmoPolicy(pufferlib.models.Policy):
     task_size = policy_args.get("task_size", 1024)
     mask_actions = policy_args.get("mask_actions", True)
     self.encode_task = policy_args.get("encode_task", True)
-    self.attend_task = policy_args.get("attend_task", 'none')
+    self.attend_task = policy_args.get("attend_task", "none")
     self.attentional_decode = policy_args.get("attentional_decode", True)
     self.extra_encoders = policy_args.get("extra_encoders", True)
     self._policy_args = policy_args
@@ -404,9 +427,9 @@ class NmmoPolicy(pufferlib.models.Policy):
     num_encode = 2
     if self.encode_task:
       self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
-      if self.attend_task == 'nikhil':
+      if self.attend_task == "nikhil":
         self.task_attention = MultiHeadAttention(input_size, input_size)
-      elif self.attend_task == 'pytorch':
+      elif self.attend_task == "pytorch":
         pass
       else:
         num_encode += 1
@@ -450,22 +473,27 @@ class NmmoPolicy(pufferlib.models.Policy):
 
     if self.extra_encoders:
       obs.extend([inventory, market])
-      lookup.extend([player_embeddings, inventory_embeddings, market_embeddings])
+      lookup.extend(
+          [player_embeddings, inventory_embeddings, market_embeddings])
 
     if self.encode_task:
       task = self.task_encoder(env_outputs["Task"])
-      if self.attend_task == 'none':
+      if self.attend_task == "none":
         obs.append(task)
       lookup.append(task)
 
     obs = torch.cat(obs, dim=-1)
     obs = self.proj_fc(obs)
 
-    if self.attend_task == 'nikhil':
-      obs, _ = self.task_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+    if self.attend_task == "nikhil":
+      obs, _ = self.task_attention(
+          task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0)
+      )
       obs = obs.squeeze(0)
-    elif self.attend_task == 'pytorch':
-      obs = torch.nn.functional.scaled_dot_product_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+    elif self.attend_task == "pytorch":
+      obs = torch.nn.functional.scaled_dot_product_attention(
+          task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0)
+      )
       obs = obs.squeeze(0)
 
     return obs, (

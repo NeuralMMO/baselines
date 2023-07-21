@@ -104,7 +104,6 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       env.realm.record_replay(self._replay_helper)
     self._reset_episode_stats()
 
-
   def reset(self, team_obs):
     super().reset(team_obs)
     self._reset_episode_stats()
@@ -131,15 +130,15 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         task = self.env.agent_task_map[agent_id][0]
         if task.completed:
           # NOTE: The default StayAlive task returns True after the first tick
-          self._task_completed += 1. / self.team_size
+          self._task_completed += 1.0 / self.team_size
 
         # log the cause of death for each dead agent
         if agent.damage.val > 0:
-          self._cod_attacked += 1. / self.team_size
+          self._cod_attacked += 1.0 / self.team_size
         elif agent.food.val == 0:
-          self._cod_starved += 1. / self.team_size
+          self._cod_starved += 1.0 / self.team_size
         elif agent.water.val == 0:
-          self._cod_dehydrated += 1. / self.team_size
+          self._cod_dehydrated += 1.0 / self.team_size
 
     return team_reward, team_info
 
@@ -153,14 +152,16 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
       team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
       team_infos["stats"]["task/completed"] = self._task_completed
 
-      achieved, performed, _ = \
-        process_event_log(self.env.realm, self.teams[self.team_id])
+      achieved, performed, _ = process_event_log(
+          self.env.realm, self.teams[self.team_id]
+      )
       for key, val in list(achieved.items()) + list(performed.items()):
         team_infos["stats"][key] = float(val)
 
       if self._replay_save_dir is not None:
         self._replay_helper.save(
-          os.path.join(self._replay_save_dir, f"replay_{step}.json"), step)
+            os.path.join(self._replay_save_dir, f"replay_{step}.json"), step
+        )
 
     return team_infos
 
@@ -171,6 +172,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
   # def actions(self, actions, step):
   #   return self._feature_extractor.translate_actions(actions)
+
 
 def create_binding(args: Namespace):
   return pufferlib.emulation.Binding(
@@ -186,8 +188,12 @@ def create_binding(args: Namespace):
 
 #####################################################################
 
-INFO_KEY_TO_EVENT_CODE = { 'event/'+evt.lower(): val for evt, val in EventCode.__dict__.items()
-                           if isinstance(val, int) }
+INFO_KEY_TO_EVENT_CODE = {
+    "event/" + evt.lower(): val
+    for evt, val in EventCode.__dict__.items()
+    if isinstance(val, int)
+}
+
 
 def process_event_log(realm, agent_list):
   log = realm.event_log.get_data(agents=agent_list)
@@ -197,11 +203,20 @@ def process_event_log(realm, agent_list):
   event_cnt = {}
   for key, code in INFO_KEY_TO_EVENT_CODE.items():
     # count the freq of each event
-    event_cnt[key] = sum(log[:,attr_to_col["event"]] == code)
+    event_cnt[key] = sum(log[:, attr_to_col["event"]] == code)
 
   # convert the numbers into binary (performed or not) for the key events
-  key_event = ["eat_food", "drink_water", "score_hit", "player_kill",
-               "equip_item", "consume_item", "harvest_item", "list_item", "buy_item"]
+  key_event = [
+      "eat_food",
+      "drink_water",
+      "score_hit",
+      "player_kill",
+      "equip_item",
+      "consume_item",
+      "harvest_item",
+      "list_item",
+      "buy_item",
+  ]
   performed = {}
   for evt in key_event:
     key = "event/" + evt
@@ -210,78 +225,90 @@ def process_event_log(realm, agent_list):
   # record important achievements
   achieved = {}
   check_max = {
-    "level": EventCode.LEVEL_UP,
-    "damage": EventCode.SCORE_HIT,
-    "distance": EventCode.GO_FARTHEST
+      "level": EventCode.LEVEL_UP,
+      "damage": EventCode.SCORE_HIT,
+      "distance": EventCode.GO_FARTHEST,
   }
   for attr, code in check_max.items():
-    idx = log[:,attr_to_col["event"]] == code
-    achieved["achieved/max_"+attr] = \
-      max(log[idx,attr_to_col[attr]]) if sum(idx) > 0 else 0
+    idx = log[:, attr_to_col["event"]] == code
+    achieved["achieved/max_" + attr] = (
+        max(log[idx, attr_to_col[attr]]) if sum(idx) > 0 else 0
+    )
   # correct the initial level
   if achieved["achieved/max_level"] == 0:
     achieved["achieved/max_level"] = 1
   achieved["achieved/player_kill"] = event_cnt["event/player_kill"]
-  achieved["achieved/unique_events"] = score_unique_events(realm, log, score_diff=False)
+  achieved["achieved/unique_events"] = score_unique_events(
+      realm, log, score_diff=False
+  )
 
   # TODO: log consume ration/poultice?
 
   return achieved, performed, event_cnt
 
+
 def score_unique_events(realm, log, score_diff=True):
   """Calculate score by counting unique events.
 
-    score_diff = True gives the difference score for the current tick
-    score_diff = False gives the number of all unique events in the episode
+  score_diff = True gives the difference score for the current tick
+  score_diff = False gives the number of all unique events in the episode
 
-    EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
-      because the details of these events are not recorded at all
+  EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
+    because the details of these events are not recorded at all
 
-    Count all PLAYER_KILL, EARN_GOLD (sold item), LEVEL_UP events
+  Count all PLAYER_KILL, EARN_GOLD (sold item), LEVEL_UP events
   """
   attr_to_col = realm.event_log.attr_to_col
 
-  if len(log) == 0: # no event logs
+  if len(log) == 0:  # no event logs
     return 0
 
   if score_diff:
-    curr_idx = log[:,attr_to_col["tick"]] == realm.tick
-    if sum(curr_idx) == 0: # no new logs
+    curr_idx = log[:, attr_to_col["tick"]] == realm.tick
+    if sum(curr_idx) == 0:  # no new logs
       return 0
 
   # mask some columns to make the event redundant
   cols_to_ignore = {
-    EventCode.SCORE_HIT: ["combat_style", "damage"],
-    EventCode.CONSUME_ITEM: ["quantity"], # treat each (item, level) differently
-    EventCode.HARVEST_ITEM: ["quantity"], # but, count each (item, level) only once
-    EventCode.EQUIP_ITEM: ["quantity"],
-    EventCode.LIST_ITEM: ["quantity", "price"],
-    EventCode.BUY_ITEM: ["quantity", "price"], }
+      EventCode.SCORE_HIT: ["combat_style", "damage"],
+      # treat each (item, level) differently
+      EventCode.CONSUME_ITEM: ["quantity"],
+      # but, count each (item, level) only once
+      EventCode.HARVEST_ITEM: ["quantity"],
+      EventCode.EQUIP_ITEM: ["quantity"],
+      EventCode.LIST_ITEM: ["quantity", "price"],
+      EventCode.BUY_ITEM: ["quantity", "price"],
+  }
 
   for code, attrs in cols_to_ignore.items():
-    idx = log[:,attr_to_col["event"]] == code
+    idx = log[:, attr_to_col["event"]] == code
     for attr in attrs:
-      log[idx,attr_to_col[attr]] = 0
+      log[idx, attr_to_col[attr]] = 0
 
   # make every EARN_GOLD events unique
-  idx = log[:,attr_to_col["event"]] == EventCode.EARN_GOLD
-  log[idx,attr_to_col["number"]] = log[idx,attr_to_col["tick"]].copy() # this is a hack
+  idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
+  log[idx, attr_to_col["number"]] = log[
+      idx, attr_to_col["tick"]
+  ].copy()  # this is a hack
 
   # remove redundant events after masking
-  unique_all = np.unique(log[:,attr_to_col["event"]:], axis=0)
+  unique_all = np.unique(log[:, attr_to_col["event"]:], axis=0)
   score = len(unique_all)
 
   if score_diff:
-    unique_prev = np.unique(log[~curr_idx,attr_to_col["event"]:], axis=0)
+    unique_prev = np.unique(log[~curr_idx, attr_to_col["event"]:], axis=0)
     score -= len(unique_prev)
 
     # reward hack to make agents learn to eat and drink
-    basic_idx = np.in1d(log[curr_idx,attr_to_col["event"]],
-                        [EventCode.EAT_FOOD, EventCode.DRINK_WATER])
+    basic_idx = np.in1d(
+        log[curr_idx, attr_to_col["event"]],
+        [EventCode.EAT_FOOD, EventCode.DRINK_WATER],
+    )
     if sum(basic_idx) > 0:
-      score += 1 if realm.tick < 200 else \
-        np.random.choice([0, 1], p=[2/3, 1/3]) # use prob. reward after 200 ticks
+      score += (
+          1 if realm.tick < 200 else np.random.choice([0, 1], p=[2 / 3, 1 / 3])
+      )  # use prob. reward after 200 ticks
 
-    return min(2, score) # clip max score to 2
+    return min(2, score)  # clip max score to 2
 
   return score

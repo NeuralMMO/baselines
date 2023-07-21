@@ -2,15 +2,16 @@
 import argparse
 import logging
 import os
-import pandas as pd
+import time
 
+import clean_pufferl
+import pandas as pd
+from pufferlib.policy_store import DirectoryPolicyStore
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
-import time
-import clean_pufferl
+
 import nmmo_env
 import nmmo_policy
-from pufferlib.policy_store import DirectoryPolicyStore
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -126,16 +127,19 @@ if __name__ == "__main__":
     evaluator.evaluate()
     ratings = evaluator.policy_ranker.ratings()
     dataframe = pd.DataFrame(
-      {
-          ('Rating'): [ratings.get(n).mu for n in ratings],
-          ('Policy'): ratings.keys(),
-      })
+        {
+            ("Rating"): [ratings.get(n).mu for n in ratings],
+            ("Policy"): ratings.keys(),
+        }
+    )
 
-    print("\n\n" + dataframe.round(2)\
-      .sort_values(by=['Rating'], ascending=False)\
-      .to_string(index=False) + "\n\n")
-
-
+    print(
+        "\n\n"
+        + dataframe.round(2)
+        .sort_values(by=["Rating"], ascending=False)
+        .to_string(index=False)
+        + "\n\n"
+    )
 
   evaluator.close()
 
