@@ -28,7 +28,7 @@ class ScaledDotProductAttention(nn.Module):
         attn = F.softmax(score, -1)
         context = torch.bmm(attn, value)
         return context, attn
-    
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model: int = 512, num_heads: int = 8):
         super(MultiHeadAttention, self).__init__()
@@ -99,6 +99,7 @@ def add_args(parser: argparse.ArgumentParser):
       dest="mask_actions",
       type=str,
       default='none',
+      choices=['none', 'move', 'all', 'exclude-attack'],
       help="mask actions - none, move, all, or exclude-attack (default: none)",
   )
 
@@ -106,7 +107,7 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.encode_task",
       dest="encode_task",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="encode task (default: False)",
   )
 
@@ -115,14 +116,15 @@ def add_args(parser: argparse.ArgumentParser):
       dest="attend_task",
       type=str,
       default='none',
-      help="attend task - pytorch or nikhil (default: none)",
+      choices=['none', 'pytorch', 'nikhil'],
+      help="attend task - none, pytorch, or nikhil (default: none)",
   )
 
   parser.add_argument(
       "--policy.attentional_decode",
       dest="attentional_decode",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="use attentional action decoder (default: False)",
   )
 
@@ -130,7 +132,7 @@ def add_args(parser: argparse.ArgumentParser):
       "--policy.extra_encoders",
       dest="extra_encoders",
       type=str_to_bool,
-      default=False,
+      default=True,
       help="use inventory and market encoders (default: False)",
   )
 
@@ -309,7 +311,7 @@ class ActionDecoder(torch.nn.Module):
       hidden = torch.matmul(embeddings, hidden.unsqueeze(-1)).squeeze(-1)
 
     if mask is not None:
-      hidden = hidden.masked_fill(mask==0, -1e9)
+      hidden = hidden.masked_fill(mask==1, -1e9)
 
     return hidden
 
