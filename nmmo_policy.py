@@ -99,6 +99,7 @@ def add_args(parser: argparse.ArgumentParser):
       dest="mask_actions",
       type=str,
       default='none',
+      choices=['none', 'move', 'all', 'exclude-attack'],
       help="mask actions - none, move, all, or exclude-attack (default: none)",
   )
 
@@ -115,7 +116,8 @@ def add_args(parser: argparse.ArgumentParser):
       dest="attend_task",
       type=str,
       default='none',
-      help="attend task - pytorch or nikhil (default: none)",
+      choices=['none', 'pytorch', 'nikhil'],
+      help="attend task - none, pytorch, or nikhil (default: none)",
   )
 
   parser.add_argument(
