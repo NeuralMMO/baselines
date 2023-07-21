@@ -485,16 +485,14 @@ class NmmoPolicy(pufferlib.models.Policy):
     obs = torch.cat(obs, dim=-1)
     obs = self.proj_fc(obs)
 
-    if self.attend_task == "nikhil":
-      obs, _ = self.task_attention(
-          task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0)
-      )
-      obs = obs.squeeze(0)
-    elif self.attend_task == "pytorch":
-      obs = torch.nn.functional.scaled_dot_product_attention(
-          task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0)
-      )
-      obs = obs.squeeze(0)
+    if self.attend_task == 'nikhil':
+      attn_obs, _ = self.task_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+      attn_obs = attn_obs.squeeze(0)
+      obs = attn_obs + obs
+    elif self.attend_task == 'pytorch':
+      attn_obs = torch.nn.functional.scaled_dot_product_attention(task.unsqueeze(0), obs.unsqueeze(0), obs.unsqueeze(0))
+      attn_obs = attn_obs.squeeze(0)
+      obs = attn_obs + obs
 
     return obs, (
         player_embeddings,
