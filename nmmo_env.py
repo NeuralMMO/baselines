@@ -1,14 +1,14 @@
+import os
 from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 
-import numpy as np
 import nmmo
-from nmmo.lib.log import EventCode
-
+import numpy as np
 import pufferlib
 import pufferlib.emulation
+from nmmo.lib.log import EventCode
 from nmmo.render.replay_helper import FileReplayHelper
-from typing import Any, Dict
+
 
 def add_args(parser: ArgumentParser):
   parser.add_argument(
@@ -105,6 +105,10 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     self._reset_episode_stats()
 
 
+  def reset(self, team_obs):
+    super().reset(team_obs)
+    self._reset_episode_stats()
+
   def _reset_episode_stats(self):
     self._cod_attacked = 0
     self._cod_starved = 0
@@ -153,6 +157,10 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         process_event_log(self.env.realm, self.teams[self.team_id])
       for key, val in list(achieved.items()) + list(performed.items()):
         team_infos["stats"][key] = float(val)
+
+      if self._replay_save_dir is not None:
+        self._replay_helper.save(
+          os.path.join(self._replay_save_dir, f"replay_{step}.json"), step)
 
     return team_infos
 
