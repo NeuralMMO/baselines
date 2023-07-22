@@ -67,13 +67,20 @@ def add_args(parser: ArgumentParser):
       default=None,
       help="path to tasks to use for training (default: tasks.pkl)",
   )
-
+  parser.add_argument(
+      "--env.replay_save_dir",
+      dest="replay_save_dir",
+      type=str,
+      default=None,
+      help="path to save replay files (default: auto-generated)",
+  )
 
 class Config(
     nmmo.config.Medium,
     nmmo.config.Terrain,
     nmmo.config.Resource,
     nmmo.config.Progression,
+    nmmo.config.Profession,
     nmmo.config.Equipment,
     nmmo.config.Item,
     nmmo.config.Exchange,
@@ -98,14 +105,25 @@ class Config(
 class Postprocessor(pufferlib.emulation.Postprocessor):
   def __init__(self, env, teams, team_id, replay_save_dir=None):
     super().__init__(env, teams, team_id)
-    self._replay_save_dir = replay_save_dir
-    if self._replay_save_dir is not None:
-      self._replay_helper = FileReplayHelper()
-      env.realm.record_replay(self._replay_helper)
+
+    self._num_replays_saved = 0
+    self._replay_save_dir = None
+    if replay_save_dir is not None and self.team_id == 1:
+      self._replay_save_dir = replay_save_dir
+    self._replay_helper = None
+
     self._reset_episode_stats()
 
-  def reset(self, team_obs):
+  def reset(self, team_obs, dummy=False):
     super().reset(team_obs)
+
+    if not dummy:
+      if self._replay_helper is None and self._replay_save_dir is not None:
+        self._replay_helper = FileReplayHelper()
+        self.env.realm.record_replay(self._replay_helper)
+      if self._replay_helper is not None:
+        self._replay_helper.reset()
+
     self._reset_episode_stats()
 
   def _reset_episode_stats(self):
@@ -160,8 +178,9 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
       if self._replay_save_dir is not None:
         self._replay_helper.save(
-            os.path.join(self._replay_save_dir, f"replay_{step}.json"), step
-        )
+            os.path.join(
+              self._replay_save_dir, f"replay_{self._num_replays_saved}.json"), compress=False)
+        self._num_replays_saved += 1
 
     return team_infos
 
@@ -182,7 +201,9 @@ def create_binding(args: Namespace):
       suppress_env_prints=False,
       emulate_const_horizon=args.max_episode_length,
       postprocessor_cls=Postprocessor,
-      postprocessor_args=[],
+      postprocessor_kwargs={
+        'replay_save_dir': args.replay_save_dir
+      },
   )
 
 

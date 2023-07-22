@@ -12,6 +12,7 @@ from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import nmmo_env
 import nmmo_policy
+import pufferlib
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -49,7 +50,7 @@ if __name__ == "__main__":
       "--rollout.num_envs",
       dest="num_envs",
       type=int,
-      default=4,
+      default=1,
       help="number of environments to use for training (default: 1)",
   )
   parser.add_argument(
@@ -64,13 +65,6 @@ if __name__ == "__main__":
       type=int,
       default=2,
       help="number of policies to use for evaluation (default: 1)",
-  )
-  parser.add_argument(
-      "--replay.save_dir",
-      dest="replay_save_dir",
-      type=str,
-      default=None,
-      help="path to save replay files (default: auto-generated)",
   )
   parser.add_argument(
       "--wandb.project",
@@ -106,6 +100,8 @@ if __name__ == "__main__":
   # TODO: only pass the policy_args
   learner_policy = nmmo_policy.NmmoPolicy.create_policy(binding, args.__dict__)
 
+  policy_selector = pufferlib.policy_ranker.PolicySelector(args.num_policies)
+
   evaluator = clean_pufferl.CleanPuffeRL(
       binding=binding,
       agent=learner_policy,
@@ -120,6 +116,7 @@ if __name__ == "__main__":
       num_cores=args.num_envs,
       selfplay_learner_weight=0,
       selfplay_num_policies=args.num_policies + 1,
+      policy_selector=policy_selector,
       batch_size=1024,
   )
 
