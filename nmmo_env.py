@@ -116,7 +116,6 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
 
   def reset(self, team_obs, dummy=False):
     super().reset(team_obs)
-
     if not dummy:
       if self._replay_helper is None and self._replay_save_dir is not None:
         self._replay_helper = FileReplayHelper()

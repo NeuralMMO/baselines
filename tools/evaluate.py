@@ -40,6 +40,13 @@ if __name__ == "__main__":
       help="policy_store directory (default: runs)",
   )
   parser.add_argument(
+    "--eval.policy_paths",
+    dest="policy_paths",
+    type=str,
+    default=None,
+    help="comma seperated list of policies to evaluate (default: None)",
+  )
+  parser.add_argument(
       "--eval.num_rounds",
       dest="num_rounds",
       type=int,
