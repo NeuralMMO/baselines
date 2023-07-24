@@ -91,6 +91,7 @@ class Config(
     super().__init__()
 
     self.PROVIDE_ACTION_TARGETS = True
+    self.PROVIDE_NOOP_ACTION_TARGET = True
     self.MAP_FORCE_GENERATION = False
     self.PLAYER_N = args.num_agents
     self.HORIZON = args.max_episode_length
@@ -100,6 +101,7 @@ class Config(
     self.MAP_CENTER = args.map_size
     self.NPC_N = args.num_npcs
     self.CURRICULUM_FILE_PATH = args.tasks_path
+
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):

@@ -118,15 +118,6 @@ def add_args(parser: argparse.ArgumentParser):
   )
 
   parser.add_argument(
-      "--policy.mask_actions",
-      dest="mask_actions",
-      type=str,
-      default="none",
-      choices=["none", "move", "all", "exclude-attack"],
-      help="mask actions - none, move, all, or exclude-attack (default: none)",
-  )
-
-  parser.add_argument(
       "--policy.encode_task",
       dest="encode_task",
       type=str_to_bool,
@@ -308,9 +299,8 @@ class TaskEncoder(torch.nn.Module):
 
 
 class ActionDecoder(torch.nn.Module):
-  def __init__(self, input_size, hidden_size, mask_actions):
+  def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.mask_actions = mask_actions
     self.layers = torch.nn.ModuleDict(
         {
             "attack_style": torch.nn.Linear(hidden_size, 3),
@@ -383,13 +373,14 @@ class ActionDecoder(torch.nn.Module):
     actions = []
     for key, layer in self.layers.items():
       mask = None
-      if self.mask_actions == "all":
-        mask = action_targets[key]
-      elif self.mask_actions == "move" and key == "move":
-        mask = action_targets[key]
-      elif self.mask_actions == "exclude-attack" and key != "attack_target":
-        mask = action_targets[key]
-      action = self.apply_layer(layer, embeddings.get(key), mask, hidden)
+      mask = action_targets[key]
+      embs = embeddings.get(key)
+      if embs is not None and embs.shape[1] != mask.shape[1]:
+        b, _, f = embs.shape
+        zeros = torch.zeros([b, 1, f], dtype=embs.dtype, device=embs.device)
+        embs = torch.cat([embs, zeros], dim=1)
+
+      action = self.apply_layer(layer, embs, mask, hidden)
       actions.append(action)
 
     return actions
@@ -409,7 +400,6 @@ class NmmoPolicy(pufferlib.models.Policy):
     input_size = policy_args.get("input_size", 256)
     hidden_size = policy_args.get("hidden_size", 256)
     task_size = policy_args.get("task_size", 1024)
-    mask_actions = policy_args.get("mask_actions", True)
     self.encode_task = policy_args.get("encode_task", True)
     self.attend_task = policy_args.get("attend_task", "none")
     self.attentional_decode = policy_args.get("attentional_decode", True)
@@ -439,8 +429,7 @@ class NmmoPolicy(pufferlib.models.Policy):
     self.proj_fc = torch.nn.Linear(num_encode * input_size, input_size)
 
     if self.attentional_decode:
-      self.action_decoder = ActionDecoder(
-          input_size, hidden_size, mask_actions)
+      self.action_decoder = ActionDecoder(input_size, hidden_size)
     else:
       self.action_decoder = torch.nn.ModuleList(
           [
