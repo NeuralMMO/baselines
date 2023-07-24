@@ -6,7 +6,7 @@ import time
 
 import clean_pufferl
 import pandas as pd
-from pufferlib.policy_store import DirectoryPolicyStore
+from pufferlib.policy_store import DirectoryPolicyStore, FilePolicyRecord, MemoryPolicyStore
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
@@ -38,13 +38,6 @@ if __name__ == "__main__":
       type=str,
       default=None,
       help="policy_store directory (default: runs)",
-  )
-  parser.add_argument(
-    "--eval.policy_paths",
-    dest="policy_paths",
-    type=str,
-    default=None,
-    help="comma seperated list of policies to evaluate (default: None)",
   )
   parser.add_argument(
       "--eval.num_rounds",
