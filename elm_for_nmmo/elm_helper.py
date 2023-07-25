@@ -14,8 +14,9 @@ import numpy as np
 from nmmo.lib.material import Harvestable
 from nmmo.task import constraint as c, task_spec as ts
 
-# required to run check_task_spec
+# required to run is_task_spec_valid. TODO: move it inside is_task_spec_valid
 # pylint: disable=wildcard-import,unused-import,unused-wildcard-import
+from nmmo.task.base_predicates import *
 
 ######################################################################
 # some sample phenotypes:
