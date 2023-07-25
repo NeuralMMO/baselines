@@ -10,7 +10,7 @@ from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
 from openelm.environments import ENVS_DICT
 
 from elm_for_nmmo.elm_helper import import_str, task_spec_to_str
-from elm_for_nmmo.nmmo_env import NMMOConfig, NMMOEnvironment
+from elm_for_nmmo.elm_env import NMMOConfig, NMMOEnvironment
 
 
 ######################################################################

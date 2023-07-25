@@ -8,7 +8,7 @@ from elm_for_nmmo.elm_helper import (
     is_task_spec_valid,
     task_spec_to_str,
 )
-from elm_for_nmmo.nmmo_env import NMMOTaskFn
+from elm_for_nmmo.elm_env import NMMOTaskFn
 from curriculum import custom_curriculum as cc
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
