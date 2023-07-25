@@ -2,7 +2,7 @@ import random
 import unittest
 
 import curriculum.manual_curriculum
-from curriculum.task_encoder import TaskEncoder
+from task_encoder import TaskEncoder
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 

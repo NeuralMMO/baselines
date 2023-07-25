@@ -6,8 +6,8 @@ from nmmo.task.task_spec import TaskSpec
 
 import argparse
 
-from curriculum.task_encoder import TaskEncoder
-from submission import custom_curriculum as cc
+from task_encoder import TaskEncoder
+from curriculum import custom_curriculum as cc
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 
