@@ -1,7 +1,6 @@
 import os
-from argparse import ArgumentParser, Namespace
+from argparse import Namespace
 from collections import defaultdict
-
 import nmmo
 import numpy as np
 import pufferlib
@@ -9,8 +8,7 @@ import pufferlib.emulation
 from nmmo.lib.log import EventCode
 from nmmo.render.replay_helper import FileReplayHelper
 
-
-# @daveey can we use nmmo.config.Default as a base to simplify?
+# @daveey can we use nmmo.config.Default as a base here?
 class Config(
     nmmo.config.Medium,
     nmmo.config.Terrain,
@@ -23,128 +21,122 @@ class Config(
     nmmo.config.Combat,
     nmmo.config.NPC,
 ):
-  '''Standard configuration for Neural MMO.'''
-  def __init__(self, args: Namespace):
-    super().__init__()
+    """Configuration for Neural MMO."""
 
-    self.PROVIDE_ACTION_TARGETS = True
-    self.PROVIDE_NOOP_ACTION_TARGET = True
-    self.MAP_FORCE_GENERATION = False
-    self.PLAYER_N = args.num_agents
-    self.HORIZON = args.max_episode_length
-    self.MAP_N = args.num_maps
-    self.PLAYER_DEATH_FOG = args.death_fog_tick
-    self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
-    self.MAP_CENTER = args.map_size
-    self.NPC_N = args.num_npcs
-    self.CURRICULUM_FILE_PATH = args.tasks_path
+    def __init__(self, args: Namespace):
+        super().__init__()
+
+        self.PROVIDE_ACTION_TARGETS = True
+        self.PROVIDE_NOOP_ACTION_TARGET = True
+        self.MAP_FORCE_GENERATION = False
+        self.PLAYER_N = args.num_agents
+        self.HORIZON = args.max_episode_length
+        self.MAP_N = args.num_maps
+        self.PLAYER_DEATH_FOG = args.death_fog_tick
+        self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
+        self.MAP_CENTER = args.map_size
+        self.NPC_N = args.num_npcs
+        self.CURRICULUM_FILE_PATH = args.tasks_path
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
-  def __init__(self, env, teams, team_id, replay_save_dir=None):
-    super().__init__(env, teams, team_id)
+    """Postprocessing actions and metrics of Neural MMO."""
 
-    self._num_replays_saved = 0
-    self._replay_save_dir = None
-    if replay_save_dir is not None and self.team_id == 1:
-      self._replay_save_dir = replay_save_dir
-    self._replay_helper = None
+    def __init__(self, env, teams, team_id, replay_save_dir=None):
+        super().__init__(env, teams, team_id)
+        self._num_replays_saved = 0
+        self._replay_save_dir = None
+        if replay_save_dir is not None and self.team_id == 1:
+            self._replay_save_dir = replay_save_dir
+        self._replay_helper = None
+        self._reset_episode_stats()
 
-    self._reset_episode_stats()
+    def reset(self, team_obs, dummy=False):
+        super().reset(team_obs)
+        if not dummy:
+            if self._replay_helper is None and self._replay_save_dir is not None:
+                self._replay_helper = FileReplayHelper()
+                self.env.realm.record_replay(self._replay_helper)
+            if self._replay_helper is not None:
+                self._replay_helper.reset()
 
-  def reset(self, team_obs, dummy=False):
-    super().reset(team_obs)
-    if not dummy:
-      if self._replay_helper is None and self._replay_save_dir is not None:
-        self._replay_helper = FileReplayHelper()
-        self.env.realm.record_replay(self._replay_helper)
-      if self._replay_helper is not None:
-        self._replay_helper.reset()
+        self._reset_episode_stats()
 
-    self._reset_episode_stats()
+    def _reset_episode_stats(self):
+        self._cod_attacked = 0
+        self._cod_starved = 0
+        self._cod_dehydrated = 0
+        self._task_completed = 0
 
-  def _reset_episode_stats(self):
-    self._cod_attacked = 0
-    self._cod_starved = 0
-    self._cod_dehydrated = 0
-    self._task_completed = 0
+    def rewards(self, team_rewards, team_dones, team_infos, step):
+        """Calculate team rewards and update stats."""
 
-  def rewards(self, team_rewards, team_dones, team_infos, step):
-    team_reward = sum(team_rewards.values())
-    team_info = {"stats": defaultdict(float)}
+        team_reward = sum(team_rewards.values())
+        team_info = {"stats": defaultdict(float)}
 
-    for agent_id in team_dones:
-      if team_dones[agent_id] is True:
-        agent = self.env.realm.players.dead_this_tick.get(
-            agent_id, self.env.realm.players.get(agent_id)
-        )
-        if agent is None:
-          continue
+        for agent_id in team_dones:
+            if team_dones[agent_id] is True:
+                agent = self.env.realm.players.dead_this_tick.get(
+                    agent_id, self.env.realm.players.get(agent_id)
+                )
+                if agent is None:
+                    continue
 
-        # check if the agent has completed the task
-        task = self.env.agent_task_map[agent_id][0]
-        if task.completed:
-          # NOTE: The default StayAlive task returns True after the first tick
-          self._task_completed += 1.0 / self.team_size
+                task = self.env.agent_task_map[agent_id][0]
+                if task.completed:
+                    self._task_completed += 1.0 / self.team_size
 
-        # log the cause of death for each dead agent
-        if agent.damage.val > 0:
-          self._cod_attacked += 1.0 / self.team_size
-        elif agent.food.val == 0:
-          self._cod_starved += 1.0 / self.team_size
-        elif agent.water.val == 0:
-          self._cod_dehydrated += 1.0 / self.team_size
+                if agent.damage.val > 0:
+                    self._cod_attacked += 1.0 / self.team_size
+                elif agent.food.val == 0:
+                    self._cod_starved += 1.0 / self.team_size
+                elif agent.water.val == 0:
+                    self._cod_dehydrated += 1.0 / self.team_size
 
-    return team_reward, team_info
+        return team_reward, team_info
 
-  def infos(self, team_reward, env_done, team_done, team_infos, step):
-    team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)
+    def infos(self, team_reward, env_done, team_done, team_infos, step):
+        """Update team infos and save replays."""
 
-    # record the stats when the episode ends
-    if env_done:
-      team_infos["stats"]["cod/attacked"] = self._cod_attacked
-      team_infos["stats"]["cod/starved"] = self._cod_starved
-      team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
-      team_infos["stats"]["task/completed"] = self._task_completed
+        team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)
 
-      achieved, performed, _ = process_event_log(
-          self.env.realm, self.teams[self.team_id]
-      )
-      for key, val in list(achieved.items()) + list(performed.items()):
-        team_infos["stats"][key] = float(val)
+        if env_done:
+            team_infos["stats"]["cod/attacked"] = self._cod_attacked
+            team_infos["stats"]["cod/starved"] = self._cod_starved
+            team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
+            team_infos["stats"]["task/completed"] = self._task_completed
 
-      if self._replay_save_dir is not None:
-        self._replay_helper.save(
-            os.path.join(
-              self._replay_save_dir, f"replay_{self._num_replays_saved}.json"), compress=False)
-        self._num_replays_saved += 1
+            achieved, performed, _ = process_event_log(
+                self.env.realm, self.teams[self.team_id]
+            )
+            for key, val in list(achieved.items()) + list(performed.items()):
+                team_infos["stats"][key] = float(val)
 
-    return team_infos
+            if self._replay_save_dir is not None:
+                self._replay_helper.save(
+                    os.path.join(
+                        self._replay_save_dir, f"replay_{self._num_replays_saved}.json"), compress=False)
+                self._num_replays_saved += 1
 
-  # def features(self, obs, step):
-  #   # for ob in obs.values():
-  #   #   ob["featurized"] = self._feature_extractor(obs)
-  #   return obs
-
-  # def actions(self, actions, step):
-  #   return self._feature_extractor.translate_actions(actions)
+        return team_infos
 
 
 def create_binding(args: Namespace):
-  return pufferlib.emulation.Binding(
-      env_cls=nmmo.Env,
-      default_args=[Config(args)],
-      env_name="Neural MMO",
-      suppress_env_prints=False,
-      emulate_const_horizon=args.max_episode_length,
-      postprocessor_cls=Postprocessor,
-      postprocessor_kwargs={
-        'replay_save_dir': args.replay_save_dir
-      },
-  )
+    """Create an environment binding."""
 
+    return pufferlib.emulation.Binding(
+        env_cls=nmmo.Env,
+        default_args=[Config(args)],
+        env_name="Neural MMO",
+        suppress_env_prints=False,
+        emulate_const_horizon=args.max_episode_length,
+        postprocessor_cls=Postprocessor,
+        postprocessor_kwargs={
+            'replay_save_dir': args.replay_save_dir
+        },
+    )
 
-#####################################################################
+# Event processing utilities for Neural MMO.
 
 INFO_KEY_TO_EVENT_CODE = {
     "event/" + evt.lower(): val
@@ -154,6 +146,7 @@ INFO_KEY_TO_EVENT_CODE = {
 
 
 def process_event_log(realm, agent_list):
+  """Process the event log and extract performed actions and achievements."""
   log = realm.event_log.get_data(agents=agent_list)
   attr_to_col = realm.event_log.attr_to_col
 

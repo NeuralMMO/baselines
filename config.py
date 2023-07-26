@@ -13,10 +13,12 @@ class Config:
     checkpoint_interval = 10  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/nmmo_train"  # Directory for runs
-    policy_store_dir = None  # Policy store directory
+    policy_store_dir = 'pool' # Policy store directory
     use_serial_vecenv = False  # Use serial vecenv implementation
     learner_weight = 1.0  # Weight of learner policy
     max_opponent_policies = 0  # Maximum number of opponent policies to train against
+    eval_num_policies = 2 # Number of policies to use for evaluation
+    eval_num_rounds = 1 # Number of rounds to use for evaluation
     wandb_project = None  # WandB project name
     wandb_entity = None  # WandB entity name
 

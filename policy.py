@@ -1,10 +1,7 @@
 import argparse
-import numpy as np
-from typing import Dict, Optional, Tuple
-
 import torch
-from torch import Tensor, nn
 import torch.nn.functional as F
+from typing import Dict
 
 import pufferlib
 import pufferlib.emulation
@@ -13,9 +10,7 @@ import pufferlib.models
 import nmmo
 from nmmo.entity.entity import EntityState
 
-
 EntityId = EntityState.State.attr_name_to_col["id"]
-
 
 def str_to_bool(s):
   if s.lower() in ("yes", "true", "t", "y", "1"):
@@ -24,17 +19,34 @@ def str_to_bool(s):
     return False
   raise argparse.ArgumentTypeError("Boolean value expected.")
 
-
-
-class NmmoPolicy(pufferlib.models.Policy):
-  def __init__(self, binding, policy_args: Dict):
+class Random(pufferlib.models.Policy):
+  '''A random policy that resets weights on every call'''
+  def __init__(self, binding):
     super().__init__(binding)
-    """Simple custom PyTorch policy subclassing the pufferlib BasePolicy
+    self.decoders = torch.nn.ModuleList(
+        [torch.nn.Linear(1, n) for n in binding.single_action_space.nvec]
+    )
 
-    This requires only that you structure your network as an observation encoder,
-    an action decoder, and a critic function. If you use our LSTM support, it will
-    be added between the encoder and the decoder.
-    """
+  def encode_observations(self, env_outputs):
+    return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
+
+  def decode_actions(self, hidden, lookup, concat=True):
+    torch.nn.init.xavier_uniform_(hidden)
+    actions = [dec(hidden) for dec in self.decoders]
+    return torch.cat(actions, dim=-1) if concat else actions
+
+  def critic(self, hidden):
+    return torch.zeros((hidden.shape[0], 1)).to(hidden.device)
+
+  @staticmethod
+  def create_policy():
+    return pufferlib.frameworks.cleanrl.make_policy(
+        Random, recurrent_args=[1, 1], recurrent_kwargs={"num_layers": 0}
+    )
+
+
+class Baseline(pufferlib.models.Policy):
+  def __init__(self, binding, policy_args: Dict):
     super().__init__(binding)
     self.raw_single_observation_space = binding.raw_single_observation_space
     input_size = policy_args.get("input_size", 256)
@@ -44,15 +56,26 @@ class NmmoPolicy(pufferlib.models.Policy):
 
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
-
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
-
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
     self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
+
+  @staticmethod
+  def create_policy(binding: pufferlib.emulation.Binding, args: Dict):
+    args["input_size"] = 128
+    args["hidden_size"] = 256 if args["num_lstm_layers"] else 128
+
+    return pufferlib.frameworks.cleanrl.make_policy(
+        Baseline,
+        recurrent_args=[args["input_size"], args["hidden_size"]]
+        if args["num_lstm_layers"]
+        else [],
+        recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
+    )(binding, args)
 
   def critic(self, hidden):
     return self.value_head(hidden)
@@ -64,10 +87,10 @@ class NmmoPolicy(pufferlib.models.Policy):
         env_outputs["Entity"], env_outputs["AgentId"][:, 0]
     )
 
-    inventory_embeddings = self.item_encoder(env_outputs["Inventory"])
-    market_embeddings = self.item_encoder(env_outputs["Market"])
+    item_embeddings = self.item_encoder(env_outputs["Inventory"])
+    inventory = self.inventory_encoder(item_embeddings)
 
-    inventory = self.inventory_encoder(inventory_embeddings)
+    market_embeddings = self.item_encoder(env_outputs["Market"])
     market = self.market_encoder(market_embeddings)
 
     task = self.task_encoder(env_outputs["Task"])
@@ -77,33 +100,17 @@ class NmmoPolicy(pufferlib.models.Policy):
 
     return obs, (
         player_embeddings,
-        inventory_embeddings,
+        item_embeddings,
         market_embeddings,
         env_outputs["ActionTargets"],
     )
 
   def decode_actions(self, hidden, lookup, concat=True):
     actions = self.action_decoder(hidden, lookup)
-
-    if concat:
-      return torch.cat(actions, dim=-1)
-    return actions
+    return torch.cat(actions, dim=-1) if concat else actions
 
   def policy_args(self):
     return self._policy_args
-
-  @staticmethod
-  def create_policy(binding: pufferlib.emulation.Binding, args: Dict):
-    args["input_size"] = 128
-    args["hidden_size"] = 256 if args["num_lstm_layers"] else 128
-
-    return pufferlib.frameworks.cleanrl.make_policy(
-        NmmoPolicy,
-        recurrent_args=[args["input_size"], args["hidden_size"]]
-        if args["num_lstm_layers"]
-        else [],
-        recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
-    )(binding, args)
 
 
 class TileEncoder(torch.nn.Module):
@@ -130,13 +137,10 @@ class TileEncoder(torch.nn.Module):
         .view(agents, features * embed, 15, 15)
     )
 
-    tile = self.tile_conv_1(tile)
-    tile = F.relu(tile)
-    tile = self.tile_conv_2(tile)
-    tile = F.relu(tile)
+    tile = F.relu(self.tile_conv_1(tile))
+    tile = F.relu(self.tile_conv_2(tile))
     tile = tile.contiguous().view(agents, -1)
-    tile = self.tile_fc(tile)
-    tile = F.relu(tile)
+    tile = F.relu(self.tile_fc(tile))
 
     return tile
 
@@ -339,5 +343,3 @@ class ActionDecoder(torch.nn.Module):
       actions.append(action)
 
     return actions
-
-

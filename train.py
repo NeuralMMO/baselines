@@ -3,7 +3,6 @@ import logging
 import environment
 import policy
 import config
-from elm_for_nmmo.elm_curriculum_gen import OpenELMTaskGenerator, SimpleTaskGenerator
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 from pufferlib.policy_store import DirectoryPolicyStore
@@ -32,7 +31,7 @@ def setup_env(args):
     if args.policy_store_dir is not None:
         logging.info("Using policy store from %s", args.policy_store_dir)
         policy_store = DirectoryPolicyStore(args.policy_store_dir)
-    learner_policy = policy.NmmoPolicy.create_policy(binding, args.__dict__)
+    learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
     trainer = clean_pufferl.CleanPuffeRL(
         binding=binding,
         agent=learner_policy,
@@ -65,6 +64,7 @@ def reinforcement_learning_track(trainer, args):
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):
+    from elm_for_nmmo.elm_curriculum_gen import OpenELMTaskGenerator, SimpleTaskGenerator
     task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT) if use_elm else SimpleTaskGenerator(CURRICULUM.task_spec)
     train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
     task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
@@ -89,9 +89,9 @@ if __name__ == "__main__":
     trainer = setup_env(args)
 
     # Uncomment the following line to run reinforcement learning track
-    #reinforcement_learning_track(trainer, args)
+    reinforcement_learning_track(trainer, args)
 
     # Uncomment the following line to run curriculum generation track
-    curriculum_generation_track(trainer, args, use_elm=True)
+    #curriculum_generation_track(trainer, args, use_elm=True)
 
     trainer.close()
