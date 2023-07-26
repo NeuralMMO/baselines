@@ -64,8 +64,8 @@ def reinforcement_learning_track(trainer, args):
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):
-    from elm_for_nmmo.elm_curriculum_gen import OpenELMTaskGenerator, SimpleTaskGenerator
-    task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT) if use_elm else SimpleTaskGenerator(CURRICULUM.task_spec)
+    from elm import OpenELMTaskGenerator, RandomTaskGenerator
+    task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT) if use_elm else RandomTaskGenerator(CURRICULUM.task_spec)
     train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
     task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
     task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)

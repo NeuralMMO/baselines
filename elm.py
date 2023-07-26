@@ -3,6 +3,7 @@ import math
 import multiprocessing as mp
 import re
 import sys
+import ast
 import time
 import random
 from collections import Counter
@@ -11,22 +12,21 @@ from typing import List, Optional, Dict, Union
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 import nmmo
 from nmmo.lib.material import Harvestable
 from nmmo.task import constraint as c, task_spec as ts
+import nmmo.task.base_predicates
 from nmmo.task.base_predicates import *
 
-import numpy as np
-import re
-import ast
-
 from openelm import ELM
-from openelm.environments import Genotype
+from openelm.environments.base import Genotype, Phenotype
 from openelm.configs import EnvConfig
 from openelm.environments import BaseEnvironment, Genotype
-from openelm.mutation_model import DiffModel
+from openelm.mutation_model import MutationModel, PromptModel
 from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
-from openelm.environments import ENVS_DICT
+#from openelm.environments import ENVS_DICT
 
 
 # used in OpenELMTaskGenerator: see self.config.env.impr = import_str["short_import"]
@@ -105,13 +105,14 @@ def extract_task_fn(result_str, fn_name):
     Returns:
         The source code of the function as a string.
     """
-    fn_str = [
-        line
-        for line in reversed(result_str.split("\n"))
-        if line.startswith(f"def {fn_name}(")
-    ]
-    return "\n".join(reversed(fn_str))
-
+    split = result_str.split("\n")
+    fn_str = []
+    for line in split[::-1]:
+      if line.startswith(f"def {fn_name}("):
+        fn_str.append(line)
+        break
+      fn_str.append(line)
+    return "\n".join(fn_str[::-1])
 
 def sample_parameter(key, type_hint):
     """
@@ -223,6 +224,58 @@ def is_task_spec_valid(spec_list: List[ts.TaskSpec], timeout=15) -> bool:
     # Return True if at least one task ran successfully.
     return num_success > 0
 
+def generate_task_spec(result_str, fn_name, num_sample=3):
+  """
+  Generates a list of TaskSpec objects from the task function string provided during the class instantiation.
+  Each TaskSpec is an instantiation of the task function with sampled parameters.
+
+  Args:
+      program_str: The string representation of the task function.
+      fn_name: The name of the task function.
+      num_sample: The number of TaskSpecs to generate. Defaults to None, which will generate a TaskSpec for each valid
+      function parameter set.
+
+  Returns:
+      A list of valid TaskSpec objects. If the task function string is invalid or no valid TaskSpecs can be generated,
+      an empty list is returned.
+  """
+  task_spec = []
+  task_fn_str = extract_task_fn(result_str, fn_name)
+  import_str = (
+      "from nmmo.task.game_state import GameState\n"
+      + "from nmmo.task.group import Group\n"
+      + "from nmmo.task.base_predicates import *\n\n"
+  )
+
+  locals_dict = {}
+  try:
+    # NOTE: this is a security vulenerability
+    # TODO: make this secure
+    exec(import_str + task_fn_str, globals(), locals_dict)
+  except:
+    # return empty task spec for invalid function
+    print("Invalid python function generated ...")
+    return task_spec
+  task_fn = locals_dict[fn_name]
+  fn_params = inspect.signature(task_fn).parameters
+
+  included_kwargs = set()
+  for _ in range(num_sample):
+    task_fn_kwargs = {}
+    for key, param in fn_params.items():
+      if key in ["gs", "subject"]:
+        continue
+      type_hint = param.annotation.__name__
+      task_fn_kwargs[key] = sample_parameter(key, type_hint)
+    args_vals = tuple(task_fn_kwargs.values())
+    if args_vals not in included_kwargs:
+      task_spec.append(
+          ts.TaskSpec(eval_fn=task_fn, eval_fn_kwargs=task_fn_kwargs)
+      )
+      included_kwargs.add(args_vals)
+
+  return task_spec
+
 
 class NMMOTaskFn(Genotype):
     """A task in the NMMO environment."""
@@ -239,8 +292,9 @@ class NMMOTaskFn(Genotype):
         self._fitness = -np.inf
         self._fn_name = fn_name
         self.program_str = extract_task_fn(program_str, self._fn_name)
-        self.valid = is_task_spec_valid(self.program_str)
-        self.morphology = {}
+        self.valid = is_task_spec_valid(
+            generate_task_spec(program_str, self._fn_name)
+        )
 
         self.PREBUILT_TASK_FN = {
             name: fn
@@ -250,6 +304,7 @@ class NMMOTaskFn(Genotype):
             and not name.startswith("_")
         }
 
+        self.morphology = {}
         if self.valid:
             code_only = re.sub(r" +#.*\n", "", self.program_str)  # Removes comments.
             self.morphology["predicates"] = self._count_predicates(code_only)
@@ -301,37 +356,12 @@ class NMMOTaskFn(Genotype):
         """
         if not self.valid:
             return []
-
         task_spec = []
-        import_str = (
-            "from nmmo.task.game_state import GameState\n"
-            + "from nmmo.task.group import Group\n"
-            + "from nmmo.task.base_predicates import *\n\n"
-        )
-
-        try:
-            exec(import_str + self.program_str, globals(), {})
-            task_fn = globals()[self._fn_name]
-            task_specs_generated = [
-                ts.TaskSpec(
-                    eval_fn=task_fn,
-                    eval_fn_kwargs={
-                        key: sample_parameter(key, param.annotation.__name__)
-                        for key, param in inspect.signature(task_fn).parameters.items()
-                        if key not in ["gs", "subject"]
-                    },
-                )
-                for _ in range(num_sample or 0)
-            ]
-
-            # Only retain valid TaskSpecs
-            task_spec = [
-                spec for spec in task_specs_generated if is_task_spec_valid(spec)
-            ]
-
-        except Exception as e:
-            print(f"Invalid python function generated. Error: {str(e)}")
-
+        for single_spec in generate_task_spec(
+            self.program_str, self._fn_name, num_sample
+        ):
+            if is_task_spec_valid([single_spec]):
+                task_spec.append(single_spec)
         return task_spec
 
     @property
@@ -343,6 +373,18 @@ class NMMOTaskFn(Genotype):
             The fitness score of the task.
         """
         return self._fitness
+
+    def to_phenotype(self) -> Optional[Phenotype]:
+        if self.valid:
+            return np.array(
+                [
+                    self.morphology["predicates"],
+                    self.morphology["length"],
+                    self.morphology["lines"],
+                ]
+            ).astype(int)
+        else:
+            return None
 
 
 class RandomTaskGenerator:
@@ -364,7 +406,6 @@ class RandomTaskGenerator:
         # CHECK ME: do we need to provide a random task generator?
         #   providing a manually curated task could do
         return random.choices(self.task_spec, k=num_tasks)
-
 
 class OpenELMTaskGenerator(RandomTaskGenerator):
     """Container class to include all the configs and generate tasks"""
@@ -400,9 +441,8 @@ class OpenELMTaskGenerator(RandomTaskGenerator):
         self.config.model.batch_size = batch_size
         self.config.model.model_path = checkpoint
 
-        ENVS_DICT["NMMO"] = NMMOEnvironment
-
-    def task_spec_to_str(self, task_spec: List[ts.TaskSpec]):
+    @staticmethod
+    def task_spec_to_str(task_spec: List[ts.TaskSpec]):
         """
         Converts a list of TaskSpec objects to a string of function source code.
 
@@ -427,7 +467,7 @@ class OpenELMTaskGenerator(RandomTaskGenerator):
 
         # NOTE: evolve task to generate a function, then generate parameters to deliver num_tasks
         self.config.env.init_prompt = self.task_spec_to_str(task_spec)
-        elm = ELM(self.config)
+        elm = ELM(self.config, env=NMMOEnvironment)
 
         best_task = None
         while best_task is None:
@@ -444,6 +484,7 @@ class NMMOConfig(EnvConfig):
     """Configuration class for the NMMO environment."""
 
     env_name: str = "NMMO"
+    prebuilt_task_module = nmmo.task.base_predicates
 
     # Determines the behavior space to improve diversity.
     behavior_space: List[List[float]] = field(
@@ -464,13 +505,15 @@ class NMMOConfig(EnvConfig):
 class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
     """The NMMO environment."""
 
-    def __init__(self, config: NMMOConfig, mutation_model: DiffModel) -> None:
+    def __init__(self, config: NMMOConfig, mutation_model: MutationModel) -> None:
         self.config: NMMOConfig = config
         self.batch_size = self.config.batch_size
-        self.mutation_model: DiffModel = mutation_model
+        self.mutation_model: MutationModel = mutation_model
         self.genotype_space = np.array(self.config.behavior_space).T
         self.gen_fn_name = config.gen_fn_name
         self.num_sample_spec = config.num_sample_spec
+        self.impr = config.impr
+        self.prebuilt_task_module = config.prebuilt_task_module
 
     def construct_prompt(
         self, code_batch: Optional[Union[List[str], str]] = None
@@ -505,7 +548,7 @@ class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
         eval_fn_batch = self._generate_task_fn(code_batch)
         task_list = []
         for gen_str in eval_fn_batch:
-            gene = NMMOTaskFn(gen_str, self.gen_fn_name)
+            gene = NMMOTaskFn(gen_str, self.gen_fn_name, self.prebuilt_task_module)
             if gene.valid:
                 task_list.append(gene)
         return task_list
@@ -531,6 +574,13 @@ class NMMOEnvironment(BaseEnvironment[NMMOTaskFn]):
             return x.evaluate()
         return -np.inf
 
+    def get_rng_state(self) -> Optional[np.random._generator.Generator]:
+        #warnings.warn("WARNING: rng state not used in this environment")
+        return None
+
+    def set_rng_state(self, rng_state: Optional[np.random._generator.Generator]):
+        #warnings.warn("WARNING: rng state not used in this environment")
+        pass
 
 def entropy(task):
     """
