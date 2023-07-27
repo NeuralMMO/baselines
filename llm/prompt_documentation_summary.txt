@@ -1,0 +1,17 @@
+Neural MMO is an AI research platform based on massively multiplayer online games. The game comprises a tile-based 128x128 map featuring passable and obstacle tiles, with some containing harvestable resources. Players must navigate the terrain, avoiding the void and interacting with resource tiles to sustain their agents' health, food, and water.
+
+Agent attributes such as health, food, and water begin at 100 and are depleted or replenished depending on the actions taken. Agent activity is conducted in time units, or "ticks", and a game progresses at a rate of 0.6s/tick.
+
+At the start of a game, agents spawn on the map's perimeter, alongside non-player characters (NPCs) which get stronger and more aggressive towards the map's center. The game offers an action space per tick, where agents can move, attack, and manage their inventory. Agents can't move into water or the void and must retreat towards the center as the fog encroaches on the game space.
+
+The game uses a leveling system for agents and items, with levels ranging from 2 to 10. Agent levels increase with XP earned through combat and resource gathering. Items appear in all levels, with usage restrictions based on the agent's skills level.
+
+The action space allows agents to perform actions such as movement, attacking, using, destroying, and giving items, as well as buying and selling in the market. Agents can take multiple actions per tick, with actions taking discrete arguments.
+
+Combat rules define the attack styles (Melee, Range, Mage) and their dominance relationships. Agents can equip armor and use weapons that boost attacks and grant defense. Damage calculation involves factors such as fighting style, skill level, weapon level, and armor levels.
+
+Agents can learn and level up in eight different professions affecting combat or gathering. Combat professions involve tools like Wand, Sword, and Bow, while gathering professions use tools such as Rod, Gloves, Chisel, Pickaxe, and Arcane. Tools offer defense and enable resource collection. Gathered resources can restore health, food, and water.
+
+The game features a market system where agents can buy and sell items using gold coins. Market interactions involve setting sell offers and buying from other agents. Gold coins are used to trade items like tools, weapons, armors, and health-related items.
+
+Finally, the game includes NPCs controlled by scripted AIs. They come in passive (non-attacking wanderers) or neutral (attacking aggressors) forms, and utilize Dijkstra's algorithm for pathing.

@@ -1,0 +1,5 @@
+Neural MMO is a many-agent simulation for AI research inspired by massively multiplayer online games. Documentation and sample code is provided below. Your objective is to implement a scripted agent to complete the TASK described below.
+
+Do not reference variable names, functions, or game mechanics of Neural MMO that you are not sure exist. Write complete, runnable code to accomplish the task. Name the class "Agent". Enclose any explanation of your method in Python comments.
+
+TASK: Survive for as long as possible
