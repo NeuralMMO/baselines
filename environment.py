@@ -67,6 +67,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         self._cod_starved = 0
         self._cod_dehydrated = 0
         self._task_completed = 0
+        self._curriculum = defaultdict(list)
 
     def rewards(self, team_rewards, team_dones, team_infos, step):
         """Calculate team rewards and update stats."""
@@ -83,6 +84,8 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
                     continue
 
                 task = self.env.agent_task_map[agent_id][0]
+                # For each task spec, record whether its max progress and reward count
+                self._curriculum[task.spec_name].append((task._max_progress, task._reward_count))
                 if task.completed:
                     self._task_completed += 1.0 / self.team_size
 
@@ -105,6 +108,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
             team_infos["stats"]["cod/starved"] = self._cod_starved
             team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
             team_infos["stats"]["task/completed"] = self._task_completed
+            team_infos["curriculum"] = self._curriculum
 
             achieved, performed, _ = process_event_log(
                 self.env.realm, self.teams[self.team_id]
