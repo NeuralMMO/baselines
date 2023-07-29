@@ -16,7 +16,7 @@ from curriculum_generation.task_encoder import TaskEncoder
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 AGENT_MODEL_PATH = ""
-NUM_TRAIN_TASKS = 30
+NUM_SEED_TASKS = 30
 NUM_TEST_TASKS = 5
 NUM_NEW_TASKS = 5
 EPOCHS_PER_ELM_UPDATE = 10
@@ -69,33 +69,33 @@ def reinforcement_learning_track(trainer, args):
 def curriculum_generation_track(trainer, args, use_elm=True):
     if use_elm:
         from curriculum_generation.elm import OpenELMTaskGenerator
+        task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
         task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT)
+        # NOTE: adjust NUM_SEED_TASKS to fit your gpu
+        # You may also want to try different seeds to generate diverse tasks
+        cand_task_spec = []
+        for _ in range(3): # may repeat task generation multiple times with different seed tasks
+          seed_task_spec = task_generator.sample_tasks(NUM_SEED_TASKS)
+          cand_task_spec += seed_task_spec + task_generator.evolve_tasks(seed_task_spec, NUM_NEW_TASKS, debug=DEBUG)
+        # Select the "good" training tasks based on the evaluation
+        task_encoder.get_task_embedding(cand_task_spec, save_to_file=CURRICULUM_FILE_PATH)
+
+        # @daveey: We need a baseline checkpoint for this
+        #load_agent_model(AGENT_MODEL_PATH)
+
+        # TODO: Task selection based on evaluation
+        trainer.evaluate()
+        train_task_spec = cand_task_spec
     else:
-        from curriculum_generation.custom_curriculum import RandomTaskGenerator
-        task_generator = RandomTaskGenerator(CURRICULUM.task_spec)
+        # using the manually curated curriculum
+        from curriculum_generation import custom_curriculum
+        task_encoder = TaskEncoder(LLM_CHECKPOINT, custom_curriculum, batch_size=2)
+        train_task_spec = custom_curriculum.task_spec
 
-    train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
-    task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
+    # Use the train_task_spec to train agents
     task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
-    # @daveey: We need a baseline checkpoint for this
-    #load_agent_model(AGENT_MODEL_PATH)
-    for epoch in range(30):
-        if use_elm and epoch % EPOCHS_PER_ELM_UPDATE == 9:
-            print("eval fn evol!, epoch:", epoch)
-            new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS, debug=DEBUG)
-            train_task_spec += new_task_spec
-            task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
-
-        # TODO: Incorporate feedback from trainer.evaluate
-        # between task evolution epochs
-
-    trainer.evaluate()
-    trainer.train(
-        update_epochs=args.ppo_update_epochs,
-        bptt_horizon=args.bptt_horizon,
-        batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
-    )
- 
+    task_encoder.close()
+    reinforcement_learning_track(trainer, args)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -104,6 +104,7 @@ if __name__ == "__main__":
     # You can either edit the defaults in config.py or set args
     # from the commandline.
     args = config.create_config(config.LocalConfig)
+    args.tasks_path = CURRICULUM_FILE_PATH # NOTE: this file must exist
     trainer = setup_env(args)
 
     # Uncomment the following line to run reinforcement learning track

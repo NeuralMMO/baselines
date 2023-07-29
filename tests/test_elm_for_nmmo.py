@@ -5,8 +5,8 @@ from openelm.mutation_model import PromptModel
 
 import nmmo.task.base_predicates
 
-import elm
-from curriculum import custom_curriculum as cc
+import curriculum_generation.elm as elm
+from curriculum_generation import custom_curriculum as cc
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 NUM_TRAIN_TASKS = 5
@@ -22,8 +22,8 @@ class TestElmForNmmo(unittest.TestCase):
   def test_task_generator_api(self):
     # pylint: disable=unused-variable
     task_generator = elm.OpenELMTaskGenerator(cc.task_spec, LLM_CHECKPOINT)
-    train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
-    eval_task_spec = task_generator.generate_tasks(NUM_TEST_TASKS)
+    train_task_spec = task_generator.sample_tasks(NUM_TRAIN_TASKS)
+    eval_task_spec = task_generator.sample_tasks(NUM_TEST_TASKS)
 
     # to actually run elm, remove debug=True
     new_task_spec = task_generator.evolve_tasks(
@@ -88,7 +88,7 @@ def training_task(gs, subject):
     # pylint: disable=protected-access,bad-builtin
     # NOTE: this is to test different elm prompt
     task_generator = elm.OpenELMTaskGenerator(cc.task_spec, LLM_CHECKPOINT)
-    train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
+    train_task_spec = task_generator.sample_tasks(NUM_TRAIN_TASKS)
 
     elm_config = task_generator.config
     # NOTE: if init_prompt is long, it will cause CUDA out of memory error
