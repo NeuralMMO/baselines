@@ -18,19 +18,22 @@ import inspect
 
 
 def load_data_from_pickle(file_path):
-    with open(file_path, 'rb') as pickle_file:
-        data = pickle.load(pickle_file)
+    with open(file_path, 'rb') as json_file:
+        data = json_file.read().splitlines()
+
 
     eval_fn_array = []
     embedding_array = []
     for d in data:
-        func_name = d[1].__name__
-        func_args = d[2]
-        func_src = inspect.getsource(d[1])
-        embeddings = d[3]['embedding'].tolist()
+        d = json.loads(d)
+        func_name = d['eval_fn']
+        func_args = d['eval_kwargs']
+        #func_src = inspect.getsource(d[1])
+        embeddings = d['embedding']
 
         # Combine function name, args and source code
-        eval_fn = f"{func_name} {func_args}\n\n{func_src}"
+        #eval_fn = f"{func_name} {func_args}\n\n{func_src}"
+        eval_fn = f"{func_name} {func_args}\n\n"
         
         eval_fn_array.append(eval_fn)
         embedding_array.append(embeddings)
@@ -81,7 +84,7 @@ class TaskEmbeddingVisualizer:
         return [trace]
 
 # usage
-visualizer = TaskEmbeddingVisualizer("pickled_task_with_embs.pkl")
+visualizer = TaskEmbeddingVisualizer("task_embedding_file.json")
 traces = visualizer.visualize(dims=3)
 
 # Create Dash app

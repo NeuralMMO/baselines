@@ -1,15 +1,9 @@
-nmmo
-psutil
-pufferlib
-ray
-stable_baselines3
-tensorboard
-wandb
-torchtyping
-pandas
-traitlets
-
-# for TaskEncoder and OpenELMTaskGenerator
-transformers
-accelerate
-openelm
+accelerate==0.21.0
+pandas==2.0.3
+psutil==5.9.3
+ray==2.6.1
+tensorboard==2.11.2
+torchtyping==0.1.4
+traitlets==5.9.0
+transformers==4.31.0
+wandb==0.13.7

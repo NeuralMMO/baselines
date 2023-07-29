@@ -24,9 +24,8 @@ from openelm import ELM
 from openelm.environments.base import Genotype, Phenotype
 from openelm.configs import EnvConfig
 from openelm.environments import BaseEnvironment, Genotype
-from openelm.mutation_model import MutationModel, PromptModel
+from openelm.mutation_model import MutationModel
 from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
-#from openelm.environments import ENVS_DICT
 
 
 # used in OpenELMTaskGenerator: see self.config.env.impr = import_str["short_import"]

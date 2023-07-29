@@ -1,15 +1,18 @@
 import os
 import logging
-import environment
-import policy
-import config
+
 from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 from pufferlib.policy_store import DirectoryPolicyStore
 import clean_pufferl
 
-import curriculum.manual_curriculum
-from task_encoder import TaskEncoder
+import environment
+
+from reinforcement_learning import policy
+from reinforcement_learning import config
+
+from curriculum_generation import manual_curriculum
+from curriculum_generation.task_encoder import TaskEncoder
 
 LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
 AGENT_MODEL_PATH = ""
@@ -18,8 +21,8 @@ NUM_TEST_TASKS = 5
 NUM_NEW_TASKS = 5
 EPOCHS_PER_ELM_UPDATE = 10
 DEBUG = True
-CURRICULUM = curriculum.manual_curriculum
-CURRICULUM_FILE_PATH = "curriculum/curriculum_with_embedding.pkl"
+CURRICULUM = manual_curriculum
+CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
 
 def setup_env(args):
     run_dir = os.path.join(args.runs_dir, args.run_name)
@@ -64,8 +67,13 @@ def reinforcement_learning_track(trainer, args):
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):
-    from elm import OpenELMTaskGenerator, RandomTaskGenerator
-    task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT) if use_elm else RandomTaskGenerator(CURRICULUM.task_spec)
+    if use_elm:
+        from curriculum_generation.elm import OpenELMTaskGenerator
+        task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT)
+    else:
+        from curriculum_generation.custom_curriculum import RandomTaskGenerator
+        task_generator = RandomTaskGenerator(CURRICULUM.task_spec)
+
     train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
     task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
     task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
@@ -77,7 +85,17 @@ def curriculum_generation_track(trainer, args, use_elm=True):
             new_task_spec = task_generator.evolve_tasks(train_task_spec, NUM_NEW_TASKS, debug=DEBUG)
             train_task_spec += new_task_spec
             task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
-        #trainer.train() # xcxc
+
+        # TODO: Incorporate feedback from trainer.evaluate
+        # between task evolution epochs
+
+    trainer.evaluate()
+    trainer.train(
+        update_epochs=args.ppo_update_epochs,
+        bptt_horizon=args.bptt_horizon,
+        batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
+    )
+ 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -89,9 +107,9 @@ if __name__ == "__main__":
     trainer = setup_env(args)
 
     # Uncomment the following line to run reinforcement learning track
-    reinforcement_learning_track(trainer, args)
+    #reinforcement_learning_track(trainer, args)
 
     # Uncomment the following line to run curriculum generation track
-    #curriculum_generation_track(trainer, args, use_elm=True)
+    curriculum_generation_track(trainer, args, use_elm=True)
 
     trainer.close()

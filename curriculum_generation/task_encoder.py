@@ -126,3 +126,18 @@ class TaskEncoder:
             os.replace(self.temp_file_path, save_to_file)
 
         return task_spec
+
+
+if __name__ == '__main__':
+    import time
+
+    LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
+    from submission import manual_curriculum as cc
+
+
+    task_encoder = TaskEncoder(LLM_CHECKPOINT, cc, 3)
+    s = time.time()
+    # Make this run
+    train_task_spec_with_embedding = task_encoder.get_task_embedding(train_task_spec, save_to_file="with_batching.json")
+    e = time.time()
+    print("Time taken ", e-s)
