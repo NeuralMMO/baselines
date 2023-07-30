@@ -52,7 +52,7 @@ class LocalConfig(Config):
     # A smaller config for local testing that won't OOM your machine
     num_envs = 1  # Number of environments to use for training
     num_buffers = 1  # Number of buffers to use for training
-    rollout_batch_size = 2**12  # Number of steps to rollout
+    #rollout_batch_size = 2**12  # Number of steps to rollout
 
 
 def create_config(config_cls):

@@ -27,7 +27,7 @@ from openelm.environments import BaseEnvironment, Genotype
 from openelm.mutation_model import MutationModel
 from openelm.configs import ELMConfig, MAPElitesConfig, PromptModelConfig
 
-from curriculum_generation.task_sampler import RandomTaskSampler
+from curriculum_generation.task_sampler import LearnableTaskSampler
 
 
 # used in OpenELMTaskGenerator: see self.config.env.impr = import_str["short_import"]
@@ -388,7 +388,7 @@ class NMMOTaskFn(Genotype):
             return None
 
 
-class OpenELMTaskGenerator(RandomTaskSampler):
+class OpenELMTaskGenerator(LearnableTaskSampler):
     """Container class to include all the configs and generate tasks"""
 
     def __init__(
@@ -439,7 +439,7 @@ class OpenELMTaskGenerator(RandomTaskSampler):
 
     def evolve_tasks(
         self, task_spec: List[ts.TaskSpec], num_tasks, steps=10, debug=False
-    ):
+    ) -> List[ts.TaskSpec]:
         """Evolve the given task specs for the given number of steps
         and return the num_tasks task specs
         """
@@ -455,6 +455,7 @@ class OpenELMTaskGenerator(RandomTaskSampler):
             elm.run(init_steps=2, total_steps=steps)
             # for now, just using the maximum fitness genome
             # TODO: we may want to sample best ones across the MAP (see MAP-Elites)
+            # TODO: vary the name of generated functions. Now, it's all training_task (self.gen_fn_name)
             best_task = elm.qd_algorithm.current_max_genome
 
         return best_task.generate_task_spec(num_tasks)
