@@ -127,17 +127,27 @@ class TaskEncoder:
 
         return task_spec
 
+    def close(self):
+        del self.model
+        del self.tokenizer
+        torch.cuda.empty_cache()
+        del self
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import time
+    import curriculum_generation.manual_curriculum as curriculum
 
     LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
-    from submission import manual_curriculum as cc
+    CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
 
-
-    task_encoder = TaskEncoder(LLM_CHECKPOINT, cc, 3)
+    task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum, batch_size=3)
     s = time.time()
-    # Make this run
-    train_task_spec_with_embedding = task_encoder.get_task_embedding(train_task_spec, save_to_file="with_batching.json")
+
+    task_spec_with_embedding = task_encoder.get_task_embedding(
+        curriculum.task_spec,
+        save_to_file=CURRICULUM_FILE_PATH
+    )
+
     e = time.time()
     print("Time taken ", e-s)
