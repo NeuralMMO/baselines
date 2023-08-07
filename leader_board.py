@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from dataclasses import dataclass
 
 import numpy as np
@@ -45,6 +45,38 @@ class TeamResult:
 
     # system-level
     n_timeout: Optional[int] = 0
+
+    @classmethod
+    def names(cls) -> List[str]:
+        return [
+            "total_score",
+            "player_kill",
+            "max_level",
+            "max_damage",
+            "max_distance",
+            "eat_food_count",
+            "drink_water_count",
+            "attack_count",
+            "item_equip_count",
+            "item_harvest_count",
+            "item_list_count",
+            "item_buy_count",
+            "time_alive",
+            "gold_owned",
+            "completed_task_count",
+            "damage_received",
+            "damage_inflicted",
+            "ration_consumed",
+            "potion_consumed",
+            "melee_level",
+            "range_level",
+            "mage_level",
+            "fishing_level",
+            "herbalism_level",
+            "prospecting_level",
+            "carving_level",
+            "alchemy_level",
+        ]
 
 def get_team_result(realm: Realm, teams, team_id):
     achieved, performed, event_cnt = process_event_log(realm, teams[team_id])
