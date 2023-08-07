@@ -1,12 +1,14 @@
 import os
 from argparse import Namespace
 from collections import defaultdict
-import nmmo
-import numpy as np
+
 import pufferlib
 import pufferlib.emulation
-from nmmo.lib.log import EventCode
+
+import nmmo
 from nmmo.render.replay_helper import FileReplayHelper
+
+from leader_board import get_team_result
 
 # @daveey can we use nmmo.config.Default as a base here?
 class Config(
@@ -69,6 +71,53 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
         self._task_completed = 0
         self._curriculum = defaultdict(list)
 
+        # for team results
+        # CHECK ME: perhaps create a stat wrapper for putting all stats in one place?
+        self._time_alive = 0
+        self._gold_owned = 0
+        self._damage_received = 0
+        self._damage_inflicted = 0
+        self._ration_consumed = 0
+        self._potion_consumed = 0
+        self._melee_level = 0
+        self._range_level = 0
+        self._mage_level = 0
+        self._fishing_level = 0
+        self._herbalism_level = 0
+        self._prospecting_level = 0
+        self._carving_level = 0
+        self._alchemy_level = 0
+
+    def _update_stats(self, agent):
+        task = self.env.agent_task_map[agent.ent_id][0]
+        # For each task spec, record whether its max progress and reward count
+        self._curriculum[task.spec_name].append((task._max_progress, task._reward_count))
+        if task.completed:
+            self._task_completed += 1.0 / self.team_size
+
+        if agent.damage.val > 0:
+            self._cod_attacked += 1.0 / self.team_size
+        elif agent.food.val == 0:
+            self._cod_starved += 1.0 / self.team_size
+        elif agent.water.val == 0:
+            self._cod_dehydrated += 1.0 / self.team_size
+
+        # For TeamResult
+        self._time_alive += agent.history.time_alive.val
+        self._gold_owned += agent.gold.val
+        self._damage_received += agent.history.damage_received
+        self._damage_inflicted += agent.history.damage_inflicted
+        self._ration_consumed += agent.ration_consumed
+        self._potion_consumed += agent.poultice_consumed
+        self._melee_level += agent.melee_level.val
+        self._range_level += agent.range_level.val
+        self._mage_level += agent.mage_level.val
+        self._fishing_level += agent.fishing_level.val
+        self._herbalism_level += agent.herbalism_level.val
+        self._prospecting_level += agent.prospecting_level.val
+        self._carving_level += agent.carving_level.val
+        self._alchemy_level += agent.alchemy_level.val
+
     def rewards(self, team_rewards, team_dones, team_infos, step):
         """Calculate team rewards and update stats."""
 
@@ -82,19 +131,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
                 )
                 if agent is None:
                     continue
-
-                task = self.env.agent_task_map[agent_id][0]
-                # For each task spec, record whether its max progress and reward count
-                self._curriculum[task.spec_name].append((task._max_progress, task._reward_count))
-                if task.completed:
-                    self._task_completed += 1.0 / self.team_size
-
-                if agent.damage.val > 0:
-                    self._cod_attacked += 1.0 / self.team_size
-                elif agent.food.val == 0:
-                    self._cod_starved += 1.0 / self.team_size
-                elif agent.water.val == 0:
-                    self._cod_dehydrated += 1.0 / self.team_size
+                self._update_stats(agent)
 
         return team_reward, team_info
 
@@ -110,11 +147,30 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
             team_infos["stats"]["task/completed"] = self._task_completed
             team_infos["curriculum"] = self._curriculum
 
-            achieved, performed, _ = process_event_log(
-                self.env.realm, self.teams[self.team_id]
+            team_result, achieved, performed, _ = get_team_result(
+                self.env.realm, self.teams, self.team_id
             )
             for key, val in list(achieved.items()) + list(performed.items()):
                 team_infos["stats"][key] = float(val)
+
+            # Fill in the TeamResult
+            team_result.time_alive = self._time_alive
+            team_result.gold_owned = self._gold_owned
+            team_result.completed_task_count = round(self._task_completed * self.team_size)
+            team_result.damage_received = self._damage_received
+            team_result.damage_inflicted = self._damage_inflicted
+            team_result.ration_consumed = self._ration_consumed
+            team_result.potion_consumed = self._potion_consumed
+            team_result.melee_level = self._melee_level
+            team_result.range_level = self._range_level
+            team_result.mage_level = self._mage_level
+            team_result.fishing_level = self._fishing_level
+            team_result.herbalism_level = self._herbalism_level
+            team_result.prospecting_level = self._prospecting_level
+            team_result.carving_level = self._carving_level
+            team_result.alchemy_level = self._alchemy_level
+
+            team_infos["team_results"] = (self.team_id, team_result)
 
             if self._replay_save_dir is not None:
                 self._replay_helper.save(
@@ -139,131 +195,3 @@ def create_binding(args: Namespace):
             'replay_save_dir': args.replay_save_dir
         },
     )
-
-# Event processing utilities for Neural MMO.
-
-INFO_KEY_TO_EVENT_CODE = {
-    "event/" + evt.lower(): val
-    for evt, val in EventCode.__dict__.items()
-    if isinstance(val, int)
-}
-
-
-def process_event_log(realm, agent_list):
-  """Process the event log and extract performed actions and achievements."""
-  log = realm.event_log.get_data(agents=agent_list)
-  attr_to_col = realm.event_log.attr_to_col
-
-  # count the number of events
-  event_cnt = {}
-  for key, code in INFO_KEY_TO_EVENT_CODE.items():
-    # count the freq of each event
-    event_cnt[key] = sum(log[:, attr_to_col["event"]] == code)
-
-  # convert the numbers into binary (performed or not) for the key events
-  key_event = [
-      "eat_food",
-      "drink_water",
-      "score_hit",
-      "player_kill",
-      "equip_item",
-      "consume_item",
-      "harvest_item",
-      "list_item",
-      "buy_item",
-  ]
-  performed = {}
-  for evt in key_event:
-    key = "event/" + evt
-    performed[key] = event_cnt[key] > 0
-
-  # record important achievements
-  achieved = {}
-  check_max = {
-      "level": EventCode.LEVEL_UP,
-      "damage": EventCode.SCORE_HIT,
-      "distance": EventCode.GO_FARTHEST,
-  }
-  for attr, code in check_max.items():
-    idx = log[:, attr_to_col["event"]] == code
-    achieved["achieved/max_" + attr] = (
-        max(log[idx, attr_to_col[attr]]) if sum(idx) > 0 else 0
-    )
-  # correct the initial level
-  if achieved["achieved/max_level"] == 0:
-    achieved["achieved/max_level"] = 1
-  achieved["achieved/player_kill"] = event_cnt["event/player_kill"]
-  achieved["achieved/unique_events"] = score_unique_events(
-      realm, log, score_diff=False
-  )
-
-  # TODO: log consume ration/poultice?
-
-  return achieved, performed, event_cnt
-
-
-def score_unique_events(realm, log, score_diff=True):
-  """Calculate score by counting unique events.
-
-  score_diff = True gives the difference score for the current tick
-  score_diff = False gives the number of all unique events in the episode
-
-  EAT_FOOD, DRINK_WATER, GIVE_ITEM, DESTROY_ITEM, GIVE_GOLD are counted only once
-    because the details of these events are not recorded at all
-
-  Count all PLAYER_KILL, EARN_GOLD (sold item), LEVEL_UP events
-  """
-  attr_to_col = realm.event_log.attr_to_col
-
-  if len(log) == 0:  # no event logs
-    return 0
-
-  if score_diff:
-    curr_idx = log[:, attr_to_col["tick"]] == realm.tick
-    if sum(curr_idx) == 0:  # no new logs
-      return 0
-
-  # mask some columns to make the event redundant
-  cols_to_ignore = {
-      EventCode.SCORE_HIT: ["combat_style", "damage"],
-      # treat each (item, level) differently
-      EventCode.CONSUME_ITEM: ["quantity"],
-      # but, count each (item, level) only once
-      EventCode.HARVEST_ITEM: ["quantity"],
-      EventCode.EQUIP_ITEM: ["quantity"],
-      EventCode.LIST_ITEM: ["quantity", "price"],
-      EventCode.BUY_ITEM: ["quantity", "price"],
-  }
-
-  for code, attrs in cols_to_ignore.items():
-    idx = log[:, attr_to_col["event"]] == code
-    for attr in attrs:
-      log[idx, attr_to_col[attr]] = 0
-
-  # make every EARN_GOLD events unique
-  idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
-  log[idx, attr_to_col["number"]] = log[
-      idx, attr_to_col["tick"]
-  ].copy()  # this is a hack
-
-  # remove redundant events after masking
-  unique_all = np.unique(log[:, attr_to_col["event"]:], axis=0)
-  score = len(unique_all)
-
-  if score_diff:
-    unique_prev = np.unique(log[~curr_idx, attr_to_col["event"]:], axis=0)
-    score -= len(unique_prev)
-
-    # reward hack to make agents learn to eat and drink
-    basic_idx = np.in1d(
-        log[curr_idx, attr_to_col["event"]],
-        [EventCode.EAT_FOOD, EventCode.DRINK_WATER],
-    )
-    if sum(basic_idx) > 0:
-      score += (
-          1 if realm.tick < 200 else np.random.choice([0, 1], p=[2 / 3, 1 / 3])
-      )  # use prob. reward after 200 ticks
-
-    return min(2, score)  # clip max score to 2
-
-  return score
