@@ -1,6 +1,6 @@
 from pdb import set_trace as T
+import os
 from tqdm import tqdm
-
 import numpy as np
 
 import nmmo
@@ -8,7 +8,7 @@ from nmmo.render.replay_helper import FileReplayHelper
 
 # These files are symlinked for convenience
 from scripted import baselines
-from environment import process_event_log
+from leader_board import process_event_log
 
 from generated_agent import Agent
 
@@ -45,6 +45,7 @@ for t in tqdm(range(128)):
     _, _, d, _ = env.step({})
     agent_info += [get_agent_info(env, agent_id) for agent_id in d if d[agent_id] is True]
 
+os.makedirs('replays', exist_ok=True)
 replay_helper.save('replays/gpt-agent')
 
 # remaining agents
