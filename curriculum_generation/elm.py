@@ -399,8 +399,6 @@ class OpenELMTaskGenerator(LearnableTaskSampler):
         batch_size=1,
         gen_fn_name="training_task",
     ):
-        pattern = r"Salesforce/codegen-(350M|2B|6B)-mono"
-        assert re.match(pattern, checkpoint), "Provided model not supported"
         assert 0.9 <= temperature <= 1.4, "temperature should be between 0.9 and 1.4"
         super().__init__(task_spec)
 
@@ -421,6 +419,7 @@ class OpenELMTaskGenerator(LearnableTaskSampler):
         self.config.model.temp = temperature
         self.config.model.batch_size = batch_size
         self.config.model.model_path = checkpoint
+        self.config.model.load_in_8bit = True
 
     @staticmethod
     def task_spec_to_str(task_spec: List[ts.TaskSpec]):

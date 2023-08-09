@@ -6,9 +6,10 @@ from typing import List
 
 import dill
 import torch
+import numpy as np
 from nmmo.task import task_spec as ts
 from tqdm import tqdm
-from transformers import AutoTokenizer, CodeGenModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 def extract_module_fn(module: ModuleType):
@@ -33,10 +34,17 @@ class TaskEncoder:
         tmp_file_path: Temporary file path for saving intermediate data.
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = CodeGenModel.from_pretrained(checkpoint).to(self.device)
-        self.model.eval()
-        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        if self.device == "cuda":
+            self.model = AutoModelForCausalLM.from_pretrained(checkpoint,
+                                                              trust_remote_code=True,
+                                                              device_map="auto",
+                                                              load_in_8bit=True)
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(checkpoint,
+                                                              trust_remote_code=True).to(self.device)
+        self.model.eval()
         self.batch_size = batch_size
         self.temp_file_path = tmp_file_path
         self._fn_dict = extract_module_fn(context)
@@ -59,11 +67,13 @@ class TaskEncoder:
         A list of embeddings corresponding to input tasks.
         """
         all_embeddings = []
-        for i in range(0, len(prompts), self.batch_size):
-            batch = prompts[i: i + self.batch_size]
-            tokens = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(self.device)
-            embeddings = self.model(**tokens)[0].mean(dim=1).detach().cpu().numpy()
-            all_embeddings.extend(embeddings)
+        with torch.no_grad():
+            for i in tqdm(range(0, len(prompts), self.batch_size)):
+                batch = prompts[i: i + self.batch_size]
+                tokens = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(self.device)
+                outputs = self.model(**tokens, output_hidden_states=True)
+                embeddings = outputs.hidden_states[-1].mean(dim=1).detach().cpu().numpy()
+                all_embeddings.extend(embeddings.astype(np.float16))
         return all_embeddings
 
     def _get_task_deps_src(self, eval_fn) -> tuple:
@@ -114,7 +124,7 @@ class TaskEncoder:
         Returns:
         Updated task specifications with embeddings.
         """
-        prompts = [self._construct_prompt(single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs) for single_spec in tqdm(task_spec)]
+        prompts = [self._construct_prompt(single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs) for single_spec in task_spec]
         embeddings = self._get_embedding(prompts)
 
         for single_spec, embedding in zip(task_spec, embeddings):

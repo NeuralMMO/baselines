@@ -8,7 +8,7 @@ import nmmo.task.base_predicates
 import curriculum_generation.elm as elm
 from curriculum_generation import custom_curriculum as cc
 
-LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
+LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
 NUM_TRAIN_TASKS = 5
 NUM_TEST_TASKS = 5
 NUM_NEW_TASKS = 5

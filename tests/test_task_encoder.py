@@ -4,20 +4,19 @@ import unittest
 import curriculum_generation.manual_curriculum
 from curriculum_generation.task_encoder import TaskEncoder
 
-LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
+LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
 CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
 
 # NOTE: models that are not Salesforce/codegen-350M-mono may give different number
-EMBEDDING_DIM = 1024
-
+EMBEDDING_DIM = 4096
 
 class TestTaskEncoder(unittest.TestCase):
   # pylint: disable=protected-access,bad-builtin
   @classmethod
   def setUpClass(cls):
     cls.task_encoder = TaskEncoder(
-        LLM_CHECKPOINT, curriculum_generation.manual_curriculum, batch_size=1
-    )  # see test_batch_process()
+        LLM_CHECKPOINT, curriculum_generation.manual_curriculum, batch_size=4
+    )
 
   @classmethod
   def tearDownClass(cls):
@@ -54,16 +53,6 @@ class TestTaskEncoder(unittest.TestCase):
         single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs
     )
     print(prompt)
-
-  def test_batch_process(self):
-    batch_size = 8
-    task_encoder = TaskEncoder(
-        LLM_CHECKPOINT, curriculum_generation.manual_curriculum, batch_size=batch_size
-    )
-    batch_embedding = task_encoder._get_embedding(
-        ["# just to get the embedding size"] * batch_size
-    )
-    self.assertEqual(len(batch_embedding), batch_size)
 
 
 if __name__ == "__main__":

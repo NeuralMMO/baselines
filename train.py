@@ -14,12 +14,15 @@ from reinforcement_learning import config
 from curriculum_generation import manual_curriculum
 from curriculum_generation.task_encoder import TaskEncoder
 
-LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
+LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
 AGENT_MODEL_PATH = ""
 NUM_SEED_TASKS = 20
 NUM_NEW_TASKS = 5
 DEBUG = True
 CURRICULUM = manual_curriculum
+
+# NOTE: this file changes when running curriculum generation track
+# Run test_task_encoder.py to regenerate this file (or get it from the repo)
 CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
 
 def setup_env(args):

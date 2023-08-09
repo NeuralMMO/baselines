@@ -39,6 +39,7 @@ class Config(
         self.MAP_CENTER = args.map_size
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
+        self.TASK_EMBED_DIM = args.task_size
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
