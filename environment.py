@@ -92,7 +92,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
-        self._curriculum[task.spec_name].append((task._max_progress, task._reward_count))
+        self._curriculum[task.spec_name].append((task._max_progress, task.reward_signal_count))
         if task.completed:
             self._task_completed += 1.0 / self.team_size
 
