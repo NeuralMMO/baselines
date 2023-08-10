@@ -13,7 +13,6 @@ from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import environment
-import policy
 import config
 
 if __name__ == "__main__":

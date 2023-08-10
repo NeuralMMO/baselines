@@ -31,10 +31,13 @@ def setup_env(args):
     logging.info("Training run: %s (%s)", args.run_name, run_dir)
     logging.info("Training args: %s", args)
     binding = environment.create_binding(args)
+
     policy_store = None
-    if args.policy_store_dir is not None:
+    if args.policy_store_dir is None:
+        args.policy_store_dir = os.path.join(run_dir, "policy_store")
         logging.info("Using policy store from %s", args.policy_store_dir)
         policy_store = DirectoryPolicyStore(args.policy_store_dir)
+
     learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
     trainer = clean_pufferl.CleanPuffeRL(
         binding=binding,
@@ -108,14 +111,20 @@ if __name__ == "__main__":
     # Create a local config for testing that won't OOM your machine
     # You can either edit the defaults in config.py or set args
     # from the commandline.
-    args = config.create_config(config.LocalConfig)
+    args = config.create_config(config.Config)
+    if args.local_mode:
+        args.num_envs = 1
+        args.num_buffers = 1
+        args.use_serial_vecenv = True
+
     args.tasks_path = CURRICULUM_FILE_PATH # NOTE: this file must exist
     trainer = setup_env(args)
 
-    # Uncomment the following line to run reinforcement learning track
-    #reinforcement_learning_track(trainer, args)
-
-    # Uncomment the following line to run curriculum generation track
-    curriculum_generation_track(trainer, args, use_elm=True)
+    if args.track == "rl":
+      reinforcement_learning_track(trainer, args)
+    elif args.track == "curriculum":
+      curriculum_generation_track(trainer, args, use_elm=True)
+    else:
+      raise ValueError(f"Unknown track {args.track}, must be 'rl' or 'curriculum'")
 
     trainer.close()

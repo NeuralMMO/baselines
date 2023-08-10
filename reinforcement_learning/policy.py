@@ -12,13 +12,6 @@ from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
-def str_to_bool(s):
-  if s.lower() in ("yes", "true", "t", "y", "1"):
-    return True
-  if s.lower() in ("no", "false", "f", "n", "0"):
-    return False
-  raise argparse.ArgumentTypeError("Boolean value expected.")
-
 class Random(pufferlib.models.Policy):
   '''A random policy that resets weights on every call'''
   def __init__(self, binding):
@@ -51,7 +44,8 @@ class Baseline(pufferlib.models.Policy):
     self.raw_single_observation_space = binding.raw_single_observation_space
     input_size = policy_args.get("input_size", 256)
     hidden_size = policy_args.get("hidden_size", 256)
-    task_size = policy_args.get("task_size", 1024)
+    task_size = policy_args.get("task_size", 4096)
+
     self._policy_args = policy_args
 
     self.tile_encoder = TileEncoder(input_size)
