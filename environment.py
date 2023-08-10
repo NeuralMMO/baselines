@@ -7,22 +7,9 @@ import pufferlib.emulation
 
 import nmmo
 from nmmo.render.replay_helper import FileReplayHelper
-
 from leader_board import get_team_result
 
-# @daveey can we use nmmo.config.Default as a base here?
-class Config(
-    nmmo.config.Medium,
-    nmmo.config.Terrain,
-    nmmo.config.Resource,
-    nmmo.config.Progression,
-    nmmo.config.Profession,
-    nmmo.config.Equipment,
-    nmmo.config.Item,
-    nmmo.config.Exchange,
-    nmmo.config.Combat,
-    nmmo.config.NPC,
-):
+class Config(nmmo.config.Default):
     """Configuration for Neural MMO."""
 
     def __init__(self, args: Namespace):
@@ -40,6 +27,8 @@ class Config(
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
         self.TASK_EMBED_DIM = args.task_size
+
+        self.COMMUNICATION_SYSTEM_ENABLED = False
 
 
 class Postprocessor(pufferlib.emulation.Postprocessor):
