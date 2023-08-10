@@ -117,9 +117,11 @@ if __name__ == "__main__":
     args.tasks_path = CURRICULUM_FILE_PATH # NOTE: this file must exist
     trainer = setup_env(args)
 
-    if args.track == "reinforcement_learning":
+    if args.track == "rl":
       reinforcement_learning_track(trainer, args)
-    else:
+    elif args.track == "curriculum":
       curriculum_generation_track(trainer, args, use_elm=True)
+    else:
+      raise ValueError(f"Unknown track {args.track}, must be 'rl' or 'curriculum'")
 
     trainer.close()

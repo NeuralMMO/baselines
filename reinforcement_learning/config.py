@@ -6,7 +6,7 @@ class Config:
     # Run a smaller config on your local machine
     local_mode = False  # Run in local mode
     # Track to run - options: reinforcement_learning, curriculum_generation
-    track = "reinforcement_learning"
+    track = "rl"
 
     # Trainer Args
     num_cores = None  # Number of cores to use for training
