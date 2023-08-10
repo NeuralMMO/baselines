@@ -108,14 +108,18 @@ if __name__ == "__main__":
     # Create a local config for testing that won't OOM your machine
     # You can either edit the defaults in config.py or set args
     # from the commandline.
-    args = config.create_config(config.LocalConfig)
+    args = config.create_config(config.Config)
+    if args.local_mode:
+        args.num_envs = 1
+        args.num_buffers = 1
+        args.use_serial_vecenv = True
+
     args.tasks_path = CURRICULUM_FILE_PATH # NOTE: this file must exist
     trainer = setup_env(args)
 
-    # Uncomment the following line to run reinforcement learning track
-    #reinforcement_learning_track(trainer, args)
-
-    # Uncomment the following line to run curriculum generation track
-    curriculum_generation_track(trainer, args, use_elm=True)
+    if args.track == "reinforcement_learning":
+      reinforcement_learning_track(trainer, args)
+    else:
+      curriculum_generation_track(trainer, args, use_elm=True)
 
     trainer.close()

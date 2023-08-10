@@ -3,6 +3,11 @@ import time
 
 
 class Config:
+    # Run a smaller config on your local machine
+    local_mode = False  # Run in local mode
+    # Track to run - options: reinforcement_learning, curriculum_generation
+    track = "reinforcement_learning"
+
     # Trainer Args
     num_cores = None  # Number of cores to use for training
     num_envs = 12  # Number of environments to use for training
@@ -46,14 +51,6 @@ class Config:
     attend_task = "none"  # Attend task - options: none, pytorch, nikhil
     attentional_decode = True  # Use attentional action decoder
     extra_encoders = True  # Use inventory and market encoders
-
-
-class LocalConfig(Config):
-    # A smaller config for local testing that won't OOM your machine
-    num_envs = 1  # Number of environments to use for training
-    num_buffers = 1  # Number of buffers to use for training
-    use_serial_vecenv=True
-    #rollout_batch_size = 2**12  # Number of steps to rollout
 
 
 def create_config(config_cls):

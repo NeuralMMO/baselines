@@ -12,13 +12,6 @@ from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
-def str_to_bool(s):
-  if s.lower() in ("yes", "true", "t", "y", "1"):
-    return True
-  if s.lower() in ("no", "false", "f", "n", "0"):
-    return False
-  raise argparse.ArgumentTypeError("Boolean value expected.")
-
 class Random(pufferlib.models.Policy):
   '''A random policy that resets weights on every call'''
   def __init__(self, binding):
