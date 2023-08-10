@@ -46,8 +46,6 @@ class Baseline(pufferlib.models.Policy):
     hidden_size = policy_args.get("hidden_size", 256)
     task_size = policy_args.get("task_size", 4096)
 
-    assert task_size == 4096, f"Only task size of 4096 is supported {policy_args}"
-
     self._policy_args = policy_args
 
     self.tile_encoder = TileEncoder(input_size)
