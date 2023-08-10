@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 
 
@@ -18,7 +19,7 @@ class Config:
     checkpoint_interval = 10  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs
-    policy_store_dir = 'pool' # Policy store directory
+    policy_store_dir = os.path.join(runs_dir, run_name, '/pool') # Policy store directory
     use_serial_vecenv = False  # Use serial vecenv implementation
     learner_weight = 1.0  # Weight of learner policy
     max_opponent_policies = 0  # Maximum number of opponent policies to train against
