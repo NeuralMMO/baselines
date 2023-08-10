@@ -27,6 +27,7 @@ class Config(nmmo.config.Default):
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
         self.TASK_EMBED_DIM = args.task_size
+        assert args.task_size == 4096, "Only support task size 4096"
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
