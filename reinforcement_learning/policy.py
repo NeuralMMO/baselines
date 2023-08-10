@@ -51,7 +51,7 @@ class Baseline(pufferlib.models.Policy):
     self.raw_single_observation_space = binding.raw_single_observation_space
     input_size = policy_args.get("input_size", 256)
     hidden_size = policy_args.get("hidden_size", 256)
-    task_size = policy_args.get("task_size", 1024)
+    task_size = policy_args.get("task_size", policy_args.task_size)
     self._policy_args = policy_args
 
     self.tile_encoder = TileEncoder(input_size)
