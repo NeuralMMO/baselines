@@ -31,10 +31,13 @@ def setup_env(args):
     logging.info("Training run: %s (%s)", args.run_name, run_dir)
     logging.info("Training args: %s", args)
     binding = environment.create_binding(args)
+
     policy_store = None
-    if args.policy_store_dir is not None:
+    if args.policy_store_dir is None:
+        args.policy_store_dir = os.path.join(run_dir, "policy_store")
         logging.info("Using policy store from %s", args.policy_store_dir)
         policy_store = DirectoryPolicyStore(args.policy_store_dir)
+
     learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
     trainer = clean_pufferl.CleanPuffeRL(
         binding=binding,
