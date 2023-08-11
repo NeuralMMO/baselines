@@ -11,19 +11,10 @@ import environment
 from reinforcement_learning import policy
 from reinforcement_learning import config
 
-from curriculum_generation import manual_curriculum
-from curriculum_generation.task_encoder import TaskEncoder
-
-LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
-AGENT_MODEL_PATH = ""
-NUM_SEED_TASKS = 20
-NUM_NEW_TASKS = 5
-DEBUG = True
-CURRICULUM = manual_curriculum
-
 # NOTE: this file changes when running curriculum generation track
 # Run test_task_encoder.py to regenerate this file (or get it from the repo)
-CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
+BASELINE_CURRICULUM_FILE = "reinforcement_learning/curriculum_with_embedding.pkl"
+CUSTOM_CURRICULUM_FILE = "curriculum_generation/custom_curriculum_with_embedding.pkl"
 
 def setup_env(args):
     run_dir = os.path.join(args.runs_dir, args.run_name)
@@ -71,21 +62,30 @@ def reinforcement_learning_track(trainer, args):
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):
+    from curriculum_generation.task_encoder import TaskEncoder
+    LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
+
     if use_elm:
+        from curriculum_generation import manual_curriculum
         from curriculum_generation.elm import OpenELMTaskGenerator
-        task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
-        task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT)
+        AGENT_MODEL_PATH = ""
+        NUM_SEED_TASKS = 20
+        NUM_NEW_TASKS = 5
+        ELM_DEBUG = True
+
+        task_encoder = TaskEncoder(LLM_CHECKPOINT, manual_curriculum, batch_size=2)
+        task_generator = OpenELMTaskGenerator(manual_curriculum.task_spec, LLM_CHECKPOINT)
 
         # @daveey: We need a baseline checkpoint for this
         #load_agent_model(AGENT_MODEL_PATH)
 
         # Generating new tasks and evaluating all candidate training tasks
-        for _ in range(5):
+        for _ in range(3):
             # NOTE: adjust NUM_SEED_TASKS to fit your gpu
             seed_task_spec = task_generator.sample_tasks(NUM_SEED_TASKS, random_ratio=1)
-            new_task_spec = task_generator.evolve_tasks(seed_task_spec, NUM_NEW_TASKS, debug=DEBUG)
+            new_task_spec = task_generator.evolve_tasks(seed_task_spec, NUM_NEW_TASKS, debug=ELM_DEBUG)
             task_generator.add_tasks(new_task_spec)
-            task_encoder.get_task_embedding(seed_task_spec + new_task_spec, save_to_file=CURRICULUM_FILE_PATH)
+            task_encoder.get_task_embedding(seed_task_spec + new_task_spec, save_to_file=CUSTOM_CURRICULUM_FILE)
             # CHECK ME: the trainer will automatically use the new task embedding file
             _, _, infos = trainer.evaluate()
             task_generator.update(infos) # update the task stats
@@ -94,14 +94,12 @@ def curriculum_generation_track(trainer, args, use_elm=True):
         train_task_spec = task_generator.sample_tasks(NUM_SEED_TASKS*3, random_ratio=0.3) # NOTE: arbitrary numbers
 
     else:
-        # using the manually curated curriculum
-        from curriculum_generation.task_sampler import LearnableTaskSampler
-        from curriculum_generation import custom_curriculum
-        task_encoder = TaskEncoder(LLM_CHECKPOINT, custom_curriculum, batch_size=2)
-        train_task_spec = custom_curriculum.task_spec
+        from curriculum_generation import curriculum_tutorial  # custom tutorial
+        task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum_tutorial, batch_size=2)
+        train_task_spec = curriculum_tutorial.task_spec
 
     # Use the train_task_spec to train agents
-    task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
+    task_encoder.get_task_embedding(train_task_spec, save_to_file=CUSTOM_CURRICULUM_FILE)
     task_encoder.close()
     reinforcement_learning_track(trainer, args)
 
@@ -117,12 +115,13 @@ if __name__ == "__main__":
         args.num_buffers = 1
         args.use_serial_vecenv = True
 
-    args.tasks_path = CURRICULUM_FILE_PATH # NOTE: this file must exist
-    trainer = setup_env(args)
-
     if args.track == "rl":
+      args.tasks_path = BASELINE_CURRICULUM_FILE
+      trainer = setup_env(args)
       reinforcement_learning_track(trainer, args)
     elif args.track == "curriculum":
+      args.tasks_path = CUSTOM_CURRICULUM_FILE
+      trainer = setup_env(args)
       curriculum_generation_track(trainer, args, use_elm=True)
     else:
       raise ValueError(f"Unknown track {args.track}, must be 'rl' or 'curriculum'")
