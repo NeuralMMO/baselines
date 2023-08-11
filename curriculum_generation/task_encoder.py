@@ -1,6 +1,7 @@
 import ast
 import inspect
 import os
+import gc
 from types import ModuleType
 from typing import List
 
@@ -23,7 +24,7 @@ def extract_module_fn(module: ModuleType):
 class TaskEncoder:
     """A class for encoding tasks into embeddings using a pretrained model."""
     
-    def __init__(self, checkpoint: str, context: ModuleType, batch_size=64, tmp_file_path="tmp_task_encoder.pkl"):
+    def __init__(self, checkpoint: str, context: ModuleType, batch_size=2, tmp_file_path="tmp_task_encoder.pkl"):
         """
         Initialize the TaskEncoder.
 
@@ -124,6 +125,7 @@ class TaskEncoder:
         Returns:
         Updated task specifications with embeddings.
         """
+        assert self.model is not None, "Model has been unloaded. Re-initialize the TaskEncoder."
         prompts = [self._construct_prompt(single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs) for single_spec in task_spec]
         embeddings = self._get_embedding(prompts)
 
@@ -138,26 +140,26 @@ class TaskEncoder:
         return task_spec
 
     def close(self):
-        del self.model
-        del self.tokenizer
+        # free up gpu memory
+        self.model = None
+        self.tokenizer = None
+        gc.collect()
         torch.cuda.empty_cache()
-        del self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 
 if __name__ == "__main__":
-    import time
     import curriculum_generation.manual_curriculum as curriculum
-
-    LLM_CHECKPOINT = "Salesforce/codegen-350M-mono"
+    LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
     CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
 
-    task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum, batch_size=3)
-    s = time.time()
-
-    task_spec_with_embedding = task_encoder.get_task_embedding(
-        curriculum.task_spec,
-        save_to_file=CURRICULUM_FILE_PATH
-    )
-
-    e = time.time()
-    print("Time taken ", e-s)
+    with TaskEncoder(LLM_CHECKPOINT, curriculum, batch_size=6) as task_encoder:
+        task_encoder.get_task_embedding(
+            curriculum.task_spec,
+            save_to_file=CURRICULUM_FILE_PATH
+        )
