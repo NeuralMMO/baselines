@@ -95,7 +95,6 @@ def curriculum_generation_track(trainer, args, use_elm=True):
 
     else:
         # using the manually curated curriculum
-        from curriculum_generation.task_sampler import LearnableTaskSampler
         from curriculum_generation import custom_curriculum
         task_encoder = TaskEncoder(LLM_CHECKPOINT, custom_curriculum, batch_size=2)
         train_task_spec = custom_curriculum.task_spec
