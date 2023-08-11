@@ -71,11 +71,10 @@ for space in [2, 4, 8]:
 
 
 if __name__ == "__main__":
+    # Import the custom curriculum
+    print("------------------------------------------------------------")
     import curriculum_tutorial  # which is this file
     training_task_spec = curriculum_tutorial.task_spec
-
-    # The task_spec is the custom curriculum
-    print("------------------------------------------------------------")
     print("The number of task specs for training:", len(training_task_spec))
 
     # Check if these task specs are valid in the nmmo environment
@@ -93,12 +92,12 @@ if __name__ == "__main__":
 
     # The task_spec must be picklable to be used for agent training
     print("------------------------------------------------------------")
-    print("Checking if the task specs are pickable ...")
+    print("Checking if the task specs are picklable ...")
     CURRICULUM_FILE_PATH = "custom_curriculum_with_embedding.pkl"
     with open(CURRICULUM_FILE_PATH, "wb") as f:
         import dill
         dill.dump(task_spec, f)
-    print("All task specs are pickable.")
+    print("All task specs are picklable.")
 
     # To use the curriculum for agent training, the curriculum, task_spec, should be
     # saved to a file with the embeddings using the task encoder. The task encoder uses
