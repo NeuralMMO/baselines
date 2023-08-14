@@ -106,14 +106,16 @@ def curriculum_generation_track(trainer, args, use_elm=True):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # Create a local config for testing that won't OOM your machine
     # You can either edit the defaults in config.py or set args
     # from the commandline.
     args = config.create_config(config.Config)
+
+    # Avoid OOMing your machine for local testing
     if args.local_mode:
         args.num_envs = 1
         args.num_buffers = 1
         args.use_serial_vecenv = True
+        args.rollout_batch_size = 2**10
 
     if args.track == "rl":
       args.tasks_path = BASELINE_CURRICULUM_FILE
