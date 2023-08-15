@@ -13,11 +13,20 @@ from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
 from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
 
 import environment
-import config
+
+from reinforcement_learning import policy
+from reinforcement_learning import config
+
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
-  args = config.create_config(config.LocalConfig)
+  args = config.create_config(config.Config)
+
+  # Avoid OOMing your machine for local testing
+  if args.local_mode:
+      args.num_envs = 1
+      args.num_buffers = 1
+      args.use_serial_vecenv = True
 
   run_dir = os.path.join(args.runs_dir, args.run_name)
   os.makedirs(run_dir, exist_ok=True)
@@ -26,6 +35,7 @@ if __name__ == "__main__":
   logging.info("Training args: %s", args)
   binding = environment.create_binding(args)
 
+  policy_store = None
   if args.policy_store_dir is not None:
     logging.info("Using policy store from %s", args.policy_store_dir)
     policy_store = DirectoryPolicyStore(args.policy_store_dir)
@@ -45,11 +55,13 @@ if __name__ == "__main__":
       wandb_project=args.wandb_project,
       wandb_extra_data=args,
       vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+      device='cpu',
       num_envs=args.num_envs,
       num_cores=args.num_envs,
-      selfplay_learner_weight=0, # @daveey: is this correct? Seems to break policy pool
+      num_buffers=args.num_buffers,
+      selfplay_learner_weight=args.learner_weight,
       selfplay_num_policies=args.eval_num_policies + 1,
-      policy_selector=policy_selector,
+      policy_selector=None,#policy_selector,
       batch_size=1024,
   )
 
