@@ -74,7 +74,7 @@ def curriculum_generation_track(trainer, args, use_elm=True):
         ELM_DEBUG = True
 
         task_encoder = TaskEncoder(LLM_CHECKPOINT, manual_curriculum, batch_size=2)
-        task_generator = OpenELMTaskGenerator(manual_curriculum.task_spec, LLM_CHECKPOINT)
+        task_generator = OpenELMTaskGenerator(manual_curriculum.curriculum, LLM_CHECKPOINT)
 
         # @daveey: We need a baseline checkpoint for this
         #load_agent_model(AGENT_MODEL_PATH)
@@ -82,24 +82,24 @@ def curriculum_generation_track(trainer, args, use_elm=True):
         # Generating new tasks and evaluating all candidate training tasks
         for _ in range(3):
             # NOTE: adjust NUM_SEED_TASKS to fit your gpu
-            seed_task_spec = task_generator.sample_tasks(NUM_SEED_TASKS, random_ratio=1)
-            new_task_spec = task_generator.evolve_tasks(seed_task_spec, NUM_NEW_TASKS, debug=ELM_DEBUG)
-            task_generator.add_tasks(new_task_spec)
-            task_encoder.get_task_embedding(seed_task_spec + new_task_spec, save_to_file=CUSTOM_CURRICULUM_FILE)
+            seed_task_list = task_generator.sample_tasks(NUM_SEED_TASKS, random_ratio=1)
+            new_task_list = task_generator.evolve_tasks(seed_task_list, NUM_NEW_TASKS, debug=ELM_DEBUG)
+            task_generator.add_tasks(new_task_list)
+            task_encoder.get_task_embedding(seed_task_list + new_task_list, save_to_file=CUSTOM_CURRICULUM_FILE)
             # CHECK ME: the trainer will automatically use the new task embedding file
             _, _, infos = trainer.evaluate()
             task_generator.update(infos) # update the task stats
 
         # NOTE: sample_tasks() uses task stats to sample learnable tasks
-        train_task_spec = task_generator.sample_tasks(NUM_SEED_TASKS*3, random_ratio=0.3) # NOTE: arbitrary numbers
+        curriculum = task_generator.sample_tasks(NUM_SEED_TASKS*3, random_ratio=0.3) # NOTE: arbitrary numbers
 
     else:
         from curriculum_generation import curriculum_tutorial  # custom tutorial
         task_encoder = TaskEncoder(LLM_CHECKPOINT, curriculum_tutorial, batch_size=2)
-        train_task_spec = curriculum_tutorial.task_spec
+        curriculum = curriculum_tutorial.curriculum
 
     # Use the train_task_spec to train agents
-    task_encoder.get_task_embedding(train_task_spec, save_to_file=CUSTOM_CURRICULUM_FILE)
+    task_encoder.get_task_embedding(curriculum, save_to_file=CUSTOM_CURRICULUM_FILE)
     task_encoder.close()
     reinforcement_learning_track(trainer, args)
 
