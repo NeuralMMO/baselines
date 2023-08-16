@@ -301,26 +301,18 @@ class ActionDecoder(torch.nn.Module):
     }
 
     action_targets = {
-        "attack_style": action_targets[nmmo.action.Attack][nmmo.action.Style],
-        "attack_target": action_targets[nmmo.action.Attack][nmmo.action.Target],
-        "market_buy": action_targets[nmmo.action.Buy][nmmo.action.MarketItem],
-        "inventory_destroy": action_targets[nmmo.action.Destroy][
-            nmmo.action.InventoryItem
-        ],
-        "inventory_give_item": action_targets[nmmo.action.Give][
-            nmmo.action.InventoryItem
-        ],
-        "inventory_give_player": action_targets[nmmo.action.Give][
-            nmmo.action.Target
-        ],
-        "gold_quantity": action_targets[nmmo.action.GiveGold][nmmo.action.Price],
-        "gold_target": action_targets[nmmo.action.GiveGold][nmmo.action.Target],
-        "move": action_targets[nmmo.action.Move][nmmo.action.Direction],
-        "inventory_sell": action_targets[nmmo.action.Sell][
-            nmmo.action.InventoryItem
-        ],
-        "inventory_price": action_targets[nmmo.action.Sell][nmmo.action.Price],
-        "inventory_use": action_targets[nmmo.action.Use][nmmo.action.InventoryItem],
+        "attack_style": action_targets["Attack"]["Style"],
+        "attack_target": action_targets["Attack"]["Target"],
+        "market_buy": action_targets["Buy"]["MarketItem"],
+        "inventory_destroy": action_targets["Destroy"]["InventoryItem"],
+        "inventory_give_item": action_targets["Give"]["InventoryItem"],
+        "inventory_give_player": action_targets["Give"]["Target"],
+        "gold_quantity": action_targets["GiveGold"]["Price"],
+        "gold_target": action_targets["GiveGold"]["Target"],
+        "move": action_targets["Move"]["Direction"],
+        "inventory_sell": action_targets["Sell"]["InventoryItem"],
+        "inventory_price": action_targets["Sell"]["Price"],
+        "inventory_use": action_targets["Use"]["InventoryItem"],
     }
 
     actions = []
