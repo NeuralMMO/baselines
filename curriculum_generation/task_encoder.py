@@ -114,30 +114,30 @@ class TaskEncoder:
         The agent's goal is"""
         return task_specific_prompt
 
-    def get_task_embedding(self, task_spec: List[ts.TaskSpec], save_to_file: str = None):
+    def get_task_embedding(self, task_spec_list: List[ts.TaskSpec], save_to_file: str = None):
         """
         Compute embeddings for given task specifications and save them to file.
 
         Args:
-        task_spec: List of task specifications.
+        task_spec_list: List of task specifications.
         save_to_file: Name of the file where the results should be saved.
 
         Returns:
         Updated task specifications with embeddings.
         """
         assert self.model is not None, "Model has been unloaded. Re-initialize the TaskEncoder."
-        prompts = [self._construct_prompt(single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs) for single_spec in task_spec]
+        prompts = [self._construct_prompt(single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs) for single_spec in task_spec_list]
         embeddings = self._get_embedding(prompts)
 
-        for single_spec, embedding in zip(task_spec, embeddings):
+        for single_spec, embedding in zip(task_spec_list, embeddings):
             single_spec.embedding = embedding
 
         if save_to_file:  # use save_to_file as the file name
             with open(self.temp_file_path, "wb") as f:
-                dill.dump(task_spec, f)
+                dill.dump(task_spec_list, f)
             os.replace(self.temp_file_path, save_to_file)
 
-        return task_spec
+        return task_spec_list
 
     def close(self):
         # free up gpu memory
@@ -156,10 +156,10 @@ class TaskEncoder:
 if __name__ == "__main__":
     import curriculum_generation.manual_curriculum as curriculum
     LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
-    CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
+    CURRICULUM_FILE_PATH = "reinforcement_learning/curriculum_with_embedding.pkl"
 
     with TaskEncoder(LLM_CHECKPOINT, curriculum, batch_size=6) as task_encoder:
         task_encoder.get_task_embedding(
-            curriculum.task_spec,
+            curriculum.curriculum,
             save_to_file=CURRICULUM_FILE_PATH
         )

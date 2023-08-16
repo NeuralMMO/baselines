@@ -1,12 +1,10 @@
 import unittest
 
 from openelm import ELM
-from openelm.mutation_model import PromptModel
-
 import nmmo.task.base_predicates
 
 import curriculum_generation.elm as elm
-from curriculum_generation import custom_curriculum as cc
+from curriculum_generation import curriculum_tutorial as tutorial
 
 LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
 NUM_TRAIN_TASKS = 5
@@ -21,13 +19,13 @@ VALID_TASK_FN = """def training_task(gs, subject, dist, num_tick):
 class TestElmForNmmo(unittest.TestCase):
   def test_task_generator_api(self):
     # pylint: disable=unused-variable
-    task_generator = elm.OpenELMTaskGenerator(cc.task_spec, LLM_CHECKPOINT)
-    train_task_spec = task_generator.sample_tasks(NUM_TRAIN_TASKS)
-    eval_task_spec = task_generator.sample_tasks(NUM_TEST_TASKS)
+    task_generator = elm.OpenELMTaskGenerator(tutorial.curriculum, LLM_CHECKPOINT)
+    train_task_list = task_generator.sample_tasks(NUM_TRAIN_TASKS)
+    eval_task_list = task_generator.sample_tasks(NUM_TEST_TASKS)
 
     # to actually run elm, remove debug=True
     new_task_spec = task_generator.evolve_tasks(
-        train_task_spec, NUM_NEW_TASKS, debug=False
+        train_task_list, NUM_NEW_TASKS, debug=True
     )
 
   def test_gnereate_task_spec(self):
@@ -87,7 +85,7 @@ def training_task(gs, subject):
   def test_elm_prompt(self):
     # pylint: disable=protected-access,bad-builtin
     # NOTE: this is to test different elm prompt
-    task_generator = elm.OpenELMTaskGenerator(cc.task_spec, LLM_CHECKPOINT)
+    task_generator = elm.OpenELMTaskGenerator(tutorial.curriculum, LLM_CHECKPOINT)
     train_task_spec = task_generator.sample_tasks(NUM_TRAIN_TASKS)
 
     elm_config = task_generator.config
