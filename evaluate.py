@@ -223,10 +223,8 @@ if __name__ == "__main__":
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
-    # if eval_args.run_dir is not None and eval_args.policy_store_dir is not None:
-    #     raise ValueError("Only one of run_dir or policy_store_dir can be specified")
-    eval_args.run_dir = "train_dir"
-    #eval_args.policy_store_dir = "pool"
+    if eval_args.run_dir is not None and eval_args.policy_store_dir is not None:
+        raise ValueError("Only one of run_dir or policy_store_dir can be specified")
 
     if eval_args.run_dir is not None:
         logging.info("Generating replays from %s", eval_args.run_dir)
