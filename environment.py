@@ -1,4 +1,5 @@
 import os
+import time
 from argparse import Namespace
 from collections import defaultdict
 
@@ -166,7 +167,7 @@ class Postprocessor(pufferlib.emulation.Postprocessor):
             if self._replay_save_dir is not None:
                 self._replay_helper.save(
                     os.path.join(
-                        self._replay_save_dir, f"replay_{self._num_replays_saved}.json"), compress=False)
+                        self._replay_save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}"), compress=False)
                 self._num_replays_saved += 1
 
         return team_infos
