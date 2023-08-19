@@ -197,7 +197,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     def infos(self, team_reward, env_done, team_done, team_infos, step):
         """Update team infos and save replays."""
         team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)
-        team_infos["stats"] = defaultdict(float)
 
         if env_done:
             team_infos["stats"]["cod/attacked"] = self._cod_attacked

@@ -1,4 +1,5 @@
 from argparse import Namespace
+from collections import defaultdict
 
 import nmmo
 import pufferlib
@@ -57,8 +58,9 @@ class Postprocessor(StatPostprocessor):
         """Called in _poststep() via _shape_rewards().
            See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L322
         """
-        # The below line updates the stats and does not affect the reward.
+        # The below lines update the stats and do NOT affect the reward.
         super().rewards(team_rewards, team_dones, team_infos, step)  # DO NOT REMOVE
+        team_infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
 
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
