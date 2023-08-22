@@ -5,7 +5,7 @@ import nmmo
 import pufferlib
 import pufferlib.emulation
 
-from leader_board import StatPostprocessor
+from leader_board import StatPostprocessor, score_unique_events
 
 class Config(nmmo.config.Default):
     """Configuration for Neural MMO."""
@@ -28,7 +28,6 @@ class Config(nmmo.config.Default):
         assert args.task_size == 4096, "Only support task size 4096"
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
-
 
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, teams, team_id, replay_save_dir=None):
@@ -64,7 +63,15 @@ class Postprocessor(StatPostprocessor):
 
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
-        return sum(team_rewards.values()), team_infos
+
+        # Unique event-based rewards, similar to exploration bonus
+        # NOTE: this gets slower as the size of event log increases
+        # BONUS_WEIGHT = 0.01
+        # log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
+        # explore_bonus = BONUS_WEIGHT * score_unique_events(self.env.realm, log)
+        explore_bonus = 0
+
+        return sum(team_rewards.values()) + explore_bonus, team_infos
 
     def infos(self, team_reward, env_done, team_done, team_infos, step):
         """Called in _poststep() via _handle_infos().
