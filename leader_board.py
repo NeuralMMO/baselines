@@ -13,7 +13,7 @@ import pufferlib.emulation
 from nmmo.core.realm import Realm
 from nmmo.lib.log import EventCode
 from nmmo.render.replay_helper import FileReplayHelper
-
+import nmmo.systems.item as Item
 
 @dataclass
 class TeamResult:
@@ -36,7 +36,7 @@ class TeamResult:
     # agent object based (fill these in the environment)
     # CHECK ME: perhaps create a stat wrapper for putting all stats in one place?
     time_alive: int = 0,
-    gold_owned: int = 0,
+    earned_gold: int = 0,
     completed_task_count: int = 0,
     damage_received: int = 0,
     damage_inflicted: int = 0,
@@ -70,7 +70,7 @@ class TeamResult:
             "item_list_count",
             "item_buy_count",
             "time_alive",
-            "gold_owned",
+            "earned_gold",
             "completed_task_count",
             "damage_received",
             "damage_inflicted",
@@ -136,11 +136,14 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._cod_starved = 0
         self._cod_dehydrated = 0
         self._task_completed = 0
+        self._task_with_2_reward_signal = 0
+        self._task_with_0p2_max_progress = 0
         self._curriculum = defaultdict(list)
+        self._combat_level = []
+        self._harvest_level = []
 
         # for team results
         self._time_alive = 0
-        self._gold_owned = 0
         self._damage_received = 0
         self._damage_inflicted = 0
         self._ration_consumed = 0
@@ -158,6 +161,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
         self._curriculum[task.spec_name].append((task._max_progress, task.reward_signal_count))
+        if task.reward_signal_count >= 2:
+            self._task_with_2_reward_signal += 1.0 / self.team_size
+        if task._max_progress >= 0.2:
+            self._task_with_0p2_max_progress += 1.0 / self.team_size
         if task.completed:
             self._task_completed += 1.0 / self.team_size
 
@@ -168,9 +175,17 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         elif agent.water.val == 0:
             self._cod_dehydrated += 1.0 / self.team_size
 
+        self._combat_level.append(agent.attack_level)
+        self._harvest_level.append(max(
+            agent.fishing_level.val,
+            agent.herbalism_level.val,
+            agent.prospecting_level.val,
+            agent.carving_level.val,
+            agent.alchemy_level.val,
+        ))
+
         # For TeamResult
         self._time_alive += agent.history.time_alive.val
-        self._gold_owned += agent.gold.val
         self._damage_received += agent.history.damage_received
         self._damage_inflicted += agent.history.damage_inflicted
         self._ration_consumed += agent.ration_consumed
@@ -203,6 +218,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             team_infos["stats"]["cod/starved"] = self._cod_starved
             team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
             team_infos["stats"]["task/completed"] = self._task_completed
+            team_infos["stats"]["task/pcnt_2_reward_signal"] = self._task_with_2_reward_signal
+            team_infos["stats"]["task/pcnt_0p2_max_progress"] = self._task_with_0p2_max_progress
+            team_infos["stats"]["achieved/max_combat_level"] = max(self._combat_level)
+            team_infos["stats"]["achieved/max_harvest_level"] = max(self._harvest_level)
             team_infos["curriculum"] = self._curriculum
 
             team_result, achieved, performed, _ = get_team_result(
@@ -213,7 +232,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
             # Fill in the TeamResult
             team_result.time_alive = self._time_alive
-            team_result.gold_owned = self._gold_owned
+            team_result.earned_gold = achieved["achieved/earned_gold"]
             team_result.completed_task_count = round(self._task_completed * self.team_size)
             team_result.damage_received = self._damage_received
             team_result.damage_inflicted = self._damage_inflicted
@@ -247,6 +266,28 @@ INFO_KEY_TO_EVENT_CODE = {
     if isinstance(val, int)
 }
 
+# convert the numbers into binary (performed or not) for the key events
+KEY_EVENT = [
+    "eat_food",
+    "drink_water",
+    "score_hit",
+    "player_kill",
+    "equip_item",
+    "consume_item",
+    "harvest_item",
+    "list_item",
+    "buy_item",
+]
+
+ITEM_TYPE = {
+    "armor": [item.ITEM_TYPE_ID for item in [Item.Hat, Item.Top, Item.Bottom]],
+    "weapon": [item.ITEM_TYPE_ID for item in [Item.Spear, Item.Bow, Item.Wand]],
+    "tool": [item.ITEM_TYPE_ID for item in \
+             [Item.Axe, Item.Gloves, Item.Rod, Item.Pickaxe, Item.Chisel]],
+    "ammo": [item.ITEM_TYPE_ID for item in [Item.Runes, Item.Arrow, Item.Whetstone]],
+    "consumable": [item.ITEM_TYPE_ID for item in [Item.Potion, Item.Ration]],
+}
+
 def process_event_log(realm, agent_list):
     """Process the event log and extract performed actions and achievements."""
     log = realm.event_log.get_data(agents=agent_list)
@@ -258,20 +299,8 @@ def process_event_log(realm, agent_list):
         # count the freq of each event
         event_cnt[key] = int(sum(log[:, attr_to_col["event"]] == code))
 
-    # convert the numbers into binary (performed or not) for the key events
-    key_event = [
-        "eat_food",
-        "drink_water",
-        "score_hit",
-        "player_kill",
-        "equip_item",
-        "consume_item",
-        "harvest_item",
-        "list_item",
-        "buy_item",
-    ]
     performed = {}
-    for evt in key_event:
+    for evt in KEY_EVENT:
         key = "event/" + evt
         performed[key] = event_cnt[key] > 0
 
@@ -290,13 +319,27 @@ def process_event_log(realm, agent_list):
     # correct the initial level
     if achieved["achieved/max_level"] == 0:
         achieved["achieved/max_level"] = 1
+
+    # get earned gold
+    idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
+    achieved["achieved/earned_gold"] = int(sum(log[idx, attr_to_col["gold"]]))
+
+    # get max possessed item levels: from harvesting, looting, buying
+    idx = np.in1d(log[:, attr_to_col["event"]],
+                  [EventCode.HARVEST_ITEM, EventCode.LOOT_ITEM, EventCode.BUY_ITEM])
+    for item_type, item_ids in ITEM_TYPE.items():
+        idx_item = np.in1d(log[idx, attr_to_col["item_type"]], item_ids)
+        if sum(idx_item) > 0:
+            achieved["achieved/max_" + item_type + "_level"] = \
+              int(max(log[idx][idx_item, attr_to_col["level"]]))
+
+    # other notable achievements
     achieved["achieved/player_kill"] = event_cnt["event/player_kill"]
     achieved["achieved/unique_events"] = score_unique_events(
         realm, log, score_diff=False
     )
 
     return achieved, performed, event_cnt
-
 
 def score_unique_events(realm, log, score_diff=True):
     """Calculate score by counting unique events.
@@ -327,6 +370,7 @@ def score_unique_events(realm, log, score_diff=True):
         # but, count each (item, level) only once
         EventCode.HARVEST_ITEM: ["quantity"],
         EventCode.EQUIP_ITEM: ["quantity"],
+        EventCode.LOOT_ITEM: ["quantity"],
         EventCode.LIST_ITEM: ["quantity", "price"],
         EventCode.BUY_ITEM: ["quantity", "price"],
     }
@@ -360,6 +404,6 @@ def score_unique_events(realm, log, score_diff=True):
                 1 if realm.tick < 200 else np.random.choice([0, 1], p=[2 / 3, 1 / 3])
             )  # use prob. reward after 200 ticks
 
-        return min(2, score)  # clip max score to 2
+        return min(3, score)  # clip max score to 3
 
     return score
