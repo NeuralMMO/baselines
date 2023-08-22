@@ -2,7 +2,6 @@ import argparse
 import os
 import time
 
-
 class Config:
     # Run a smaller config on your local machine
     local_mode = False  # Run in local mode
@@ -53,12 +52,16 @@ class Config:
     attentional_decode = True  # Use attentional action decoder
     extra_encoders = True  # Use inventory and market encoders
 
+    @classmethod
+    def asdict(cls):
+        return {attr: getattr(cls, attr) for attr in dir(cls)
+                if not callable(getattr(cls, attr)) and not attr.startswith("__")}
 
 def create_config(config_cls):
     parser = argparse.ArgumentParser()
 
     # Get attribute names and their values from the static class
-    attrs = {attr: getattr(config_cls, attr) for attr in dir(config_cls) if not callable(getattr(config_cls, attr)) and not attr.startswith("__")}
+    attrs = config_cls.asdict()
 
     # Iterate over these attributes and set the default values of arguments to the corresponding attribute values
     for attr, value in attrs.items():

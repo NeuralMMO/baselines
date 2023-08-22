@@ -9,18 +9,18 @@ try:
 except:
     print('pip install dash to use this script')
 
-CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
+CURRICULUM_FILE_PATH = "reinforcement_learning/curriculum_with_embedding.pkl"
 
 
 class TaskEmbeddingVisualizer:
     def __init__(self, curriculum_file_path):
         with open(curriculum_file_path, 'rb') as f:
             # TODO: de-duplication. Although, the manual curriculum doesn't have duplicates.
-            self.task_spec = dill.load(f)
-        self.embeddings = np.array([single_spec.embedding for single_spec in self.task_spec])
+            self.curriculum = dill.load(f)
+        self.embeddings = np.array([single_spec.embedding for single_spec in self.curriculum])
 
     def visualize(self, dims=2):
-        task_names = [single_spec.name for single_spec in self.task_spec]
+        task_names = [single_spec.name for single_spec in self.curriculum]
         colors = [f"#00{format(int(val), '02x')}ff" for val in np.linspace(0, 255, len(task_names))]
         task_to_color = {eval_fn: color for eval_fn, color in zip(task_names, colors)}
 

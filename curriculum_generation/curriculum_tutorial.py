@@ -14,9 +14,9 @@ from nmmo.task.task_spec import TaskSpec, check_task_spec
 
 ##############################################################################
 # Use pre-built eval functions and TaskSpec class to define each training task
-# See curriculum/manual_curriculum.py for detailed examples based on pre-built eval fns
+# See manual_curriculum.py for detailed examples based on pre-built eval fns
 
-task_spec = []
+curriculum = []
 
 # Make training tasks for each of the following events
 # Agents have completed the task if they have done the event N times
@@ -30,7 +30,7 @@ essential_events = [
 ]
 
 for event_code in essential_events:
-    task_spec.append(
+    curriculum.append(
         TaskSpec(
             eval_fn=CountEvent,  # is a pre-built eval function
             eval_fn_kwargs={"event": event_code, "N": 10},  # kwargs for CountEvent
@@ -55,14 +55,14 @@ def PracticeEating(gs, subject):
         progress += 0.3
     return norm(progress)  # norm is a helper function to normalize the value to [0, 1]
 
-task_spec.append(TaskSpec(eval_fn=PracticeEating, eval_fn_kwargs={}))
+curriculum.append(TaskSpec(eval_fn=PracticeEating, eval_fn_kwargs={}))
 
 # You can also use pre-built eval functions to define your own eval functions
 def PracticeInventoryManagement(gs, subject, space, num_tick):
     return norm(InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick))
 
 for space in [2, 4, 8]:
-    task_spec.append(
+    curriculum.append(
         TaskSpec(
             eval_fn=PracticeInventoryManagement,
             eval_fn_kwargs={"space": space, "num_tick": 500},
@@ -74,30 +74,30 @@ if __name__ == "__main__":
     # Import the custom curriculum
     print("------------------------------------------------------------")
     import curriculum_tutorial  # which is this file
-    training_task_spec = curriculum_tutorial.task_spec
-    print("The number of task specs for training:", len(training_task_spec))
+    CURRICULUM = curriculum_tutorial.curriculum
+    print("The number of training tasks in the curriculum:", len(CURRICULUM))
 
     # Check if these task specs are valid in the nmmo environment
     # Invalid tasks will crash your agent training
     print("------------------------------------------------------------")
     print("Checking whether the task specs are valid ...")
-    results = check_task_spec(training_task_spec)
+    results = check_task_spec(CURRICULUM)
     num_error = 0
     for result in results:
         if result["runnable"] is False:
             print("ERROR: ", result["spec_name"])
             num_error += 1
     assert num_error == 0, "Invalid task specs will crash training. Please fix them."
-    print("All task specs are valid.")
+    print("All training tasks are valid.")
 
     # The task_spec must be picklable to be used for agent training
     print("------------------------------------------------------------")
-    print("Checking if the task specs are picklable ...")
+    print("Checking if the training tasks are picklable ...")
     CURRICULUM_FILE_PATH = "custom_curriculum_with_embedding.pkl"
     with open(CURRICULUM_FILE_PATH, "wb") as f:
         import dill
-        dill.dump(task_spec, f)
-    print("All task specs are picklable.")
+        dill.dump(CURRICULUM, f)
+    print("All training tasks are picklable.")
 
     # To use the curriculum for agent training, the curriculum, task_spec, should be
     # saved to a file with the embeddings using the task encoder. The task encoder uses
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     # Get the task embeddings for the training tasks and save to file
     # You need to provide the curriculum file as a module to the task encoder
     with TaskEncoder(LLM_CHECKPOINT, curriculum_tutorial) as task_encoder:
-        task_encoder.get_task_embedding(training_task_spec, save_to_file=CURRICULUM_FILE_PATH)
+        task_encoder.get_task_embedding(CURRICULUM, save_to_file=CURRICULUM_FILE_PATH)
     print("Done.")
 
     # Initialize the trainer with the custom curriculum
@@ -126,7 +126,7 @@ if __name__ == "__main__":
         args.num_envs = 1
         args.num_buffers = 1
         args.use_serial_vecenv = True
-        args.rollout_batch_size = 2**14
+        args.rollout_batch_size = 2**12
 
     print("------------------------------------------------------------")
     print("Setting up the agent training env ...")

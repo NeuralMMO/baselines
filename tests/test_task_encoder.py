@@ -5,9 +5,9 @@ import curriculum_generation.manual_curriculum
 from curriculum_generation.task_encoder import TaskEncoder
 
 LLM_CHECKPOINT = "Salesforce/codegen25-7b-instruct"
-CURRICULUM_FILE_PATH = "curriculum_generation/curriculum_with_embedding.pkl"
+CURRICULUM_FILE_PATH = "curriculum_with_embedding.pkl"
 
-# NOTE: models that are not Salesforce/codegen-350M-mono may give different number
+# NOTE: different LLMs will give different embedding dimensions
 EMBEDDING_DIM = 4096
 
 class TestTaskEncoder(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestTaskEncoder(unittest.TestCase):
 
   def test_task_encoder_api(self):
     task_spec_with_embedding = self.task_encoder.get_task_embedding(
-      curriculum_generation.manual_curriculum.task_spec,
+      curriculum_generation.manual_curriculum.curriculum,
       save_to_file=CURRICULUM_FILE_PATH
     )
 
@@ -48,7 +48,7 @@ class TestTaskEncoder(unittest.TestCase):
     self.assertTrue("def TickGE(" in deps_src)
 
   def test_contruct_prompt(self):
-    single_spec = random.choice(curriculum_generation.manual_curriculum.task_spec)
+    single_spec = random.choice(curriculum_generation.manual_curriculum.curriculum)
     prompt = self.task_encoder._construct_prompt(
         single_spec.reward_to, single_spec.eval_fn, single_spec.eval_fn_kwargs
     )
