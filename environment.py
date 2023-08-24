@@ -25,13 +25,22 @@ class Config(nmmo.config.Default):
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
         self.TASK_EMBED_DIM = args.task_size
-        assert args.task_size == 4096, "Only support task size 4096"
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
+        self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+
 class Postprocessor(StatPostprocessor):
-    def __init__(self, env, teams, team_id, replay_save_dir=None):
+    def __init__(self, env, teams, team_id,
+      replay_save_dir=None,
+      sqrt_achievement_rewards=False,
+      heal_bonus_weight=0,
+      explore_bonus_weight=0
+      ):
         super().__init__(env, teams, team_id, replay_save_dir)
+        self.sqrt_achievement_rewards = sqrt_achievement_rewards
+        self.heal_bonus_weight = heal_bonus_weight
+        self.explore_bonus_weight = explore_bonus_weight
 
     def reset(self, team_obs, dummy=False):
         super().reset(team_obs, dummy)
@@ -65,18 +74,17 @@ class Postprocessor(StatPostprocessor):
         # Add custom reward shaping here.
 
         # Add "Healing" score based on health increase and decrease due to food and water
-        HEAL_BONUS_WEIGHT = 0.03
         health_restore = 0
         for agent_id in self.teams[self.team_id]:
             if agent_id in self.env.realm.players:
                 health_restore += self.env.realm.players[agent_id].resources.health_restore
-        healing_bonus = HEAL_BONUS_WEIGHT if health_restore > 0 else 0
+        healing_bonus = self.heal_bonus_weight if health_restore > 0 else 0
 
         # Unique event-based rewards, similar to exploration bonus
         # NOTE: this gets slower as the size of event log increases
-        EXPLORE_BONUS_WEIGHT = 0.02
         log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
-        explore_bonus = EXPLORE_BONUS_WEIGHT * score_unique_events(self.env.realm, log)
+        explore_bonus = self.explore_bonus_weight * score_unique_events(self.env.realm, log,
+          sqrt_rewards=self.sqrt_achievement_rewards)
 
         team_reward = sum(team_rewards.values()) + explore_bonus + healing_bonus
 
@@ -104,6 +112,9 @@ def create_binding(args: Namespace):
         emulate_const_horizon=args.max_episode_length,
         postprocessor_cls=Postprocessor,
         postprocessor_kwargs={
-            'replay_save_dir': args.replay_save_dir
+            'replay_save_dir': args.replay_save_dir,
+            'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
+            'heal_bonus_weight': args.heal_bonus_weight,
+            'explore_bonus_weight': args.explore_bonus_weight
         },
     )

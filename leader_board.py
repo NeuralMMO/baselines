@@ -341,7 +341,7 @@ def process_event_log(realm, agent_list):
 
     return achieved, performed, event_cnt
 
-def score_unique_events(realm, log, score_diff=True):
+def score_unique_events(realm, log, score_diff=True, sqrt_rewards=False):
     """Calculate score by counting unique events.
 
     score_diff = True gives the difference score for the current tick
@@ -390,19 +390,34 @@ def score_unique_events(realm, log, score_diff=True):
     unique_all = np.unique(log[:, attr_to_col["event"]:], axis=0)
     score = len(unique_all)
 
+    # Extract the first column (event types)
+    event_types = unique_all[:, 0]
+
+    # Find unique event types and their counts
+    unique_types, counts = np.unique(event_types, return_counts=True)
+    if sqrt_rewards:
+      score = np.sum(np.sqrt(counts))
+    else:
+      score = np.sum(counts)
+
     if score_diff:
         unique_prev = np.unique(log[~curr_idx, attr_to_col["event"]:], axis=0)
-        score -= len(unique_prev)
+        event_types_p = unique_prev[:, 0]
+        unique_types_p, counts_p = np.unique(event_types_p, return_counts=True)
+        if sqrt_rewards:
+          score -= np.sum(np.sqrt(counts_p))
+        else:
+          score -= np.sum(counts_p)
 
-        # reward hack to make agents learn to eat and drink
-        basic_idx = np.in1d(
-            log[curr_idx, attr_to_col["event"]],
-            [EventCode.EAT_FOOD, EventCode.DRINK_WATER],
-        )
-        if sum(basic_idx) > 0:
-            score += (
-                1 if realm.tick < 200 else np.random.choice([0, 1], p=[2 / 3, 1 / 3])
-            )  # use prob. reward after 200 ticks
+        # # reward hack to make agents learn to eat and drink
+        # basic_idx = np.in1d(
+        #     log[curr_idx, attr_to_col["event"]],
+        #     [EventCode.EAT_FOOD, EventCode.DRINK_WATER],
+        # )
+        # if sum(basic_idx) > 0:
+        #     score += (
+        #         1 if realm.tick < 200 else np.random.choice([0, 1], p=[2 / 3, 1 / 3])
+        #     )  # use prob. reward after 200 ticks
 
         return min(3, score)  # clip max score to 3
 
