@@ -43,6 +43,8 @@ class Config:
     map_size = 128  # Size of maps to use for training
     tasks_path = None  # Path to tasks to use for training
     replay_save_dir = None  # Path to save replay files
+    sqrt_achievement_rewards=False # Use the log of achievement rewards
+    spawn_immunity = 20
 
     # Policy Args
     num_lstm_layers = 0  # Number of LSTM layers to use

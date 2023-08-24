@@ -28,9 +28,14 @@ class Config(nmmo.config.Default):
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
+        self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+
 class Postprocessor(StatPostprocessor):
-    def __init__(self, env, teams, team_id, replay_save_dir=None):
+    def __init__(self, env, teams, team_id,
+      replay_save_dir=None,
+      sqrt_achievement_rewards=False):
         super().__init__(env, teams, team_id, replay_save_dir)
+        self.sqrt_achievement_rewards = sqrt_achievement_rewards
 
     def reset(self, team_obs, dummy=False):
         super().reset(team_obs, dummy)
@@ -75,7 +80,8 @@ class Postprocessor(StatPostprocessor):
         # NOTE: this gets slower as the size of event log increases
         EXPLORE_BONUS_WEIGHT = 0.02
         log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
-        explore_bonus = EXPLORE_BONUS_WEIGHT * score_unique_events(self.env.realm, log)
+        explore_bonus = EXPLORE_BONUS_WEIGHT * score_unique_events(self.env.realm, log,
+          sqrt_rewards=self.sqrt_achievement_rewards)
 
         team_reward = sum(team_rewards.values()) + explore_bonus + healing_bonus
 
@@ -103,6 +109,7 @@ def create_binding(args: Namespace):
         emulate_const_horizon=args.max_episode_length,
         postprocessor_cls=Postprocessor,
         postprocessor_kwargs={
-            'replay_save_dir': args.replay_save_dir
+            'replay_save_dir': args.replay_save_dir,
+            'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
         },
     )
