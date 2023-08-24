@@ -64,14 +64,23 @@ class Postprocessor(StatPostprocessor):
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
 
+        # Add "Healing" score based on health increase and decrease due to food and water
+        HEAL_BONUS_WEIGHT = 0.03
+        health_restore = 0
+        for agent_id in self.teams[self.team_id]:
+            if agent_id in self.env.realm.players:
+                health_restore += self.env.realm.players[agent_id].resources.health_restore
+        healing_bonus = HEAL_BONUS_WEIGHT if health_restore > 0 else 0
+
         # Unique event-based rewards, similar to exploration bonus
         # NOTE: this gets slower as the size of event log increases
-        # BONUS_WEIGHT = 0.01
-        # log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
-        # explore_bonus = BONUS_WEIGHT * score_unique_events(self.env.realm, log)
-        explore_bonus = 0
+        EXPLORE_BONUS_WEIGHT = 0.02
+        log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
+        explore_bonus = EXPLORE_BONUS_WEIGHT * score_unique_events(self.env.realm, log)
 
-        return sum(team_rewards.values()) + explore_bonus, team_infos
+        team_reward = sum(team_rewards.values()) + explore_bonus + healing_bonus
+
+        return team_reward, team_infos
 
     def infos(self, team_reward, env_done, team_done, team_infos, step):
         """Called in _poststep() via _handle_infos().

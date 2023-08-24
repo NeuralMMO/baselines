@@ -30,7 +30,7 @@ from nmmo.task.base_predicates import (
 )
 from nmmo.task.task_spec import TaskSpec, check_task_spec
 
-EVENT_NUMBER_GOAL = [3, 4, 5, 7, 9, 12, 15, 20, 30, 50]
+EVENT_NUMBER_GOAL = [1, 2, 3, 5, 7, 9, 12, 15, 20, 30, 50]
 INFREQUENT_GOAL = list(range(1, 10))
 STAY_ALIVE_GOAL = [50, 100, 150, 200, 300, 500]
 LEVEL_GOAL = list(range(1, 10))  # TODO: get config
@@ -46,13 +46,31 @@ curriculum: List[TaskSpec] = []
 
 # explore, eat, drink, attack any agent, harvest any item, level up any skill
 #   which can happen frequently
-essential_skills = [
-    "GO_FARTHEST",
+most_essentials = [
     "EAT_FOOD",
     "DRINK_WATER",
+    "GO_FARTHEST",
+]
+for event_code in most_essentials:
+  for cnt in range(1, 10):
+    curriculum.append(
+        TaskSpec(
+            eval_fn=CountEvent,
+            eval_fn_kwargs={"event": event_code, "N": cnt},
+            sampling_weight=100,
+        )
+    )
+
+essential_skills = [
     "SCORE_HIT",
+    "PLAYER_KILL",
     "HARVEST_ITEM",
+    "EQUIP_ITEM",
+    "CONSUME_ITEM",
     "LEVEL_UP",
+    "EARN_GOLD",
+    "LIST_ITEM",
+    "BUY_ITEM",
 ]
 for event_code in essential_skills:
   for cnt in EVENT_NUMBER_GOAL:
@@ -60,20 +78,15 @@ for event_code in essential_skills:
         TaskSpec(
             eval_fn=CountEvent,
             eval_fn_kwargs={"event": event_code, "N": cnt},
-            sampling_weight=30,
+            sampling_weight=20,
         )
     )
 
 # item/market skills, which happen less frequently or should not do too much
 item_skills = [
-    "CONSUME_ITEM",
     "GIVE_ITEM",
     "DESTROY_ITEM",
-    "EQUIP_ITEM",
     "GIVE_GOLD",
-    "LIST_ITEM",
-    "EARN_GOLD",
-    "BUY_ITEM",
 ]
 for event_code in item_skills:
   curriculum += [
