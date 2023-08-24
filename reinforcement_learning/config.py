@@ -44,6 +44,8 @@ class Config:
     tasks_path = None  # Path to tasks to use for training
     replay_save_dir = None  # Path to save replay files
     sqrt_achievement_rewards=False # Use the log of achievement rewards
+    heal_bonus_weight = 0.03
+    explore_bonus_weight = 0.02
     spawn_immunity = 20
 
     # Policy Args
