@@ -112,12 +112,13 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id, replay_save_dir=None):
+    def __init__(self, env, agent_id, max_episode_length, replay_save_dir=None):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
+        self.max_episode_length = max_episode_length
         self._num_replays_saved = 0
         self._replay_save_dir = None
-        if replay_save_dir is not None:# and self.team_id == 1: @kwych what is this?
-            self._replay_save_dir = replay_save_dir
+        #if replay_save_dir is not None:# and self.team_id == 1: @kwych what is this?
+        #    self._replay_save_dir = replay_save_dir
         self._replay_helper = None
         self._reset_episode_stats()
 
@@ -131,6 +132,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._reset_episode_stats()
 
     def _reset_episode_stats(self):
+        self.tick = 0
+        self.epoch_return = 0
+        self.epoch_length = 0
+
         self._cod_attacked = 0
         self._cod_starved = 0
         self._cod_dehydrated = 0
@@ -200,19 +205,24 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
+        self.tick += 1
+
+        # @kywch How do we prevent spam logging tasks without zeroing?
+        info = {'stats': {}}
+
         if not done:
+            self.epoch_length += 1
+            self.epoch_return += reward
             return reward, done, info
 
         agent = self.env.realm.players.dead_this_tick.get(
             self.agent_id, self.env.realm.players.get(self.agent_id)
         )
-        if agent is None:
-            return reward, done, info
-
+        assert agent is not None
         self._update_stats(agent)
 
-        if not self.env.done:
-            return reward, done, info
+        info['return'] = self.epoch_return
+        info['length'] = self.epoch_length
 
         info["stats"]["cod/attacked"] = self._cod_attacked
         info["stats"]["cod/starved"] = self._cod_starved
@@ -225,7 +235,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         info["curriculum"] = self._curriculum
 
         result, achieved, performed, _ = get_result(
-            self.env.realm, self.teams, self.team_id
+            self.env.realm, self.agent_id
         )
         for key, val in list(achieved.items()) + list(performed.items()):
             info["stats"][key] = float(val)
@@ -233,7 +243,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         # Fill in the TeamResult
         result.time_alive = self._time_alive
         result.earned_gold = achieved["achieved/earned_gold"]
-        result.completed_task_count = round(self._task_completed * self.team_size)
+        result.completed_task_count = round(self._task_completed)
         result.damage_received = self._damage_received
         result.damage_inflicted = self._damage_inflicted
         result.ration_consumed = self._ration_consumed
@@ -247,7 +257,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         result.carving_level = self._carving_level
         result.alchemy_level = self._alchemy_level
 
-        info["results"] = (self.agent_id, result)
+        info["team_results"] = (self.agent_id, result)
 
         if self._replay_helper is not None:
             replay_file = os.path.join(

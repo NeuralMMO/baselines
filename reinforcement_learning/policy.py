@@ -45,7 +45,6 @@ class Baseline(pufferlib.models.Policy):
     super().__init__()
     self.envs = envs
 
-    from pdb import set_trace as T; T()
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
     self.item_encoder = ItemEncoder(input_size, hidden_size)
@@ -162,7 +161,7 @@ class ItemEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
     self.item_offset = torch.tensor([i * 256 for i in range(16)])
-    self.embedding = torch.nn.Embedding(32, 32)
+    self.embedding = torch.nn.Embedding(256, 32)
 
     self.fc = torch.nn.Linear(2 * 32 + 12, hidden_size)
 

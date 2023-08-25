@@ -35,41 +35,41 @@ class Postprocessor(StatPostprocessor):
       replay_save_dir=None,
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
-      explore_bonus_weight=0
+      explore_bonus_weight=0,
+      max_episode_length=1024,
       ):
-        super().__init__(env, is_multiagent, agent_id)
+        super().__init__(env, agent_id, max_episode_length)
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
 
     def reset(self, obs):
-        pass
+        '''Called at the start of each episode'''
+        super().reset(obs)
 
     def action(self, action):
-        """Called in _prestep() via _handle_actions().
-           See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L192
-        """
-        # Default action handler does nothing. Add custom action handling here.
+        '''Called before actions are passed from the model to the environment'''
         return action
 
     @property
     def observation_space(self):
-        # If you modify the shape of features, you need to specify the new obs space
+        '''If you modify the shape of features, you need to specify the new obs space'''
         return super().observation_space
 
     def observation(self, obs):
-        """Called in _poststep() via _featurize().
-           See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L309
-        """
-        # Add custom featurization here.
+        '''Called before observations are returned from the environment
+
+        Use this to define custom featurizers. Changing the space itself requires you to
+        define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
+        '''
         return obs
 
     def reward_done_info(self, reward, done, info):
-        """Called in _poststep() via _shape_rewards().
-           See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L322
-        """
+        '''Called on reward, done, and info before they are returned from the environment'''
+        reward, done, info = super().reward_done_info(reward, done, info)
+
         # The below lines update the stats and do NOT affect the reward.
-        infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
+        #infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
         agent_id = self.agent_id
 
         # Default reward shaper sums team rewards.
@@ -89,14 +89,14 @@ class Postprocessor(StatPostprocessor):
 
         reward = reward + explore_bonus + healing_bonus
 
-        return reward, infos
+        return reward, done, info
 
 
 def make_env_creator(args: Namespace):
     # TODO: Max episode length
     def env_creator():
         """Create an environment."""
-        env = nmmo.Env(*Config(args))
+        env = nmmo.Env(Config(args))
         env = pufferlib.emulation.PettingZooPufferEnv(env,
             #emulate_const_horizon=args.max_episode_length,
             postprocessor_cls=Postprocessor,
@@ -104,7 +104,8 @@ def make_env_creator(args: Namespace):
                 'replay_save_dir': args.replay_save_dir,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
-                'explore_bonus_weight': args.explore_bonus_weight
+                'explore_bonus_weight': args.explore_bonus_weight,
+                'max_episode_length': args.max_episode_length,
             },
         )
         return env
