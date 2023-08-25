@@ -86,10 +86,11 @@ class TeamResult:
             "alchemy_level",
         ]
 
-def get_team_result(realm: Realm, teams, team_id):
-    achieved, performed, event_cnt = process_event_log(realm, teams[team_id])
-    team_result = TeamResult(
-        policy_id = str(team_id), # TODO: put actual team name here
+def get_result(realm: Realm, agent_id):
+    achieved, performed, event_cnt = process_event_log(realm, [agent_id])
+    # Not actually a "team" result
+    result = TeamResult(
+        policy_id = str(agent_id), # TODO: put actual team name here
         total_score = achieved["achieved/unique_events"],
         player_kill = achieved["achieved/player_kill"],
         max_level = achieved["achieved/max_level"],
@@ -104,30 +105,28 @@ def get_team_result(realm: Realm, teams, team_id):
         item_buy_count = event_cnt["event/buy_item"],
     )
 
-    return team_result, achieved, performed, event_cnt
+    return result, achieved, performed, event_cnt
 
 
 class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, teams, team_id, replay_save_dir=None):
-        super().__init__(env, teams, team_id)
+    def __init__(self, env, agent_id, replay_save_dir=None):
+        super().__init__(env, is_multiagent=True, agent_id=agent_id)
         self._num_replays_saved = 0
         self._replay_save_dir = None
-        if replay_save_dir is not None and self.team_id == 1:
+        if replay_save_dir is not None:# and self.team_id == 1: @kwych what is this?
             self._replay_save_dir = replay_save_dir
         self._replay_helper = None
         self._reset_episode_stats()
 
-    def reset(self, team_obs, dummy=False):
-        super().reset(team_obs)
-        if not dummy:
-            if self._replay_helper is None and self._replay_save_dir is not None:
-                self._replay_helper = FileReplayHelper()
-                self.env.realm.record_replay(self._replay_helper)
-            if self._replay_helper is not None:
-                self._replay_helper.reset()
+    def reset(self, observation):
+        if self._replay_helper is None and self._replay_save_dir is not None:
+            self._replay_helper = FileReplayHelper()
+            self.env.realm.record_replay(self._replay_helper)
+        if self._replay_helper is not None:
+            self._replay_helper.reset()
 
         self._reset_episode_stats()
 
@@ -142,7 +141,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._combat_level = []
         self._harvest_level = []
 
-        # for team results
+        # for agent results
         self._time_alive = 0
         self._damage_received = 0
         self._damage_inflicted = 0
@@ -162,18 +161,18 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         # For each task spec, record whether its max progress and reward count
         self._curriculum[task.spec_name].append((task._max_progress, task.reward_signal_count))
         if task.reward_signal_count >= 2:
-            self._task_with_2_reward_signal += 1.0 / self.team_size
+            self._task_with_2_reward_signal += 1.0
         if task._max_progress >= 0.2:
-            self._task_with_0p2_max_progress += 1.0 / self.team_size
+            self._task_with_0p2_max_progress += 1.0
         if task.completed:
-            self._task_completed += 1.0 / self.team_size
+            self._task_completed += 1.0
 
         if agent.damage.val > 0:
-            self._cod_attacked += 1.0 / self.team_size
+            self._cod_attacked += 1.0
         elif agent.food.val == 0:
-            self._cod_starved += 1.0 / self.team_size
+            self._cod_starved += 1.0
         elif agent.water.val == 0:
-            self._cod_dehydrated += 1.0 / self.team_size
+            self._cod_dehydrated += 1.0
 
         self._combat_level.append(agent.attack_level)
         self._harvest_level.append(max(
@@ -199,64 +198,65 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
 
-    def rewards(self, team_rewards, team_dones, team_infos, step):
-        for agent_id in team_dones:
-            if team_dones[agent_id] is True:
-                agent = self.env.realm.players.dead_this_tick.get(
-                    agent_id, self.env.realm.players.get(agent_id)
-                )
-                if agent is None:
-                    continue
-                self._update_stats(agent)
+    def reward_done_info(self, reward, done, info):
+        """Update stats + info and save replays."""
+        if not done:
+            return reward, done, info
 
-    def infos(self, team_reward, env_done, team_done, team_infos, step):
-        """Update team infos and save replays."""
-        team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)
+        agent = self.env.realm.players.dead_this_tick.get(
+            self.agent_id, self.env.realm.players.get(self.agent_id)
+        )
+        if agent is None:
+            return reward, done, info
 
-        if env_done:
-            team_infos["stats"]["cod/attacked"] = self._cod_attacked
-            team_infos["stats"]["cod/starved"] = self._cod_starved
-            team_infos["stats"]["cod/dehydrated"] = self._cod_dehydrated
-            team_infos["stats"]["task/completed"] = self._task_completed
-            team_infos["stats"]["task/pcnt_2_reward_signal"] = self._task_with_2_reward_signal
-            team_infos["stats"]["task/pcnt_0p2_max_progress"] = self._task_with_0p2_max_progress
-            team_infos["stats"]["achieved/max_combat_level"] = max(self._combat_level)
-            team_infos["stats"]["achieved/max_harvest_level"] = max(self._harvest_level)
-            team_infos["curriculum"] = self._curriculum
+        self._update_stats(agent)
 
-            team_result, achieved, performed, _ = get_team_result(
-                self.env.realm, self.teams, self.team_id
-            )
-            for key, val in list(achieved.items()) + list(performed.items()):
-                team_infos["stats"][key] = float(val)
+        if not self.env.done:
+            return reward, done, info
 
-            # Fill in the TeamResult
-            team_result.time_alive = self._time_alive
-            team_result.earned_gold = achieved["achieved/earned_gold"]
-            team_result.completed_task_count = round(self._task_completed * self.team_size)
-            team_result.damage_received = self._damage_received
-            team_result.damage_inflicted = self._damage_inflicted
-            team_result.ration_consumed = self._ration_consumed
-            team_result.potion_consumed = self._potion_consumed
-            team_result.melee_level = self._melee_level
-            team_result.range_level = self._range_level
-            team_result.mage_level = self._mage_level
-            team_result.fishing_level = self._fishing_level
-            team_result.herbalism_level = self._herbalism_level
-            team_result.prospecting_level = self._prospecting_level
-            team_result.carving_level = self._carving_level
-            team_result.alchemy_level = self._alchemy_level
+        info["stats"]["cod/attacked"] = self._cod_attacked
+        info["stats"]["cod/starved"] = self._cod_starved
+        info["stats"]["cod/dehydrated"] = self._cod_dehydrated
+        info["stats"]["task/completed"] = self._task_completed
+        info["stats"]["task/pcnt_2_reward_signal"] = self._task_with_2_reward_signal
+        info["stats"]["task/pcnt_0p2_max_progress"] = self._task_with_0p2_max_progress
+        info["stats"]["achieved/max_combat_level"] = max(self._combat_level)
+        info["stats"]["achieved/max_harvest_level"] = max(self._harvest_level)
+        info["curriculum"] = self._curriculum
 
-            team_infos["team_results"] = (self.team_id, team_result)
+        result, achieved, performed, _ = get_result(
+            self.env.realm, self.teams, self.team_id
+        )
+        for key, val in list(achieved.items()) + list(performed.items()):
+            info["stats"][key] = float(val)
 
-            if self._replay_helper is not None:
-                replay_file = os.path.join(
-                    self._replay_save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
-                logging.info("Saving replay to %s", replay_file)
-                self._replay_helper.save(replay_file, compress=False)
-                self._num_replays_saved += 1
+        # Fill in the TeamResult
+        result.time_alive = self._time_alive
+        result.earned_gold = achieved["achieved/earned_gold"]
+        result.completed_task_count = round(self._task_completed * self.team_size)
+        result.damage_received = self._damage_received
+        result.damage_inflicted = self._damage_inflicted
+        result.ration_consumed = self._ration_consumed
+        result.potion_consumed = self._potion_consumed
+        result.melee_level = self._melee_level
+        result.range_level = self._range_level
+        result.mage_level = self._mage_level
+        result.fishing_level = self._fishing_level
+        result.herbalism_level = self._herbalism_level
+        result.prospecting_level = self._prospecting_level
+        result.carving_level = self._carving_level
+        result.alchemy_level = self._alchemy_level
 
-        return team_infos
+        info["results"] = (self.agent_id, result)
+
+        if self._replay_helper is not None:
+            replay_file = os.path.join(
+                self._replay_save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
+            logging.info("Saving replay to %s", replay_file)
+            self._replay_helper.save(replay_file, compress=False)
+            self._num_replays_saved += 1
+
+        return reward, done, info
 
 # Event processing utilities for Neural MMO.
 

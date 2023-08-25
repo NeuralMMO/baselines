@@ -49,6 +49,8 @@ class Config:
     spawn_immunity = 20
 
     # Policy Args
+    input_size = 256
+    hidden_size = 256
     num_lstm_layers = 0  # Number of LSTM layers to use
     task_size = 4096  # Size of task embedding
     encode_task = True  # Encode task

@@ -1,9 +1,9 @@
 import os
 import logging
 
-from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
-from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+from pufferlib.vectorization import Serial, Multiprocessing
 from pufferlib.policy_store import DirectoryPolicyStore
+from pufferlib.frameworks import cleanrl
 import clean_pufferl
 
 import environment
@@ -21,7 +21,6 @@ def setup_env(args):
     os.makedirs(run_dir, exist_ok=True)
     logging.info("Training run: %s (%s)", args.run_name, run_dir)
     logging.info("Training args: %s", args)
-    binding = environment.create_binding(args)
 
     policy_store = None
     if args.policy_store_dir is None:
@@ -29,10 +28,19 @@ def setup_env(args):
         logging.info("Using policy store from %s", args.policy_store_dir)
         policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
-    learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
+    def make_policy(envs):
+        learner_policy = policy.Baseline(
+            envs,
+            input_size=args.input_size,
+            hidden_size=args.hidden_size,
+            task_size=args.task_size
+        )
+        return cleanrl.Policy(learner_policy)
+
     trainer = clean_pufferl.CleanPuffeRL(
-        binding=binding,
-        agent=learner_policy,
+        env_creator=environment.make_env_creator(args),
+        env_creator_kwargs={},
+        agent_creator=make_policy,
         data_dir=run_dir,
         exp_name=args.run_name,
         policy_store=policy_store,
@@ -40,7 +48,7 @@ def setup_env(args):
         wandb_project=args.wandb_project,
         wandb_extra_data=args,
         checkpoint_interval=args.checkpoint_interval,
-        vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+        vectorization=Serial if args.use_serial_vecenv else Multiprocessing,
         total_timesteps=args.train_num_steps,
         num_envs=args.num_envs,
         num_cores=args.num_cores or args.num_envs,

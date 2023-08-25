@@ -31,90 +31,81 @@ class Config(nmmo.config.Default):
         self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
 
 class Postprocessor(StatPostprocessor):
-    def __init__(self, env, teams, team_id,
+    def __init__(self, env, is_multiagent, agent_id,
       replay_save_dir=None,
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0
       ):
-        super().__init__(env, teams, team_id, replay_save_dir)
+        super().__init__(env, is_multiagent, agent_id)
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
 
-    def reset(self, team_obs, dummy=False):
-        super().reset(team_obs, dummy)
+    def reset(self, obs):
+        pass
 
-    def actions(self, team_actions, step):
+    def action(self, action):
         """Called in _prestep() via _handle_actions().
            See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L192
         """
         # Default action handler does nothing. Add custom action handling here.
-        return team_actions
+        return action
 
-    def features(self, obs, step):
+    @property
+    def observation_space(self):
+        # If you modify the shape of features, you need to specify the new obs space
+        return super().observation_space
+
+    def observation(self, obs):
         """Called in _poststep() via _featurize().
            See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L309
         """
-        # Default featurizer pads observations to max team size
-        team_features = super().features(obs, step)  # DO NOT REMOVE
-
         # Add custom featurization here.
-        return team_features
+        return obs
 
-    def rewards(self, team_rewards, team_dones, team_infos, step):
+    def reward_done_info(self, reward, done, info):
         """Called in _poststep() via _shape_rewards().
            See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L322
         """
         # The below lines update the stats and do NOT affect the reward.
-        super().rewards(team_rewards, team_dones, team_infos, step)  # DO NOT REMOVE
-        team_infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
+        infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
+        agent_id = self.agent_id
 
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
 
         # Add "Healing" score based on health increase and decrease due to food and water
         health_restore = 0
-        for agent_id in self.teams[self.team_id]:
-            if agent_id in self.env.realm.players:
-                health_restore += self.env.realm.players[agent_id].resources.health_restore
+        if agent_id in self.env.realm.players:
+            health_restore += self.env.realm.players[agent_id].resources.health_restore
         healing_bonus = self.heal_bonus_weight if health_restore > 0 else 0
 
         # Unique event-based rewards, similar to exploration bonus
         # NOTE: this gets slower as the size of event log increases
-        log = self.env.realm.event_log.get_data(agents=self.teams[self.team_id])
+        log = self.env.realm.event_log.get_data(agents=[agent_id])
         explore_bonus = self.explore_bonus_weight * score_unique_events(self.env.realm, log,
           sqrt_rewards=self.sqrt_achievement_rewards)
 
-        team_reward = sum(team_rewards.values()) + explore_bonus + healing_bonus
+        reward = reward + explore_bonus + healing_bonus
 
-        return team_reward, team_infos
-
-    def infos(self, team_reward, env_done, team_done, team_infos, step):
-        """Called in _poststep() via _handle_infos().
-           See https://github.com/PufferAI/PufferLib/blob/0.3/pufferlib/emulation.py#L348
-        """
-        # The below line processes the necessary stats.
-        team_infos = super().infos(team_reward, env_done, team_done, team_infos, step)  # DO NOT REMOVE
-
-        # Add custom infos here.
-        return team_infos
+        return reward, infos
 
 
-def create_binding(args: Namespace):
-    """Create an environment binding."""
-
-    return pufferlib.emulation.Binding(
-        env_cls=nmmo.Env,
-        default_args=[Config(args)],
-        env_name="Neural MMO",
-        suppress_env_prints=False,
-        emulate_const_horizon=args.max_episode_length,
-        postprocessor_cls=Postprocessor,
-        postprocessor_kwargs={
-            'replay_save_dir': args.replay_save_dir,
-            'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
-            'heal_bonus_weight': args.heal_bonus_weight,
-            'explore_bonus_weight': args.explore_bonus_weight
-        },
-    )
+def make_env_creator(args: Namespace):
+    # TODO: Max episode length
+    def env_creator():
+        """Create an environment."""
+        env = nmmo.Env(*Config(args))
+        env = pufferlib.emulation.PettingZooPufferEnv(env,
+            #emulate_const_horizon=args.max_episode_length,
+            postprocessor_cls=Postprocessor,
+            postprocessor_kwargs={
+                'replay_save_dir': args.replay_save_dir,
+                'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
+                'heal_bonus_weight': args.heal_bonus_weight,
+                'explore_bonus_weight': args.explore_bonus_weight
+            },
+        )
+        return env
+    return env_creator
