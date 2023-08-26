@@ -205,12 +205,14 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         """Update stats + info and save replays."""
 
         # @kywch How do we prevent spam logging tasks without zeroing?
-        info = {'stats': {}}
-
+        # TODO: Figure this out
         if not done:
             self.epoch_length += 1
             self.epoch_return += reward
             return reward, done, info
+
+        if 'stats' not in info:
+            info['stats'] = {}
 
         agent = self.env.realm.players.dead_this_tick.get(
             self.agent_id, self.env.realm.players.get(self.agent_id)
