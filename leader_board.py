@@ -208,12 +208,14 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
 
+        # Remove the task from info. Curriculum info is processed in _update_stats()
+        info.pop('task', None)
+
+        # Count and store unique event counts for easier use
         log = self.env.realm.event_log.get_data(agents=[self.agent_id])
         self._prev_unique_count = self._curr_unique_count
         self._curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
 
-        # @kywch How do we prevent spam logging tasks without zeroing?
-        # TODO: Figure this out
         if not done:
             self.epoch_length += 1
             self.epoch_return += reward

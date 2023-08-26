@@ -43,6 +43,7 @@ class Config:
     map_size = 128  # Size of maps to use for training
     tasks_path = None  # Path to tasks to use for training
     replay_save_dir = None  # Path to save replay files
+    early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
     explore_bonus_weight = 0.02
