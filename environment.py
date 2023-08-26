@@ -36,9 +36,8 @@ class Postprocessor(StatPostprocessor):
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0,
-      max_episode_length=1024,
       ):
-        super().__init__(env, agent_id, max_episode_length)
+        super().__init__(env, agent_id)
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
@@ -98,14 +97,12 @@ def make_env_creator(args: Namespace):
         """Create an environment."""
         env = nmmo.Env(Config(args))
         env = pufferlib.emulation.PettingZooPufferEnv(env,
-            #emulate_const_horizon=args.max_episode_length,
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
                 'replay_save_dir': args.replay_save_dir,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
-                'max_episode_length': args.max_episode_length,
             },
         )
         return env

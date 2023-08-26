@@ -112,9 +112,8 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id, max_episode_length, replay_save_dir=None):
+    def __init__(self, env, agent_id, replay_save_dir=None):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
-        self.max_episode_length = max_episode_length
         self._num_replays_saved = 0
         self._replay_save_dir = None
         #if replay_save_dir is not None:# and self.team_id == 1: @kwych what is this?
@@ -132,7 +131,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._reset_episode_stats()
 
     def _reset_episode_stats(self):
-        self.tick = 0
         self.epoch_return = 0
         self.epoch_length = 0
 
@@ -205,7 +203,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
-        self.tick += 1
 
         # @kywch How do we prevent spam logging tasks without zeroing?
         info = {'stats': {}}
