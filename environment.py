@@ -1,5 +1,4 @@
 from argparse import Namespace
-from collections import defaultdict
 import math
 
 import nmmo
@@ -34,12 +33,14 @@ class Config(nmmo.config.Default):
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,
       replay_save_dir=None,
+      early_stop_agent_num=0,
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0,
       clip_unique_event=3,
     ):
         super().__init__(env, agent_id, replay_save_dir)
+        self.early_stop_agent_num = early_stop_agent_num
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
@@ -68,20 +69,21 @@ class Postprocessor(StatPostprocessor):
 
     def reward_done_info(self, reward, done, info):
         '''Called on reward, done, and info before they are returned from the environment'''
-        reward, done, info = super().reward_done_info(reward, done, info)
 
-        # The below lines update the stats and do NOT affect the reward.
-        #infos = {"stats": defaultdict(float)}  # DO NOT REMOVE
-        agent_id = self.agent_id
+        # Stop early if there are too few agents generating the training data
+        if len(self.env.agents) <= self.early_stop_agent_num:
+            done = True
+
+        reward, done, info = super().reward_done_info(reward, done, info)
 
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
 
         # Add "Healing" score based on health increase and decrease due to food and water
-        health_restore = 0
-        if agent_id in self.env.realm.players:
-            health_restore += self.env.realm.players[agent_id].resources.health_restore
-        healing_bonus = self.heal_bonus_weight if health_restore > 0 else 0
+        healing_bonus = 0
+        if self.agent_id in self.env.realm.players:
+            if self.env.realm.players[self.agent_id].resources.health_restore > 0:
+                healing_bonus = self.heal_bonus_weight
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
@@ -106,6 +108,7 @@ def make_env_creator(args: Namespace):
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
                 'replay_save_dir': args.replay_save_dir,
+                'early_stop_agent_num': args.early_stop_agent_num,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
