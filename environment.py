@@ -1,11 +1,12 @@
 from argparse import Namespace
 from collections import defaultdict
+import math
 
 import nmmo
 import pufferlib
 import pufferlib.emulation
 
-from leader_board import StatPostprocessor, score_unique_events
+from leader_board import StatPostprocessor
 
 class Config(nmmo.config.Default):
     """Configuration for Neural MMO."""
@@ -36,12 +37,13 @@ class Postprocessor(StatPostprocessor):
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0,
-      max_episode_length=1024,
-      ):
-        super().__init__(env, agent_id, max_episode_length)
+      clip_unique_event=3,
+    ):
+        super().__init__(env, agent_id, replay_save_dir)
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
+        self.clip_unique_event = clip_unique_event
 
     def reset(self, obs):
         '''Called at the start of each episode'''
@@ -82,10 +84,13 @@ class Postprocessor(StatPostprocessor):
         healing_bonus = self.heal_bonus_weight if health_restore > 0 else 0
 
         # Unique event-based rewards, similar to exploration bonus
-        # NOTE: this gets slower as the size of event log increases
-        log = self.env.realm.event_log.get_data(agents=[agent_id])
-        explore_bonus = self.explore_bonus_weight * score_unique_events(self.env.realm, log,
-          sqrt_rewards=self.sqrt_achievement_rewards)
+        # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
+        if self.sqrt_achievement_rewards:
+            explore_bonus = math.sqrt(self._curr_unique_count) - math.sqrt(self._prev_unique_count)
+        else:
+            explore_bonus = min(self.clip_unique_event,
+                                self._curr_unique_count - self._prev_unique_count)
+        explore_bonus *= self.explore_bonus_weight
 
         reward = reward + explore_bonus + healing_bonus
 
@@ -98,14 +103,12 @@ def make_env_creator(args: Namespace):
         """Create an environment."""
         env = nmmo.Env(Config(args))
         env = pufferlib.emulation.PettingZooPufferEnv(env,
-            #emulate_const_horizon=args.max_episode_length,
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
                 'replay_save_dir': args.replay_save_dir,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
-                'max_episode_length': args.max_episode_length,
             },
         )
         return env
