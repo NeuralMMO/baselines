@@ -33,7 +33,7 @@ class Config(nmmo.config.Default):
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,
       replay_save_dir=None,
-      early_stop_agent_num=16,
+      early_stop_agent_num=0,
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0,
