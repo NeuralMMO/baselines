@@ -133,7 +133,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._reset_episode_stats()
 
     def _reset_episode_stats(self):
-        self.tick = 0
         self.epoch_return = 0
         self.epoch_length = 0
 
@@ -208,19 +207,20 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
-        self.tick += 1
 
         log = self.env.realm.event_log.get_data(agents=[self.agent_id])
         self._prev_unique_count = self._curr_unique_count
         self._curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
 
         # @kywch How do we prevent spam logging tasks without zeroing?
-        info = {'stats': {}}
-
+        # TODO: Figure this out
         if not done:
             self.epoch_length += 1
             self.epoch_return += reward
             return reward, done, info
+
+        if 'stats' not in info:
+            info['stats'] = {}
 
         agent = self.env.realm.players.dead_this_tick.get(
             self.agent_id, self.env.realm.players.get(self.agent_id)
