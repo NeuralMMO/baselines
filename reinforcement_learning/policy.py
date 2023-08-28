@@ -33,12 +33,6 @@ class Random(pufferlib.models.Policy):
   def critic(self, hidden):
     return torch.zeros((hidden.shape[0], 1)).to(hidden.device)
 
-  @staticmethod
-  def create_policy():
-    return pufferlib.frameworks.cleanrl.make_policy(
-        Random, recurrent_args=[1, 1], recurrent_kwargs={"num_layers": 0}
-    )
-
 
 class Baseline(pufferlib.models.Policy):
   def __init__(self, envs, input_size, hidden_size, task_size):
@@ -50,9 +44,8 @@ class Baseline(pufferlib.models.Policy):
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
-    #self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
-    self.proj_fc = torch.nn.Linear(4 * input_size, input_size)
-    #self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
+    self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
+    self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
@@ -69,10 +62,9 @@ class Baseline(pufferlib.models.Policy):
     market_embeddings = self.item_encoder(env_outputs["Market"])
     market = self.market_encoder(market_embeddings)
 
-    #task = self.task_encoder(env_outputs["Task"])
+    task = self.task_encoder(env_outputs["Task"])
 
-    obs = torch.cat([tile, my_agent, inventory, market], dim=-1)
-    #obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
+    obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
     obs = self.proj_fc(obs)
 
     return obs, (
