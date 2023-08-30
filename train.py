@@ -59,7 +59,7 @@ def setup_env(args):
         learning_rate=args.ppo_learning_rate,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.max_opponent_policies + 1,
-        record_loss = True,
+        record_loss = args.record_loss,
     )
     return trainer
 
