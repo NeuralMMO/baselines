@@ -1,12 +1,14 @@
 import argparse
 import os
 import time
+import torch
 
 class Config:
     # Run a smaller config on your local machine
     local_mode = False  # Run in local mode
     # Track to run - options: reinforcement_learning, curriculum_generation
     track = "rl"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Trainer Args
     num_cores = None  # Number of cores to use for training
