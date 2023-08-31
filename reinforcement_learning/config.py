@@ -9,7 +9,7 @@ class Config:
     # Track to run - options: reinforcement_learning, curriculum_generation
     track = "rl"
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    record_loss = False  # log all minibatch loss and actions, for debugging
+    #record_loss = False  # log all minibatch loss and actions, for debugging
 
     # Trainer Args
     num_cores = None  # Number of cores to use for training
