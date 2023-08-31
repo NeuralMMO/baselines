@@ -6,20 +6,21 @@ import datetime
 from types import SimpleNamespace
 from pathlib import Path
 
-import clean_pufferl
+import torch
 import pandas as pd
 
 import pufferlib
-from pufferlib.policy_store import DirectoryPolicyStore, FilePolicyRecord, MemoryPolicyStore
+from pufferlib.vectorization import Serial, Multiprocessing
+from pufferlib.policy_store import DirectoryPolicyStore
+from pufferlib.frameworks import cleanrl
+from pufferlib.policy_store import DirectoryPolicyStore
 import pufferlib.policy_ranker
 import pufferlib.utils
-from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
-from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+import clean_pufferl
 
 import environment
 
 from reinforcement_learning import config
-
 
 # To check if a new replay file was generated
 def get_new_files(directory, timestamp):
@@ -71,7 +72,7 @@ def save_replays(train_dir, save_dir):
         agent=learner_policy,
         data_dir=train_dir,
         policy_store=policy_store,
-        vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+        vectorization=Serial if args.use_serial_vecenv else Multiprocessing,
         num_envs=args.num_envs,
         num_cores=args.num_envs,
         num_buffers=args.num_buffers,
@@ -124,21 +125,28 @@ def rank_policies(policy_store_dir):
     args.data_dir = policy_store_dir
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = 16 + 1
-    args.rollout_batch_size = 1024 * 32  # NOTE: # no ranking update until 360k steps
 
     assert args.replay_save_dir is None, "Replay save dir should not be specified during policy ranking"
-    binding = environment.create_binding(args)
 
     # TODO: custom models will require different policy creation functions
     from reinforcement_learning import policy  # import your policy
-    learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
+    def make_policy(envs):
+        learner_policy = policy.Baseline(
+            envs,
+            input_size=args.input_size,
+            hidden_size=args.hidden_size,
+            task_size=args.task_size
+        )
+        return cleanrl.Policy(learner_policy)
 
     # Setup the evaluator. No training during evaluation
     evaluator = clean_pufferl.CleanPuffeRL(
-        binding=binding,
-        agent=learner_policy,
+        device=torch.device(args.device),
+        env_creator=environment.make_env_creator(args),
+        env_creator_kwargs={},
+        agent_creator=make_policy,
         data_dir=policy_store_dir,
-        vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+        vectorization=Multiprocessing,
         num_envs=args.num_envs,
         num_cores=args.num_envs,
         num_buffers=args.num_buffers,
@@ -149,8 +157,11 @@ def rank_policies(policy_store_dir):
         policy_ranker=policy_ranker, # so that a new ranker is created
     )
 
-    for _ in range(20):  # 20 is arbitrary
-        # CHECK ME: no ranking update until 360k steps?
+    rank_file = os.path.join(policy_store_dir, "ranking.txt")
+    with open(rank_file, "w") as f:
+        pass
+
+    while evaluator.global_step < args.train_num_steps:
         evaluator.evaluate()
         ratings = evaluator.policy_ranker.ratings()
         dataframe = pd.DataFrame(
@@ -160,13 +171,14 @@ def rank_policies(policy_store_dir):
             }
         )
 
-        print(
-            "\n\n"
-            + dataframe.round(2)
-            .sort_values(by=["Rating"], ascending=False)
-            .to_string(index=False)
-            + "\n\n"
-        )
+        with open(rank_file, "a") as f:
+            f.write(
+                "\n\n"
+                + dataframe.round(2)
+                .sort_values(by=["Rating"], ascending=False)
+                .to_string(index=False)
+                + "\n\n"
+            )
 
         # CHECK ME: delete the policy_ranker lock file
         Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
@@ -175,16 +187,16 @@ def rank_policies(policy_store_dir):
 
 
 if __name__ == "__main__":
-    """Usage: python evaluate.py -r <run_dir> -s <replay_save_dir> -p <policy_store_dir>
+    """Usage: python evaluate.py -c <checkpoint_file> -s <replay_save_dir> -p <policy_store_dir>
 
-    -r, --run-dir: Directory used for training and saving checkpoints. Usually contains run_name
-    -p, --policy-store-dir: Directory to load policy checkpoints from
+    -c, --checkpoint: A single checkpoint file to generate replay
+    -p, --policy-store-dir: Directory to load policy checkpoints from for evaluation/ranking
     -s, --replay-save-dir: Directory to save replays (Default: replays/)
 
-    To generate replay from your training run, run the following command, and replays will be saved under the replays/:
-    $ python evaluate.py -r <run_dir>
+    To generate replay from your checkpoint, run the following command, and replays will be saved under the replays/:
+    $ python evaluate.py -c <checkpoint_file>
 
-    To rank your checkpoints, run the following command, and the rankings will be printed out:
+    To rank your checkpoints, put them together in policy_store_dir, run the following command, and the rankings will be printed out:
     $ python evaluate.py -p <policy_store_dir>
 
     If replay_save_dir is specified, the script will run in local mode and only use 1 environment.
@@ -197,12 +209,12 @@ if __name__ == "__main__":
     # Process the evaluate.py command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-r",
-        "--run-dir",
-        dest="run_dir",
+        "-c",
+        "--checkpoint",
+        dest="checkpoint_file",
         type=str,
         default=None,
-        help="Directory used for training and saving checkpoints. Usually contains run_name",
+        help="A single checkpoint file to generate replay",
     )
     parser.add_argument(
         "-s",
@@ -223,12 +235,14 @@ if __name__ == "__main__":
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
-    if eval_args.run_dir is not None and eval_args.policy_store_dir is not None:
-        raise ValueError("Only one of run_dir or policy_store_dir can be specified")
+    # if eval_args.run_dir is not None and eval_args.policy_store_dir is not None:
+    #     raise ValueError("Only one of checkpoint or policy-store-dir can be specified.")
 
-    if eval_args.run_dir is not None:
-        logging.info("Generating replays from %s", eval_args.run_dir)
-        save_replays(eval_args.run_dir, eval_args.replay_save_dir)
+    eval_args.policy_store_dir = "puf12_late"
+
+    if eval_args.checkpoint_file is not None:
+        logging.info("Generating replays from %s", eval_args.checkpoint_file)
+        save_replays(eval_args.checkpoint_file, eval_args.replay_save_dir)
     elif eval_args.policy_store_dir is not None:
         logging.info("Evaluating checkpoints from %s", eval_args.policy_store_dir)
         logging.info("Replays will NOT be generated")
