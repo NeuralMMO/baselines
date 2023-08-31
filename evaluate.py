@@ -3,7 +3,6 @@ import argparse
 import logging
 import os
 import time
-import datetime
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -77,6 +76,7 @@ def save_replays(policy_store_dir, save_dir):
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
         policy_store=policy_store,
+        data_dir=save_dir,
     )
 
     # Load the policies into the policy pool
