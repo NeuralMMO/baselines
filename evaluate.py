@@ -110,7 +110,7 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
         )
     return policy_ranker
 
-def rank_policies(policy_store_dir):
+def rank_policies(policy_store_dir, device):
     # CHECK ME: can be custom models with different architectures loaded here?
     if not os.path.exists(policy_store_dir):
         raise ValueError("Policy store directory does not exist")
@@ -141,7 +141,7 @@ def rank_policies(policy_store_dir):
 
     # Setup the evaluator. No training during evaluation
     evaluator = clean_pufferl.CleanPuffeRL(
-        device=torch.device(args.device),
+        device=torch.device(device),
         env_creator=environment.make_env_creator(args),
         env_creator_kwargs={},
         agent_creator=make_policy,
@@ -192,6 +192,7 @@ if __name__ == "__main__":
     -c, --checkpoint: A single checkpoint file to generate replay
     -p, --policy-store-dir: Directory to load policy checkpoints from for evaluation/ranking
     -s, --replay-save-dir: Directory to save replays (Default: replays/)
+    -d, --device: Device to use for evaluation/ranking (Default: cuda if available, otherwise cpu)
 
     To generate replay from your checkpoint, run the following command, and replays will be saved under the replays/:
     $ python evaluate.py -c <checkpoint_file>
@@ -232,13 +233,20 @@ if __name__ == "__main__":
         default=None,
         help="Directory to load policy checkpoints from",
     )
+    parser.add_argument(
+        "-d",
+        "--device",
+        dest="device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="Device to use for evaluation/ranking",
+    )
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
     # if eval_args.run_dir is not None and eval_args.policy_store_dir is not None:
     #     raise ValueError("Only one of checkpoint or policy-store-dir can be specified.")
-
-    eval_args.policy_store_dir = "puf12_late"
+    eval_args.checkpoint_file = None
 
     if eval_args.checkpoint_file is not None:
         logging.info("Generating replays from %s", eval_args.checkpoint_file)
@@ -246,6 +254,6 @@ if __name__ == "__main__":
     elif eval_args.policy_store_dir is not None:
         logging.info("Evaluating checkpoints from %s", eval_args.policy_store_dir)
         logging.info("Replays will NOT be generated")
-        rank_policies(eval_args.policy_store_dir)
+        rank_policies(eval_args.policy_store_dir, eval_args.device)
     else:
         raise ValueError("Either run_dir or policy_store_dir must be specified")
