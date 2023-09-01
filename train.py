@@ -40,6 +40,7 @@ def setup_env(args):
 
     trainer = clean_pufferl.CleanPuffeRL(
         device=torch.device(args.device),
+        seed=args.seed,
         env_creator=environment.make_env_creator(args),
         env_creator_kwargs={},
         agent_creator=make_policy,

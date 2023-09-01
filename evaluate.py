@@ -66,6 +66,7 @@ def save_replays(policy_store_dir, save_dir):
 
     # Setup the evaluator. No training during evaluation
     evaluator = clean_pufferl.CleanPuffeRL(
+        seed=args.seed,
         env_creator=environment.make_env_creator(args),
         env_creator_kwargs={},
         agent_creator=make_policy,
@@ -160,6 +161,7 @@ def rank_policies(policy_store_dir, device):
     # Setup the evaluator. No training during evaluation
     evaluator = clean_pufferl.CleanPuffeRL(
         device=torch.device(device),
+        seed=args.seed,
         env_creator=environment.make_env_creator(args),
         env_creator_kwargs={},
         agent_creator=make_policy,
