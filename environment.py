@@ -32,14 +32,13 @@ class Config(nmmo.config.Default):
 
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,
-      replay_save_dir=None,
       early_stop_agent_num=0,
       sqrt_achievement_rewards=False,
       heal_bonus_weight=0,
       explore_bonus_weight=0,
       clip_unique_event=3,
     ):
-        super().__init__(env, agent_id, replay_save_dir)
+        super().__init__(env, agent_id)
         self.early_stop_agent_num = early_stop_agent_num
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
@@ -107,7 +106,6 @@ def make_env_creator(args: Namespace):
         env = pufferlib.emulation.PettingZooPufferEnv(env,
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
-                'replay_save_dir': args.replay_save_dir,
                 'early_stop_agent_num': args.early_stop_agent_num,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,

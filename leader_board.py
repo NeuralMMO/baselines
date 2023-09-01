@@ -1,6 +1,3 @@
-import os
-import time
-import logging
 from typing import Optional, List
 from dataclasses import dataclass
 from collections import defaultdict
@@ -12,7 +9,6 @@ import pufferlib.emulation
 
 from nmmo.core.realm import Realm
 from nmmo.lib.log import EventCode
-from nmmo.render.replay_helper import FileReplayHelper
 import nmmo.systems.item as Item
 
 @dataclass
@@ -113,23 +109,11 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id, replay_save_dir=None):
+    def __init__(self, env, agent_id):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
-        self._num_replays_saved = 0
-        self._replay_save_dir = None
-        #  NOTE: We only need one replay helper to get replay
-        if replay_save_dir is not None and self.agent_id == 1:
-            self._replay_save_dir = replay_save_dir
-        self._replay_helper = None
         self._reset_episode_stats()
 
     def reset(self, observation):
-        if self._replay_helper is None and self._replay_save_dir is not None:
-            self._replay_helper = FileReplayHelper()
-            self.env.realm.record_replay(self._replay_helper)
-        if self._replay_helper is not None:
-            self._replay_helper.reset()
-
         self._reset_episode_stats()
 
     def _reset_episode_stats(self):
@@ -268,13 +252,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         result.alchemy_level = self._alchemy_level
 
         info["team_results"] = (self.agent_id, result)
-
-        if self._replay_helper is not None:
-            replay_file = os.path.join(
-                self._replay_save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
-            logging.info("Saving replay to %s", replay_file)
-            self._replay_helper.save(replay_file, compress=False)
-            self._num_replays_saved += 1
 
         return reward, done, info
 

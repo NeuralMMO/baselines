@@ -1,5 +1,6 @@
 import os
 import logging
+import torch
 
 from pufferlib.vectorization import Serial, Multiprocessing
 from pufferlib.policy_store import DirectoryPolicyStore
@@ -38,6 +39,8 @@ def setup_env(args):
         return cleanrl.Policy(learner_policy)
 
     trainer = clean_pufferl.CleanPuffeRL(
+        device=torch.device(args.device),
+        seed=args.seed,
         env_creator=environment.make_env_creator(args),
         env_creator_kwargs={},
         agent_creator=make_policy,
@@ -57,6 +60,7 @@ def setup_env(args):
         learning_rate=args.ppo_learning_rate,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.max_opponent_policies + 1,
+        #record_loss = args.record_loss,
     )
     return trainer
 
