@@ -89,8 +89,10 @@ class Postprocessor(StatPostprocessor):
                 healing_bonus = self.heal_bonus_weight
 
         # Add meandering bonus to encourage moving to various directions
-        move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-        meander_bonus = self.meander_bonus_weight * max(move_entropy - 1, 0)
+        meander_bonus = 0
+        if len(self._last_moves) > 5:
+          move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
+          meander_bonus = self.meander_bonus_weight * (move_entropy - 1)
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count

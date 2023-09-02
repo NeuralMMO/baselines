@@ -50,7 +50,7 @@ class Config:
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
-    meander_bonus_weight = 0.025
+    meander_bonus_weight = 0.02
     explore_bonus_weight = 0.02
     spawn_immunity = 20
 
