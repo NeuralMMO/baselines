@@ -193,21 +193,27 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
 
+    """
     def observation(self, observation):
         # Process the masks to NOT repeat the move/price too much
         #   which seems to cause the entropy collapse during training
-
-        # Mask out the direction that were repeated for 4 times
-        if len(self._last_moves) > 4:
-            past_dirs = set(self._last_moves[-4:])
-            if len(past_dirs) == 1:  # repeated the same direction for 4 times
+        if len(self._last_moves) > 8:
+            def _mask_out_dir(mask_dir):
                 mask = observation["ActionTargets"]["Move"]["Direction"]
-                repeat_dir = past_dirs.pop()
-                mask[repeat_dir] = 0  # mask out the repeated direction
+                mask[mask_dir] = 0
                 if sum(mask) == 0:  #  if all directions are masked out
                     mask[:] = 1
-                    mask[[repeat_dir, -1]] = 0
+                    mask[[mask_dir, -1]] = 0
                 observation["ActionTargets"]["Move"]["Direction"] = mask
+
+            # When the direction that were repeated for 7 times, mask out the repeated direction
+            past_dirs = set(self._last_moves[-7:])
+            if len(past_dirs) == 1:  # repeated the same direction for 4 times
+                _mask_out_dir(self._last_moves[-1])
+            
+            # When the two-dir pattern was repeated for 3 times, break the pattern
+            if self._last_moves[-2:] == self._last_moves[-4:-2] == self._last_moves[-6:-4]:
+                _mask_out_dir(self._last_moves[-2])
 
         # Mask out the last selected price
         observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
@@ -217,6 +223,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._last_moves.append(action[8])  # 8 is the index for move direction
         self._last_price = action[10]  # 10 is the index for selling price
         return action
+    """
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
@@ -383,7 +390,8 @@ def extract_unique_event(log, attr_to_col):
 
     # mask some columns to make the event redundant
     cols_to_ignore = {
-        EventCode.SCORE_HIT: ["combat_style", "damage"],
+        EventCode.GO_FARTHEST: ["distance"],
+        EventCode.SCORE_HIT: ["damage"],
         # treat each (item, level) differently
         EventCode.CONSUME_ITEM: ["quantity"],
         # but, count each (item, level) only once
