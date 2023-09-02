@@ -14,7 +14,6 @@ from nmmo.task.base_predicates import (
     CanSeeTile,
     ConsumeItem,
     CountEvent,
-    DistanceTraveled,
     EarnGold,
     EquipItem,
     HarvestItem,
@@ -49,7 +48,6 @@ curriculum: List[TaskSpec] = []
 most_essentials = [
     "EAT_FOOD",
     "DRINK_WATER",
-    "GO_FARTHEST",
 ]
 for event_code in most_essentials:
   for cnt in range(1, 10):
@@ -126,11 +124,6 @@ for target in ["left_team", "right_team"]:
   curriculum.append(TaskSpec(eval_fn=CanSeeGroup,
                    eval_fn_kwargs={"target": target}))
 
-# explore the map -- sum the l-inf distance traveled by all subjects
-for dist in [10, 20, 30, 50, 100]:  # each agent
-  curriculum.append(TaskSpec(eval_fn=DistanceTraveled,
-                   eval_fn_kwargs={"dist": dist}))
-
 # level up a skill
 for skill in SKILLS:
   for level in LEVEL_GOAL[1:]:
@@ -186,11 +179,9 @@ for amount in EVENT_NUMBER_GOAL:
       )
   )
 
-
 # managing inventory space
 def PracticeInventoryManagement(gs, subject, space, num_tick):
   return InventorySpaceGE(gs, subject, space) * TickGE(gs, subject, num_tick)
-
 
 for space in [2, 4, 8]:
   curriculum += [
@@ -318,7 +309,7 @@ if __name__ == "__main__":
     pool.close()
     pool.join()
 
-  # 1535 task specs: divide the specs into chunks
+  # 1549 task specs: divide the specs into chunks
   num_workers = round(psutil.cpu_count(logical=False)*0.7)
   spec_chunks = np.array_split(curriculum, num_workers)
   with create_pool(num_workers) as pool:
