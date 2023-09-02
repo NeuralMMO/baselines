@@ -147,6 +147,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level = 0
         self._alchemy_level = 0
 
+        # saving actions for masking
+        self._last_moves = []
+        self._last_price = 0
+
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
@@ -188,6 +192,31 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._prospecting_level += agent.prospecting_level.val
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
+
+    def observation(self, observation):
+        # Process the masks to NOT repeat the move/price too much
+        #   which seems to cause the entropy collapse during training
+
+        # Mask out the direction that were repeated for 4 times
+        if len(self._last_moves) > 4:
+            past_dirs = set(self._last_moves[-4:])
+            if len(past_dirs) == 1:  # repeated the same direction for 4 times
+                mask = observation["ActionTargets"]["Move"]["Direction"]
+                repeat_dir = past_dirs.pop()
+                mask[repeat_dir] = 0  # mask out the repeated direction
+                if sum(mask) == 0:  #  if all directions are masked out
+                    mask[:] = 1
+                    mask[[repeat_dir, -1]] = 0
+                observation["ActionTargets"]["Move"]["Direction"] = mask
+
+        # Mask out the last selected price
+        observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
+        return observation
+
+    def action(self, action):
+        self._last_moves.append(action[8])  # 8 is the index for move direction
+        self._last_price = action[10]  # 10 is the index for selling price
+        return action
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""

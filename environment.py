@@ -49,15 +49,12 @@ class Postprocessor(StatPostprocessor):
         '''Called at the start of each episode'''
         super().reset(obs)
 
-    def action(self, action):
-        '''Called before actions are passed from the model to the environment'''
-        return action
-
     @property
     def observation_space(self):
         '''If you modify the shape of features, you need to specify the new obs space'''
         return super().observation_space
 
+    """
     def observation(self, obs):
         '''Called before observations are returned from the environment
 
@@ -65,6 +62,11 @@ class Postprocessor(StatPostprocessor):
         define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
         '''
         return obs
+
+    def action(self, action):
+        '''Called before actions are passed from the model to the environment'''
+        return action
+    """
 
     def reward_done_info(self, reward, done, info):
         '''Called on reward, done, and info before they are returned from the environment'''
