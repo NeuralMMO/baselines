@@ -1,7 +1,8 @@
 from typing import Optional, List
 from dataclasses import dataclass
-from collections import defaultdict
+from collections import defaultdict, Counter
 
+import math
 import numpy as np
 
 import pufferlib
@@ -147,7 +148,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level = 0
         self._alchemy_level = 0
 
-        # saving actions for masking
+        # saving actions for masking/scoring
         self._last_moves = []
         self._last_price = 0
 
@@ -193,28 +194,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
 
-    """
     def observation(self, observation):
-        # Process the masks to NOT repeat the move/price too much
-        #   which seems to cause the entropy collapse during training
-        if len(self._last_moves) > 8:
-            def _mask_out_dir(mask_dir):
-                mask = observation["ActionTargets"]["Move"]["Direction"]
-                mask[mask_dir] = 0
-                if sum(mask) == 0:  #  if all directions are masked out
-                    mask[:] = 1
-                    mask[[mask_dir, -1]] = 0
-                observation["ActionTargets"]["Move"]["Direction"] = mask
-
-            # When the direction that were repeated for 7 times, mask out the repeated direction
-            past_dirs = set(self._last_moves[-7:])
-            if len(past_dirs) == 1:  # repeated the same direction for 4 times
-                _mask_out_dir(self._last_moves[-1])
-            
-            # When the two-dir pattern was repeated for 3 times, break the pattern
-            if self._last_moves[-2:] == self._last_moves[-4:-2] == self._last_moves[-6:-4]:
-                _mask_out_dir(self._last_moves[-2])
-
         # Mask out the last selected price
         observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
         return observation
@@ -223,7 +203,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._last_moves.append(action[8])  # 8 is the index for move direction
         self._last_price = action[10]  # 10 is the index for selling price
         return action
-    """
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
@@ -415,3 +394,12 @@ def extract_unique_event(log, attr_to_col):
 
     # return unique events after masking
     return set(tuple(row) for row in log[:, attr_to_col["event"]:])
+
+def calculate_entropy(sequence):
+    frequencies = Counter(sequence)
+    total_elements = len(sequence)
+    entropy = 0
+    for freq in frequencies.values():
+        probability = freq / total_elements
+        entropy -= probability * math.log2(probability)
+    return entropy
