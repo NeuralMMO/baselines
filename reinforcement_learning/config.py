@@ -34,7 +34,7 @@ class Config:
     bptt_horizon = 8  # Train on this number of steps of a rollout at a time. Used to reduce GPU memory.
     ppo_training_batch_size = 128  # Number of rows in a training batch
     ppo_update_epochs = 4  # Number of update epochs to use for training
-    ppo_learning_rate = 0.0001  # Learning rate
+    ppo_learning_rate = 0.00012  # Learning rate
 
     # Environment Args
     num_agents = 128  # Number of agents to use for training

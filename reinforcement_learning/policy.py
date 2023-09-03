@@ -115,11 +115,12 @@ class TileEncoder(torch.nn.Module):
 class PlayerEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.player_offset = torch.tensor([i * 256 for i in range(23)])
-    self.embedding = torch.nn.Embedding(23 * 256, 32)
+    self.entity_dim = 31
+    self.player_offset = torch.tensor([i * 256 for i in range(self.entity_dim)])
+    self.embedding = torch.nn.Embedding(self.entity_dim * 256, 32)
 
-    self.agent_fc = torch.nn.Linear(23 * 32, hidden_size)
-    self.my_agent_fc = torch.nn.Linear(23 * 32, input_size)
+    self.agent_fc = torch.nn.Linear(self.entity_dim * 32, hidden_size)
+    self.my_agent_fc = torch.nn.Linear(self.entity_dim * 32, input_size)
 
   def forward(self, agents, my_id):
     # Pull out rows corresponding to the agent
