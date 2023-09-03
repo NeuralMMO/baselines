@@ -14,11 +14,10 @@ class Config:
     # Trainer Args
     seed = 1
     num_cores = None  # Number of cores to use for training
-    num_envs = 12  # Number of environments to use for training
+    num_envs = 6  # Number of environments to use for training
     num_buffers = 2  # Number of buffers to use for training
-    rollout_batch_size = 65536 # Number of steps to rollout
-    train_num_steps = 30_000_000  # Number of steps to train
-    train_max_epochs = 10_000_000  # Number of epochs to train
+    rollout_batch_size = 32768 # Number of steps to rollout
+    train_num_steps = 15_000_000  # Number of steps to train
     checkpoint_interval = 10  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs

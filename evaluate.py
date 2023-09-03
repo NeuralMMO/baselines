@@ -82,7 +82,7 @@ def save_replays(policy_store_dir, save_dir):
 
     # Load the policies into the policy pool
     evaluator.policy_pool.update_policies({
-        p.name: p.policy(make_policy, envs=evaluator.buffers[0]).to(evaluator.device)
+        p.name: p.policy(make_policy, evaluator.buffers[0], evaluator.device)
         for p in policy_store._all_policies().values()
     })
 
@@ -263,6 +263,9 @@ if __name__ == "__main__":
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
+
+    eval_args.policy_store_dir = 'puf04_17p'
+
     assert eval_args.policy_store_dir is not None, "Policy store directory must be specified"
 
     if eval_args.eval_mode:
