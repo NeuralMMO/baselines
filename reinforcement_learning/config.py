@@ -18,7 +18,7 @@ class Config:
     num_buffers = 2  # Number of buffers to use for training
     rollout_batch_size = 32768 # Number of steps to rollout
     train_num_steps = 10_000_000  # Number of steps to train
-    checkpoint_interval = 10  # Interval to save models
+    checkpoint_interval = 30  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs
     policy_store_dir = None # Policy store directory
