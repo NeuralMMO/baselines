@@ -51,7 +51,7 @@ class Config:
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
     meander_bonus_weight = 0.02
-    explore_bonus_weight = 0.02
+    explore_bonus_weight = 0.01
     spawn_immunity = 20
 
     # Policy Args
