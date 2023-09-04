@@ -25,6 +25,7 @@ class Config(nmmo.config.Default):
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
         self.TASK_EMBED_DIM = args.task_size
+        self.RESOURCE_RESILIENT_POPULATION = args.resilient_population
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
