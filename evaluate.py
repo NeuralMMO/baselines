@@ -52,6 +52,7 @@ def save_replays(policy_store_dir, save_dir):
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
+    args.resilient_population = 0  # no resilient agents
 
     # TODO: custom models will require different policy creation functions
     from reinforcement_learning import policy  # import your policy
@@ -146,6 +147,7 @@ def rank_policies(policy_store_dir, device):
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
+    args.resilient_population = 0  # no resilient agents
 
     # TODO: custom models will require different policy creation functions
     from reinforcement_learning import policy  # import your policy
