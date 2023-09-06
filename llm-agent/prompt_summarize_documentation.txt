@@ -1,0 +1,1 @@
+Neural MMO is a many-agent simulation for AI research inspired by massively multiplayer online games. Create an approximately 2 page or 500 word summary of the documentation below as a reference for yourself. You will later use this information to implement various scripted agents to complete tasks within the game.
