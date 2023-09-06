@@ -1,9 +1,10 @@
 import os
 import logging
+import torch
 
-from pufferlib.vectorization.multiprocessing import VecEnv as MPVecEnv
-from pufferlib.vectorization.serial import VecEnv as SerialVecEnv
+from pufferlib.vectorization import Serial, Multiprocessing
 from pufferlib.policy_store import DirectoryPolicyStore
+from pufferlib.frameworks import cleanrl
 import clean_pufferl
 
 import environment
@@ -21,7 +22,6 @@ def setup_env(args):
     os.makedirs(run_dir, exist_ok=True)
     logging.info("Training run: %s (%s)", args.run_name, run_dir)
     logging.info("Training args: %s", args)
-    binding = environment.create_binding(args)
 
     policy_store = None
     if args.policy_store_dir is None:
@@ -29,10 +29,21 @@ def setup_env(args):
         logging.info("Using policy store from %s", args.policy_store_dir)
         policy_store = DirectoryPolicyStore(args.policy_store_dir)
 
-    learner_policy = policy.Baseline.create_policy(binding, args.__dict__)
+    def make_policy(envs):
+        learner_policy = policy.Baseline(
+            envs,
+            input_size=args.input_size,
+            hidden_size=args.hidden_size,
+            task_size=args.task_size
+        )
+        return cleanrl.Policy(learner_policy)
+
     trainer = clean_pufferl.CleanPuffeRL(
-        binding=binding,
-        agent=learner_policy,
+        device=torch.device(args.device),
+        seed=args.seed,
+        env_creator=environment.make_env_creator(args),
+        env_creator_kwargs={},
+        agent_creator=make_policy,
         data_dir=run_dir,
         exp_name=args.run_name,
         policy_store=policy_store,
@@ -40,7 +51,7 @@ def setup_env(args):
         wandb_project=args.wandb_project,
         wandb_extra_data=args,
         checkpoint_interval=args.checkpoint_interval,
-        vec_backend=SerialVecEnv if args.use_serial_vecenv else MPVecEnv,
+        vectorization=Serial if args.use_serial_vecenv else Multiprocessing,
         total_timesteps=args.train_num_steps,
         num_envs=args.num_envs,
         num_cores=args.num_cores or args.num_envs,
@@ -49,6 +60,7 @@ def setup_env(args):
         learning_rate=args.ppo_learning_rate,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.max_opponent_policies + 1,
+        #record_loss = args.record_loss,
     )
     return trainer
 
@@ -59,6 +71,7 @@ def reinforcement_learning_track(trainer, args):
             update_epochs=args.ppo_update_epochs,
             bptt_horizon=args.bptt_horizon,
             batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
+            clip_coef=args.clip_coef,
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):

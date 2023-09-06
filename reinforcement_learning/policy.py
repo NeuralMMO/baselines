@@ -12,41 +12,32 @@ from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
+
 class Random(pufferlib.models.Policy):
   '''A random policy that resets weights on every call'''
-  def __init__(self, binding):
-    super().__init__(binding)
+  def __init__(self, envs):
+    super().__init__()
+    self.envs = envs
     self.decoders = torch.nn.ModuleList(
-        [torch.nn.Linear(1, n) for n in binding.single_action_space.nvec]
+        [torch.nn.Linear(1, n) for n in envs.single_action_space.nvec]
     )
 
   def encode_observations(self, env_outputs):
     return torch.randn((env_outputs.shape[0], 1)).to(env_outputs.device), None
 
-  def decode_actions(self, hidden, lookup, concat=True):
+  def decode_actions(self, hidden, lookup):
     torch.nn.init.xavier_uniform_(hidden)
     actions = [dec(hidden) for dec in self.decoders]
-    return torch.cat(actions, dim=-1) if concat else actions
+    return actions, None
 
   def critic(self, hidden):
     return torch.zeros((hidden.shape[0], 1)).to(hidden.device)
 
-  @staticmethod
-  def create_policy():
-    return pufferlib.frameworks.cleanrl.make_policy(
-        Random, recurrent_args=[1, 1], recurrent_kwargs={"num_layers": 0}
-    )
-
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, binding, policy_args: Dict):
-    super().__init__(binding)
-    self.raw_single_observation_space = binding.raw_single_observation_space
-    input_size = policy_args.get("input_size", 256)
-    hidden_size = policy_args.get("hidden_size", 256)
-    task_size = policy_args.get("task_size", 4096)
-
-    self._policy_args = policy_args
+  def __init__(self, envs, input_size, hidden_size, task_size):
+    super().__init__()
+    self.envs = envs
 
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
@@ -58,24 +49,8 @@ class Baseline(pufferlib.models.Policy):
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
-  @staticmethod
-  def create_policy(binding: pufferlib.emulation.Binding, args: Dict):
-    args["input_size"] = 128
-    args["hidden_size"] = 256 if args["num_lstm_layers"] else 128
-
-    return pufferlib.frameworks.cleanrl.make_policy(
-        Baseline,
-        recurrent_args=[args["input_size"], args["hidden_size"]]
-        if args["num_lstm_layers"]
-        else [],
-        recurrent_kwargs={"num_layers": args["num_lstm_layers"]},
-    )(binding, args)
-
-  def critic(self, hidden):
-    return self.value_head(hidden)
-
   def encode_observations(self, flat_observations):
-    env_outputs = self.binding.unpack_batched_obs(flat_observations)[0]
+    env_outputs = self.envs.unpack_batched_obs(flat_observations)
     tile = self.tile_encoder(env_outputs["Tile"])
     player_embeddings, my_agent = self.player_encoder(
         env_outputs["Entity"], env_outputs["AgentId"][:, 0]
@@ -99,12 +74,10 @@ class Baseline(pufferlib.models.Policy):
         env_outputs["ActionTargets"],
     )
 
-  def decode_actions(self, hidden, lookup, concat=True):
+  def decode_actions(self, hidden, lookup):
     actions = self.action_decoder(hidden, lookup)
-    return torch.cat(actions, dim=-1) if concat else actions
-
-  def policy_args(self):
-    return self._policy_args
+    value = self.value_head(hidden)
+    return actions, value
 
 
 class TileEncoder(torch.nn.Module):
@@ -142,11 +115,12 @@ class TileEncoder(torch.nn.Module):
 class PlayerEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.player_offset = torch.tensor([i * 256 for i in range(23)])
-    self.embedding = torch.nn.Embedding(23 * 256, 32)
+    self.entity_dim = 31
+    self.player_offset = torch.tensor([i * 256 for i in range(self.entity_dim)])
+    self.embedding = torch.nn.Embedding(self.entity_dim * 256, 32)
 
-    self.agent_fc = torch.nn.Linear(23 * 32, hidden_size)
-    self.my_agent_fc = torch.nn.Linear(23 * 32, input_size)
+    self.agent_fc = torch.nn.Linear(self.entity_dim * 32, hidden_size)
+    self.my_agent_fc = torch.nn.Linear(self.entity_dim * 32, input_size)
 
   def forward(self, agents, my_id):
     # Pull out rows corresponding to the agent
@@ -180,7 +154,7 @@ class ItemEncoder(torch.nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
     self.item_offset = torch.tensor([i * 256 for i in range(16)])
-    self.embedding = torch.nn.Embedding(32, 32)
+    self.embedding = torch.nn.Embedding(256, 32)
 
     self.fc = torch.nn.Linear(2 * 32 + 12, hidden_size)
 
