@@ -1,7 +1,8 @@
 from typing import Optional, List
 from dataclasses import dataclass
-from collections import defaultdict
+from collections import defaultdict, Counter
 
+import math
 import numpy as np
 
 import pufferlib
@@ -147,6 +148,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level = 0
         self._alchemy_level = 0
 
+        # saving actions for masking/scoring
+        self._last_moves = []
+        self._last_price = 0
+
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
@@ -188,6 +193,16 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._prospecting_level += agent.prospecting_level.val
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
+
+    def observation(self, observation):
+        # Mask out the last selected price
+        observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
+        return observation
+
+    def action(self, action):
+        self._last_moves.append(action[8])  # 8 is the index for move direction
+        self._last_price = action[10]  # 10 is the index for selling price
+        return action
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
@@ -354,7 +369,8 @@ def extract_unique_event(log, attr_to_col):
 
     # mask some columns to make the event redundant
     cols_to_ignore = {
-        EventCode.SCORE_HIT: ["combat_style", "damage"],
+        EventCode.GO_FARTHEST: ["distance"],
+        EventCode.SCORE_HIT: ["damage"],
         # treat each (item, level) differently
         EventCode.CONSUME_ITEM: ["quantity"],
         # but, count each (item, level) only once
@@ -378,3 +394,12 @@ def extract_unique_event(log, attr_to_col):
 
     # return unique events after masking
     return set(tuple(row) for row in log[:, attr_to_col["event"]:])
+
+def calculate_entropy(sequence):
+    frequencies = Counter(sequence)
+    total_elements = len(sequence)
+    entropy = 0
+    for freq in frequencies.values():
+        probability = freq / total_elements
+        entropy -= probability * math.log2(probability)
+    return entropy
