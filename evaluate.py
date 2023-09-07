@@ -5,7 +5,10 @@ import os
 import time
 from types import SimpleNamespace
 from pathlib import Path
+from collections import defaultdict
+from dataclasses import asdict
 
+import numpy as np
 import torch
 import pandas as pd
 
@@ -121,7 +124,7 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
     file = os.path.join(policy_store_dir, ranker_file)
     if os.path.exists(file):
         if os.path.exists(file + ".lock"):
-            raise ValueError("Policy ranker file is locked.")
+            raise ValueError("Policy ranker file is locked. Delete the lock file.")
         logging.info("Using policy ranker from %s", file)
         policy_ranker = pufferlib.utils.PersistentObject(
             file,
@@ -174,7 +177,7 @@ def rank_policies(policy_store_dir, device):
         num_buffers=args.num_buffers,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
-        batch_size=args.rollout_batch_size,
+        batch_size=args.eval_batch_size,
         policy_store=policy_store,
         policy_ranker=policy_ranker, # so that a new ranker is created
     )
@@ -183,8 +186,15 @@ def rank_policies(policy_store_dir, device):
     with open(rank_file, "w") as f:
         pass
 
-    while evaluator.global_step < args.train_num_steps:
-        evaluator.evaluate()
+    results = defaultdict(list)
+    while evaluator.global_step < args.eval_num_steps:
+        _, stats, infos = evaluator.evaluate()
+
+        for pol, vals in infos.items():
+            results[pol].extend([
+                e[1] for e in infos[pol]['team_results']
+            ])
+
         ratings = evaluator.policy_ranker.ratings()
         dataframe = pd.DataFrame(
             {
@@ -206,6 +216,15 @@ def rank_policies(policy_store_dir, device):
         Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
 
     evaluator.close()
+    for pol, res in results.items():
+        aggregated = {}
+        keys = asdict(res[0]).keys()
+        for k in keys:
+            if k == 'policy_id':
+                continue
+            aggregated[k] = np.mean([asdict(e)[k] for e in res])
+        results[pol] = aggregated
+    print('Evaluation complete. Average stats:\n', results)
 
 
 if __name__ == "__main__":
@@ -251,7 +270,7 @@ if __name__ == "__main__":
         "--eval-mode",
         dest="eval_mode",
         type=bool,
-        default=False,
+        default=True,
         help="Evaluate mode (Default: False)",
     )
     parser.add_argument(
