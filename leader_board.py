@@ -36,6 +36,7 @@ class TeamResult:
     time_alive: int = 0,
     earned_gold: int = 0,
     completed_task_count: int = 0,
+    max_task_progress: float = 0,
     damage_received: int = 0,
     damage_inflicted: int = 0,
     ration_consumed: int = 0,
@@ -72,6 +73,7 @@ class TeamResult:
             "time_alive",
             "earned_gold",
             "completed_task_count",
+            "max_task_progress",
             "damage_received",
             "damage_inflicted",
             "ration_consumed",
@@ -110,8 +112,9 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id):
+    def __init__(self, env, agent_id, eval_mode=False):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
+        self.eval_mode = eval_mode
         self._reset_episode_stats()
 
     def reset(self, observation):
@@ -125,6 +128,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._cod_starved = 0
         self._cod_dehydrated = 0
         self._task_completed = 0
+        self._max_task_progress = 0
         self._task_with_2_reward_signal = 0
         self._task_with_0p2_max_progress = 0
         self._curriculum = defaultdict(list)
@@ -156,19 +160,20 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
         self._curriculum[task.spec_name].append((task._max_progress, task.reward_signal_count))
+        self._max_task_progress = task._max_progress
         if task.reward_signal_count >= 2:
-            self._task_with_2_reward_signal += 1.0
+            self._task_with_2_reward_signal = 1.0
         if task._max_progress >= 0.2:
-            self._task_with_0p2_max_progress += 1.0
+            self._task_with_0p2_max_progress = 1.0
         if task.completed:
-            self._task_completed += 1.0
+            self._task_completed = 1.0
 
         if agent.damage.val > 0:
-            self._cod_attacked += 1.0
+            self._cod_attacked = 1.0
         elif agent.food.val == 0:
-            self._cod_starved += 1.0
+            self._cod_starved = 1.0
         elif agent.water.val == 0:
-            self._cod_dehydrated += 1.0
+            self._cod_dehydrated = 1.0
 
         self._combat_level.append(agent.attack_level)
         self._harvest_level.append(max(
@@ -267,6 +272,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         result.alchemy_level = self._alchemy_level
 
         info["team_results"] = (self.agent_id, result)
+
+        if self.eval_mode:
+            # "return" is used for ranking in the eval mode, so put the task progress here
+            info["return"] = self._max_task_progress  # this is 1 if done
 
         return reward, done, info
 

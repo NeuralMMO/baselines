@@ -138,19 +138,26 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
         )
     return policy_ranker
 
-def rank_policies(policy_store_dir, device):
+class AllPolicySelector(pufferlib.policy_ranker.PolicySelector):
+    def select_policies(self, policies):
+        # Return all policy names in the alpahebetical order
+        return [policies[name] for name in sorted(policies.keys())]
+
+def rank_policies(policy_store_dir, eval_curriculum_file, device):
     # CHECK ME: can be custom models with different architectures loaded here?
     policy_store = setup_policy_store(policy_store_dir)
-    num_policies = len(policy_store._all_policies())
     policy_ranker = create_policy_ranker(policy_store_dir)
+    num_policies = len(policy_store._all_policies())
+    policy_selector = AllPolicySelector(num_policies)
 
-    # TODO: task-condition agents when generating replays
     args = SimpleNamespace(**config.Config.asdict())
     args.data_dir = policy_store_dir
+    args.eval_mode = True
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
     args.resilient_population = 0  # no resilient agents
+    args.tasks_path = eval_curriculum_file  # task-conditioning
 
     # TODO: custom models will require different policy creation functions
     from reinforcement_learning import policy  # import your policy
@@ -177,9 +184,10 @@ def rank_policies(policy_store_dir, device):
         num_buffers=args.num_buffers,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
-        batch_size=args.eval_batch_size,
+        batch_size=args.rollout_batch_size,
         policy_store=policy_store,
         policy_ranker=policy_ranker, # so that a new ranker is created
+        policy_selector=policy_selector,
     )
 
     rank_file = os.path.join(policy_store_dir, "ranking.txt")
@@ -271,7 +279,7 @@ if __name__ == "__main__":
         dest="eval_mode",
         type=bool,
         default=True,
-        help="Evaluate mode (Default: False)",
+        help="Evaluate mode (Default: True). To generate replay, set to False",
     )
     parser.add_argument(
         "-d",
@@ -281,6 +289,14 @@ if __name__ == "__main__":
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device to use for evaluation/ranking (Default: cuda if available, otherwise cpu)",
     )
+    parser.add_argument(
+        "-t",
+        "--task-file",
+        dest="task_file",
+        type=str,
+        default="reinforcement_learning/eval_task_with_embedding.pkl",
+        help="Task file to use for evaluation",
+    )
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
@@ -289,7 +305,7 @@ if __name__ == "__main__":
     if eval_args.eval_mode:
         logging.info("Ranking checkpoints from %s", eval_args.policy_store_dir)
         logging.info("Replays will NOT be generated")
-        rank_policies(eval_args.policy_store_dir, eval_args.device)
+        rank_policies(eval_args.policy_store_dir, eval_args.task_file, eval_args.device)
     else:
         logging.info("Generating replays from the checkpoints in %s", eval_args.policy_store_dir)
         save_replays(eval_args.policy_store_dir, eval_args.replay_save_dir)
