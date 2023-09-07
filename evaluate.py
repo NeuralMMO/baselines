@@ -153,6 +153,8 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
     args = SimpleNamespace(**config.Config.asdict())
     args.data_dir = policy_store_dir
     args.eval_mode = True
+    args.rollout_batch_size = 1024 * 64  # to roll out long enough
+    args.num_buffers = 1
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
@@ -219,6 +221,14 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
                 .to_string(index=False)
                 + "\n\n"
             )
+
+        # Reset the envs and start the new episodes
+        # NOTE: The below line will probably end the episode in the middle, 
+        #   so we won't be able to sample scores from the successful agents.
+        #   Thus, the scores will be biased towards the agents that die early.
+        #   Still, the numbers we get this way is better than frequently
+        #   updating the scores because the openskill ranking only takes the mean.
+        evaluator.buffers[0]._async_reset()
 
         # CHECK ME: delete the policy_ranker lock file
         Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
