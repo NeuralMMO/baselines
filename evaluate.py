@@ -311,8 +311,6 @@ if __name__ == "__main__":
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
-
-    eval_args.policy_store_dir = "puf04_84p"
     assert eval_args.policy_store_dir is not None, "Policy store directory must be specified"
 
     if eval_args.eval_mode:
