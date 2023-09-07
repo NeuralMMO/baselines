@@ -154,6 +154,7 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
     args.data_dir = policy_store_dir
     args.eval_mode = True
     args.rollout_batch_size = 1024 * 64  # to roll out long enough
+    args.num_envs = 5  # sample a bit longer in each env
     args.num_buffers = 1
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
@@ -310,6 +311,8 @@ if __name__ == "__main__":
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
+
+    eval_args.policy_store_dir = "puf04_84p"
     assert eval_args.policy_store_dir is not None, "Policy store directory must be specified"
 
     if eval_args.eval_mode:
