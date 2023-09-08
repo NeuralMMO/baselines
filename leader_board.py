@@ -254,6 +254,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             info["stats"][key] = float(val)
 
         # Fill in the "TeamResult"
+        result.max_task_progress = self._max_task_progress
         result.total_score = self._curr_unique_count
         result.time_alive = self._time_alive
         result.earned_gold = achieved["achieved/earned_gold"]

@@ -17,6 +17,7 @@ class Config:
     num_envs = 6  # Number of environments to use for training
     num_buffers = 2  # Number of buffers to use for training
     rollout_batch_size = 2**15 # Number of steps to rollout
+    eval_batch_size = 2**15 # Number of steps to rollout for eval
     train_num_steps = 10_000_000  # Number of steps to train
     eval_num_steps = 1_000_000  # Number of steps to evaluate
     checkpoint_interval = 30  # Interval to save models

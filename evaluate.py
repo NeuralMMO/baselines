@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import asdict
+from itertools import cycle
 
 import numpy as np
 import torch
@@ -141,7 +142,11 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
 class AllPolicySelector(pufferlib.policy_ranker.PolicySelector):
     def select_policies(self, policies):
         # Return all policy names in the alpahebetical order
-        return [policies[name] for name in sorted(policies.keys())]
+        # Loops circularly if more policies are needed than available
+        loop = cycle([
+            policies[name] for name in sorted(policies.keys()
+        )])
+        return [next(loop) for _ in range(self._num)]
 
 def rank_policies(policy_store_dir, eval_curriculum_file, device):
     # CHECK ME: can be custom models with different architectures loaded here?
@@ -153,7 +158,6 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
     args = SimpleNamespace(**config.Config.asdict())
     args.data_dir = policy_store_dir
     args.eval_mode = True
-    args.rollout_batch_size = 1024 * 64  # to roll out long enough
     args.num_envs = 5  # sample a bit longer in each env
     args.num_buffers = 1
     args.learner_weight = 0  # evaluate mode
@@ -187,7 +191,7 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
         num_buffers=args.num_buffers,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
-        batch_size=args.rollout_batch_size,
+        batch_size=args.eval_batch_size,
         policy_store=policy_store,
         policy_ranker=policy_ranker, # so that a new ranker is created
         policy_selector=policy_selector,
@@ -229,7 +233,7 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
         #   Thus, the scores will be biased towards the agents that die early.
         #   Still, the numbers we get this way is better than frequently
         #   updating the scores because the openskill ranking only takes the mean.
-        evaluator.buffers[0]._async_reset()
+        #evaluator.buffers[0]._async_reset()
 
         # CHECK ME: delete the policy_ranker lock file
         Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
