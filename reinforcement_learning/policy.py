@@ -35,7 +35,7 @@ class Random(pufferlib.models.Policy):
 
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, envs, input_size, hidden_size, task_size):
+  def __init__(self, envs, input_size=256, hidden_size=256, task_size=4096):
     super().__init__()
     self.envs = envs
 
