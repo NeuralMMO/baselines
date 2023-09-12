@@ -3,22 +3,21 @@
 # Example ussage:
 #
 # sbatch ./scripts/slurm_run.sh scripts/train_baseline.sh \
-#   --train.run_name=realikun_16x8_0001
+#   --run-name=test --wandb-project=nmmo --wandb-entity=kywch
 
 #SBATCH --account=carperai
-#SBATCH --partition=g40
+#SBATCH --partition=g40x
 #SBATCH --nodes=1
 #SBATCH --gpus=1
-#SBATCH --cpus-per-gpu=12
+#SBATCH --cpus-per-gpu=6
 #__SBATCH --mem=80G
-#SBATCH --chdir=/fsx/home-daveey/nmmo-baselines/
+#SBATCH --chdir=/fsx/proj-nmmo/nmmo-baselines/
 #SBATCH --output=sbatch/%j.log
 #SBATCH --error=sbatch/%j.log
 #SBATCH --requeue
-#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_BASE_URL="https://stability.wandb.io",WANDB_DIR=/fsx/home-daveey/tmp/wandb,WANDB_CONFIG_DIR=/fsx/home-daveey/tmp/wandb
+#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_BASE_URL="https://stability.wandb.io",WANDB_DIR=/fsx/proj-nmmo/tmp/wandb,WANDB_CONFIG_DIR=/fsx/proj-nmmo/tmp/wandb
 
-source /fsx/home-daveey/miniconda/etc/profile.d/conda.sh && \
-conda activate nmmo && \
+source /fsx/proj-nmmo/venv/bin/activate && \
 ulimit -c unlimited && \
 ulimit -s unlimited && \
 ulimit -a
