@@ -35,9 +35,11 @@ class Random(pufferlib.models.Policy):
 
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, envs, input_size=256, hidden_size=256, task_size=4096):
+  def __init__(self, env, input_size=256, hidden_size=256, task_size=4096):
     super().__init__()
-    self.envs = envs
+
+    self.flat_observation_space = env.flat_observation_space
+    self.flat_observation_structure = env.flat_observation_structure
 
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
@@ -50,7 +52,8 @@ class Baseline(pufferlib.models.Policy):
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
   def encode_observations(self, flat_observations):
-    env_outputs = self.envs.unpack_batched_obs(flat_observations)
+    env_outputs = pufferlib.emulation.unpack_batched_obs(flat_observations,
+        self.flat_observation_space, self.flat_observation_structure)
     tile = self.tile_encoder(env_outputs["Tile"])
     player_embeddings, my_agent = self.player_encoder(
         env_outputs["Entity"], env_outputs["AgentId"][:, 0]

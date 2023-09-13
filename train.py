@@ -31,7 +31,7 @@ def setup_env(args):
 
     def make_policy(envs):
         learner_policy = policy.Baseline(
-            envs,
+            envs._driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             task_size=args.task_size
