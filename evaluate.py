@@ -5,7 +5,11 @@ import os
 import time
 from types import SimpleNamespace
 from pathlib import Path
+from collections import defaultdict
+from dataclasses import asdict
+from itertools import cycle
 
+import numpy as np
 import torch
 import pandas as pd
 
@@ -54,11 +58,11 @@ def save_replays(policy_store_dir, save_dir):
     args.early_stop_agent_num = 0  # run the full episode
     args.resilient_population = 0  # no resilient agents
 
-    # TODO: custom models will require different policy creation functions
+    # NOTE: This creates a dummy learner agent. Is it necessary?
     from reinforcement_learning import policy  # import your policy
     def make_policy(envs):
         learner_policy = policy.Baseline(
-            envs,
+            envs._driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             task_size=args.task_size
@@ -83,8 +87,10 @@ def save_replays(policy_store_dir, save_dir):
 
     # Load the policies into the policy pool
     evaluator.policy_pool.update_policies({
-        p.name: p.policy(make_policy, evaluator.buffers[0], evaluator.device)
-        for p in policy_store._all_policies().values()
+        p.name: p.policy(
+            policy_args=[evaluator.buffers[0]], 
+            device=evaluator.device
+        ) for p in list(policy_store._all_policies().values())
     })
 
     # Set up the replay helper
@@ -121,7 +127,7 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
     file = os.path.join(policy_store_dir, ranker_file)
     if os.path.exists(file):
         if os.path.exists(file + ".lock"):
-            raise ValueError("Policy ranker file is locked.")
+            raise ValueError("Policy ranker file is locked. Delete the lock file.")
         logging.info("Using policy ranker from %s", file)
         policy_ranker = pufferlib.utils.PersistentObject(
             file,
@@ -135,21 +141,34 @@ def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
         )
     return policy_ranker
 
-def rank_policies(policy_store_dir, device):
+class AllPolicySelector(pufferlib.policy_ranker.PolicySelector):
+    def select_policies(self, policies):
+        # Return all policy names in the alpahebetical order
+        # Loops circularly if more policies are needed than available
+        loop = cycle([
+            policies[name] for name in sorted(policies.keys()
+        )])
+        return [next(loop) for _ in range(self._num)]
+
+def rank_policies(policy_store_dir, eval_curriculum_file, device):
     # CHECK ME: can be custom models with different architectures loaded here?
     policy_store = setup_policy_store(policy_store_dir)
-    num_policies = len(policy_store._all_policies())
     policy_ranker = create_policy_ranker(policy_store_dir)
+    num_policies = len(policy_store._all_policies())
+    policy_selector = AllPolicySelector(num_policies)
 
-    # TODO: task-condition agents when generating replays
     args = SimpleNamespace(**config.Config.asdict())
     args.data_dir = policy_store_dir
+    args.eval_mode = True
+    args.num_envs = 5  # sample a bit longer in each env
+    args.num_buffers = 1
     args.learner_weight = 0  # evaluate mode
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
     args.resilient_population = 0  # no resilient agents
+    args.tasks_path = eval_curriculum_file  # task-conditioning
 
-    # TODO: custom models will require different policy creation functions
+    # NOTE: This creates a dummy learner agent. Is it necessary?
     from reinforcement_learning import policy  # import your policy
     def make_policy(envs):
         learner_policy = policy.Baseline(
@@ -174,17 +193,25 @@ def rank_policies(policy_store_dir, device):
         num_buffers=args.num_buffers,
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
-        batch_size=args.rollout_batch_size,
+        batch_size=args.eval_batch_size,
         policy_store=policy_store,
         policy_ranker=policy_ranker, # so that a new ranker is created
+        policy_selector=policy_selector,
     )
 
     rank_file = os.path.join(policy_store_dir, "ranking.txt")
     with open(rank_file, "w") as f:
         pass
 
-    while evaluator.global_step < args.train_num_steps:
-        evaluator.evaluate()
+    results = defaultdict(list)
+    while evaluator.global_step < args.eval_num_steps:
+        _, stats, infos = evaluator.evaluate()
+
+        for pol, vals in infos.items():
+            results[pol].extend([
+                e[1] for e in infos[pol]['team_results']
+            ])
+
         ratings = evaluator.policy_ranker.ratings()
         dataframe = pd.DataFrame(
             {
@@ -202,10 +229,27 @@ def rank_policies(policy_store_dir, device):
                 + "\n\n"
             )
 
+        # Reset the envs and start the new episodes
+        # NOTE: The below line will probably end the episode in the middle, 
+        #   so we won't be able to sample scores from the successful agents.
+        #   Thus, the scores will be biased towards the agents that die early.
+        #   Still, the numbers we get this way is better than frequently
+        #   updating the scores because the openskill ranking only takes the mean.
+        #evaluator.buffers[0]._async_reset()
+
         # CHECK ME: delete the policy_ranker lock file
         Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
 
     evaluator.close()
+    for pol, res in results.items():
+        aggregated = {}
+        keys = asdict(res[0]).keys()
+        for k in keys:
+            if k == 'policy_id':
+                continue
+            aggregated[k] = np.mean([asdict(e)[k] for e in res])
+        results[pol] = aggregated
+    print('Evaluation complete. Average stats:\n', results)
 
 
 if __name__ == "__main__":
@@ -213,7 +257,7 @@ if __name__ == "__main__":
 
     -p, --policy-store-dir: Directory to load policy checkpoints from for evaluation/ranking
     -s, --replay-save-dir: Directory to save replays (Default: replays/)
-    -e, --eval-mode: Evaluate mode (Default: False)
+    -r, --replay-mode: Replay save mode (Default: False)
     -d, --device: Device to use for evaluation/ranking (Default: cuda if available, otherwise cpu)
 
     To generate replay from your checkpoints, put them together in policy_store_dir, run the following command, 
@@ -247,12 +291,11 @@ if __name__ == "__main__":
         help="Directory to save replays (Default: replays/)",
     )
     parser.add_argument(
-        "-e",
-        "--eval-mode",
-        dest="eval_mode",
-        type=bool,
-        default=False,
-        help="Evaluate mode (Default: False)",
+        "-r",
+        "--replay-mode",
+        dest="replay_mode",
+        action="store_true",
+        help="Replay mode (Default: False)",
     )
     parser.add_argument(
         "-d",
@@ -262,15 +305,23 @@ if __name__ == "__main__":
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device to use for evaluation/ranking (Default: cuda if available, otherwise cpu)",
     )
+    parser.add_argument(
+        "-t",
+        "--task-file",
+        dest="task_file",
+        type=str,
+        default="reinforcement_learning/eval_task_with_embedding.pkl",
+        help="Task file to use for evaluation",
+    )
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
     assert eval_args.policy_store_dir is not None, "Policy store directory must be specified"
 
-    if eval_args.eval_mode:
-        logging.info("Ranking checkpoints from %s", eval_args.policy_store_dir)
-        logging.info("Replays will NOT be generated")
-        rank_policies(eval_args.policy_store_dir, eval_args.device)
-    else:
+    if getattr(eval_args, "replay_mode", False):
         logging.info("Generating replays from the checkpoints in %s", eval_args.policy_store_dir)
         save_replays(eval_args.policy_store_dir, eval_args.replay_save_dir)
+    else:
+        logging.info("Ranking checkpoints from %s", eval_args.policy_store_dir)
+        logging.info("Replays will NOT be generated")
+        rank_policies(eval_args.policy_store_dir, eval_args.task_file, eval_args.device)

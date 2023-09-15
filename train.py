@@ -31,7 +31,7 @@ def setup_env(args):
 
     def make_policy(envs):
         learner_policy = policy.Baseline(
-            envs,
+            envs._driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             task_size=args.task_size
@@ -114,6 +114,7 @@ def curriculum_generation_track(trainer, args, use_elm=True):
     # Use the train_task_spec to train agents
     task_encoder.get_task_embedding(curriculum, save_to_file=CUSTOM_CURRICULUM_FILE)
     task_encoder.close()
+    trainer.data.sort_keys = []
     reinforcement_learning_track(trainer, args)
 
 if __name__ == "__main__":

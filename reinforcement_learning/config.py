@@ -16,8 +16,10 @@ class Config:
     num_cores = None  # Number of cores to use for training
     num_envs = 6  # Number of environments to use for training
     num_buffers = 2  # Number of buffers to use for training
-    rollout_batch_size = 32768 # Number of steps to rollout
+    rollout_batch_size = 2**15 # Number of steps to rollout
+    eval_batch_size = 2**15 # Number of steps to rollout for eval
     train_num_steps = 10_000_000  # Number of steps to train
+    eval_num_steps = 1_000_000  # Number of steps to evaluate
     checkpoint_interval = 30  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs
@@ -47,6 +49,7 @@ class Config:
     map_size = 128  # Size of maps to use for training
     resilient_population = 0.2  # Percentage of agents to be resilient to starvation/dehydration
     tasks_path = None  # Path to tasks to use for training
+    eval_mode = False # Run the postprocessor in the eval mode
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03

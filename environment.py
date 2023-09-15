@@ -33,14 +33,15 @@ class Config(nmmo.config.Default):
 
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,
-      early_stop_agent_num=0,
-      sqrt_achievement_rewards=False,
-      heal_bonus_weight=0,
-      meander_bonus_weight=0,
-      explore_bonus_weight=0,
-      clip_unique_event=3,
+        eval_mode=False,
+        early_stop_agent_num=0,
+        sqrt_achievement_rewards=False,
+        heal_bonus_weight=0,
+        meander_bonus_weight=0,
+        explore_bonus_weight=0,
+        clip_unique_event=3,
     ):
-        super().__init__(env, agent_id)
+        super().__init__(env, agent_id, eval_mode)
         self.early_stop_agent_num = early_stop_agent_num
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
@@ -117,6 +118,7 @@ def make_env_creator(args: Namespace):
         env = pufferlib.emulation.PettingZooPufferEnv(env,
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
+                'eval_mode': args.eval_mode,
                 'early_stop_agent_num': args.early_stop_agent_num,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
