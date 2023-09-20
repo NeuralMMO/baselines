@@ -21,11 +21,10 @@ from pufferlib.policy_store import DirectoryPolicyStore
 from pufferlib.frameworks import cleanrl
 import pufferlib.policy_ranker
 import pufferlib.utils
-import clean_pufferl
 
 import environment
 
-from reinforcement_learning import config
+from reinforcement_learning import config, clean_pufferl
 
 def setup_policy_store(policy_store_dir):
     # CHECK ME: can be custom models with different architectures loaded here?
@@ -62,7 +61,7 @@ def save_replays(policy_store_dir, save_dir):
     from reinforcement_learning import policy  # import your policy
     def make_policy(envs):
         learner_policy = policy.Baseline(
-            envs._driver_env,
+            envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             task_size=args.task_size
@@ -172,7 +171,7 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
     from reinforcement_learning import policy  # import your policy
     def make_policy(envs):
         learner_policy = policy.Baseline(
-            envs,
+            envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             task_size=args.task_size
