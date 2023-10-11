@@ -122,12 +122,13 @@ def save_replays(policy_store_dir, save_dir):
     replay_helper.save(replay_file, compress=False)
     evaluator.close()
 
-def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle", db_file="ranking.sqlite"):
+def create_policy_ranker(policy_store_dir, ranker_file="ranker.pickle", db_file="ranking.sqlite"):
     file = os.path.join(policy_store_dir, ranker_file)
     if os.path.exists(file):
         logging.info("Using existing policy ranker from %s", file)
         policy_ranker = pufferlib.policy_ranker.OpenSkillRanker.load_from_file(file)
     else:
+        logging.info("Creating a new policy ranker and db under %s", policy_store_dir)
         db_file = os.path.join(policy_store_dir, db_file)
         policy_ranker = pufferlib.policy_ranker.OpenSkillRanker(db_file, "anchor")
     return policy_ranker
@@ -190,8 +191,10 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
         policy_selector=policy_selector,
     )
 
-    rank_file = os.path.join(policy_store_dir, "ranking.txt")
-    with open(rank_file, "w") as f:
+    ranker_file = os.path.join(policy_store_dir, "ranker.pickle")
+    # This is for quick viewing of the ranks, not for the actual ranking
+    rank_txt = os.path.join(policy_store_dir, "ranking.txt")
+    with open(rank_txt, "w") as f:
         pass
 
     results = defaultdict(list)
@@ -211,7 +214,8 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
             }
         )
 
-        with open(rank_file, "a") as f:
+        ratings = evaluator.policy_ranker.save_to_file(ranker_file)
+        with open(rank_txt, "a") as f:
             f.write(
                 "\n\n"
                 + dataframe.round(2)
