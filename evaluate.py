@@ -122,22 +122,14 @@ def save_replays(policy_store_dir, save_dir):
     replay_helper.save(replay_file, compress=False)
     evaluator.close()
 
-def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle"):
+def create_policy_ranker(policy_store_dir, ranker_file="openskill.pickle", db_file="ranking.sqlite"):
     file = os.path.join(policy_store_dir, ranker_file)
     if os.path.exists(file):
-        if os.path.exists(file + ".lock"):
-            raise ValueError("Policy ranker file is locked. Delete the lock file.")
-        logging.info("Using policy ranker from %s", file)
-        policy_ranker = pufferlib.utils.PersistentObject(
-            file,
-            pufferlib.policy_ranker.OpenSkillRanker,
-        )
+        logging.info("Using existing policy ranker from %s", file)
+        policy_ranker = pufferlib.policy_ranker.OpenSkillRanker.load_from_file(file)
     else:
-        policy_ranker = pufferlib.utils.PersistentObject(
-            file,
-            pufferlib.policy_ranker.OpenSkillRanker,
-            "anchor",
-        )
+        db_file = os.path.join(policy_store_dir, db_file)
+        policy_ranker = pufferlib.policy_ranker.OpenSkillRanker(db_file, "anchor")
     return policy_ranker
 
 class AllPolicySelector(pufferlib.policy_ranker.PolicySelector):
@@ -214,7 +206,7 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
         ratings = evaluator.policy_ranker.ratings()
         dataframe = pd.DataFrame(
             {
-                ("Rating"): [ratings.get(n).mu for n in ratings],
+                ("Rating"): [ratings.get(n).get("mu") for n in ratings],
                 ("Policy"): ratings.keys(),
             }
         )
@@ -227,17 +219,6 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
                 .to_string(index=False)
                 + "\n\n"
             )
-
-        # Reset the envs and start the new episodes
-        # NOTE: The below line will probably end the episode in the middle, 
-        #   so we won't be able to sample scores from the successful agents.
-        #   Thus, the scores will be biased towards the agents that die early.
-        #   Still, the numbers we get this way is better than frequently
-        #   updating the scores because the openskill ranking only takes the mean.
-        #evaluator.buffers[0]._async_reset()
-
-        # CHECK ME: delete the policy_ranker lock file
-        Path(evaluator.policy_ranker.lock.lock_file).unlink(missing_ok=True)
 
     evaluator.close()
     for pol, res in results.items():
