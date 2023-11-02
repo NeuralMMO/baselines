@@ -112,7 +112,6 @@ def save_replays(policy_store_dir, save_dir, curriculum_file, task_to_assign=Non
         # Assign the task to the env
         tasks = make_task_from_spec(nmmo_env.possible_agents,
                                     [select_task] * len(nmmo_env.possible_agents))
-        #nmmo_env.reset(make_task_fn=lambda: tasks)
         nmmo_env.tasks = tasks  # this is a hack
         print("seed:", args.seed,
               ", task:", nmmo_env.tasks[0].spec_name)
