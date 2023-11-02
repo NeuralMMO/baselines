@@ -9,11 +9,13 @@ from collections import defaultdict
 from dataclasses import asdict
 from itertools import cycle
 
+import dill
 import numpy as np
 import torch
 import pandas as pd
 
 from nmmo.render.replay_helper import FileReplayHelper
+from nmmo.task.task_spec import make_task_from_spec
 
 import pufferlib
 from pufferlib.vectorization import Serial, Multiprocessing
@@ -36,9 +38,10 @@ def setup_policy_store(policy_store_dir):
     policy_store = DirectoryPolicyStore(policy_store_dir)
     return policy_store
 
-def save_replays(policy_store_dir, save_dir):
+def save_replays(policy_store_dir, save_dir, curriculum_file, task_to_assign=None):
     # load the checkpoints into the policy store
     policy_store = setup_policy_store(policy_store_dir)
+    policy_ranker = create_policy_ranker(policy_store_dir)
     num_policies = len(policy_store._all_policies())
 
     # setup the replay path
@@ -56,6 +59,7 @@ def save_replays(policy_store_dir, save_dir):
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
     args.resilient_population = 0  # no resilient agents
+    args.tasks_path = curriculum_file  # task-conditioning
 
     # NOTE: This creates a dummy learner agent. Is it necessary?
     from reinforcement_learning import policy  # import your policy
@@ -81,6 +85,7 @@ def save_replays(policy_store_dir, save_dir):
         selfplay_learner_weight=args.learner_weight,
         selfplay_num_policies=args.selfplay_num_policies,
         policy_store=policy_store,
+        policy_ranker=policy_ranker, # so that a new ranker is created
         data_dir=save_dir,
     )
 
@@ -97,9 +102,23 @@ def save_replays(policy_store_dir, save_dir):
     replay_helper = FileReplayHelper()
     nmmo_env = evaluator.buffers[0].envs[0].envs[0].env
     nmmo_env.realm.record_replay(replay_helper)
-    replay_helper.reset()
+
+    if task_to_assign is not None:
+        with open(curriculum_file, 'rb') as f:
+            task_with_embedding = dill.load(f) # a list of TaskSpec
+        assert 0 <= task_to_assign < len(task_with_embedding), "Task index out of range"
+        select_task = task_with_embedding[task_to_assign]
+
+        # Assign the task to the env
+        tasks = make_task_from_spec(nmmo_env.possible_agents,
+                                    [select_task] * len(nmmo_env.possible_agents))
+        #nmmo_env.reset(make_task_fn=lambda: tasks)
+        nmmo_env.tasks = tasks  # this is a hack
+        print("seed:", args.seed,
+              ", task:", nmmo_env.tasks[0].spec_name)
 
     # Run an episode to generate the replay
+    replay_helper.reset()
     while True:
         with torch.no_grad():
             actions, logprob, value, _ = evaluator.policy_pool.forwards(
@@ -112,9 +131,27 @@ def save_replays(policy_store_dir, save_dir):
         o, r, d, i = evaluator.buffers[0].recv()
 
         num_alive = len(nmmo_env.realm.players)
-        print('Tick:', nmmo_env.realm.tick, ", alive agents:", num_alive)
-        if num_alive == 0 or nmmo_env.realm.tick == args.max_episode_length:
+        task_done = sum(1 for task in nmmo_env.tasks if task.completed)
+        alive_done = sum(1 for task in nmmo_env.tasks
+                         if task.completed and task.assignee[0] in nmmo_env.realm.players)
+        print("Tick:", nmmo_env.realm.tick, ", alive agents:", num_alive, ", task done:", task_done)
+        if num_alive == alive_done:
+            print("All alive agents completed the task.")
             break
+        if num_alive == 0 or nmmo_env.realm.tick == args.max_episode_length:
+            print("All agents died or reached the max episode length.")
+            break
+
+    # Count how many agents completed the task
+    print("--------------------------------------------------")
+    print("Task:", nmmo_env.tasks[0].spec_name)
+    num_completed = sum(1 for task in nmmo_env.tasks if task.completed)
+    print("Number of agents completed the task:", num_completed)
+    avg_progress = np.mean([task.progress_info["max_progress"] for task in nmmo_env.tasks])
+    print(f"Average maximum progress (max=1): {avg_progress:.3f}")
+    avg_completed_tick = np.mean([task.progress_info["completed_tick"]
+                                  for task in nmmo_env.tasks if task.completed])
+    print(f"Average completed tick: {avg_completed_tick:.1f}")
 
     # Save the replay file
     replay_file = os.path.join(save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
@@ -243,6 +280,8 @@ if __name__ == "__main__":
     -s, --replay-save-dir: Directory to save replays (Default: replays/)
     -r, --replay-mode: Replay save mode (Default: False)
     -d, --device: Device to use for evaluation/ranking (Default: cuda if available, otherwise cpu)
+    -t, --task-file: Task file to use for evaluation (Default: reinforcement_learning/eval_task_with_embedding.pkl)
+    -i, --task-index: The index of the task to assign in the curriculum file (Default: None)
 
     To generate replay from your checkpoints, put them together in policy_store_dir, run the following command, 
     and replays will be saved under the replays/. The script will only use 1 environment.
@@ -297,6 +336,14 @@ if __name__ == "__main__":
         default="reinforcement_learning/eval_task_with_embedding.pkl",
         help="Task file to use for evaluation",
     )
+    parser.add_argument(
+        "-i",
+        "--task-index",
+        dest="task_index",
+        type=int,
+        default=None,
+        help="The index of the task to assign in the curriculum file",
+    )
 
     # Parse and check the arguments
     eval_args = parser.parse_args()
@@ -304,7 +351,8 @@ if __name__ == "__main__":
 
     if getattr(eval_args, "replay_mode", False):
         logging.info("Generating replays from the checkpoints in %s", eval_args.policy_store_dir)
-        save_replays(eval_args.policy_store_dir, eval_args.replay_save_dir)
+        save_replays(eval_args.policy_store_dir, eval_args.replay_save_dir,
+                     eval_args.task_file, eval_args.task_index)
     else:
         logging.info("Ranking checkpoints from %s", eval_args.policy_store_dir)
         logging.info("Replays will NOT be generated")
