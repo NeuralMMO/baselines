@@ -79,16 +79,12 @@ def curriculum_generation_track(trainer, args, use_elm=True):
     if use_elm:
         from curriculum_generation import manual_curriculum
         from curriculum_generation.elm import OpenELMTaskGenerator
-        AGENT_MODEL_PATH = ""
         NUM_SEED_TASKS = 20
         NUM_NEW_TASKS = 5
         ELM_DEBUG = True
 
         task_encoder = TaskEncoder(LLM_CHECKPOINT, manual_curriculum, batch_size=2)
         task_generator = OpenELMTaskGenerator(manual_curriculum.curriculum, LLM_CHECKPOINT)
-
-        # @daveey: We need a baseline checkpoint for this
-        #load_agent_model(AGENT_MODEL_PATH)
 
         # Generating new tasks and evaluating all candidate training tasks
         for _ in range(3):

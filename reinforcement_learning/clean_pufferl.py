@@ -144,10 +144,8 @@ class CleanPuffeRL:
         # Create policy ranker
         if self.policy_ranker is None:
             if self.data_dir is not None:
-                self.policy_ranker = pufferlib.policy_ranker.OpenSkillRanker(
-                    os.path.join(self.data_dir, "openskill.pickle"),
-                    "anchor",
-                )
+                db_file = os.path.join(self.data_dir, "ranking.sqlite")
+                self.policy_ranker = pufferlib.policy_ranker.OpenSkillRanker(db_file, "anchor")
             if "learner" not in self.policy_ranker.ratings():
                 self.policy_ranker.add_policy("learner")
 
